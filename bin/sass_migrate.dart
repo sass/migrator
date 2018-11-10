@@ -11,12 +11,12 @@ import 'package:sass_migrate/src/migrator.dart';
 
 void main(List<String> args) {
   var files = {
-    "a.scss": """
+    "a.scss": r"""
 @import 'b';
-span { color: 0; }
+span { color: $test; }
     """,
-    "b.scss": """
-a { color: 1; }
+    "b.scss": r"""
+$test: 4;
     """,
   };
   var migrator = Migrator();

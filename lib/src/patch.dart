@@ -19,7 +19,10 @@ class Patch {
     var buffer = StringBuffer();
     int offset = 0;
     for (var patch in patches) {
-      if (patch.selection.start.offset > offset) {
+      if (patch.selection.start.offset < offset) {
+        for (var patch in patches) {
+          print("${patch.selection.text} ===> ${patch.replacement}");
+        }
         throw new Exception("Can't apply overlapping patches.");
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));

@@ -1,4 +1,4 @@
-// Copyright 2018 Google Inc. Use of this source code is governed by an
+// Copyright 2018 Google LLC. Use of this source code is governed by an
 // MIT-style license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
@@ -95,6 +95,16 @@ class Migrator extends BaseVisitor {
     return true;
   }
 
+  @override
+  bool visitVariableExpression(VariableExpression node) {
+    var validNamespaces = resolveVariableNamespaces(node.name);
+    if (validNamespaces.isEmpty) return true;
+    // TODO(jathak): Give user a choice of namespaces
+    var ns = validNamespaces.first;
+    _patches[currentPath].add(Patch(node.span, "\$$ns.${node.name}"));
+    return true;
+  }
+
   String findNamespace(String importUrl) {
     return importUrl.split('/').last.split('.').last;
   }
@@ -103,6 +113,15 @@ class Migrator extends BaseVisitor {
     // TODO(jathak): Actually handle this robustly
     if (!importUrl.endsWith('.scss')) importUrl += '.scss';
     return pathResolver(importUrl);
+  }
+
+  List<String> resolveVariableNamespaces(String varName) {
+    var validNamespaces = <String>[];
+    for (var ns in namespaces.keys) {
+      var api = _apis[namespaces[ns]];
+      if (api.variables.containsKey(varName)) validNamespaces.add(ns);
+    }
+    return validNamespaces;
   }
 }
 
