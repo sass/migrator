@@ -7,6 +7,8 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
+enum ApiType { variables, functions, mixins }
+
 class StylesheetApi {
   final Stylesheet sheet;
 
@@ -32,5 +34,11 @@ class StylesheetApi {
     // TODO(jathak): Handle !global variable declarations in other contexts
     // TODO(jathak): Handle @forward-ed declarations
     return api;
+  }
+
+  Iterable<String> namesOfType(ApiType type) {
+    if (type == ApiType.variables) return variables.keys;
+    if (type == ApiType.functions) return functions.keys;
+    if (type == ApiType.mixins) return mixins.keys;
   }
 }

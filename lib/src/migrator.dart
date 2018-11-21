@@ -8,122 +8,205 @@ import 'dart:io';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/visitor/interface/expression.dart';
-import 'package:sass/src/visitor/interface/statement.dart';
 
-import 'package:source_span/source_span.dart';
+import 'package:path/path.dart' as p;
 
 import 'base_visitor.dart';
 import 'patch.dart';
 import 'stylesheet_api.dart';
 
+/// A visitor that can migrate a stylesheet and its dependencies to the new
+/// module system.
 class Migrator extends BaseVisitor {
   /// Maps absolute file paths to migrated source code.
-  final Map<String, String> migrated = {};
+  final Map<Path, String> _migrated = {};
 
   /// Maps absolute file paths to the API of that stylesheet.
-  final Map<String, StylesheetApi> _apis = {};
+  final Map<Path, StylesheetApi> _apis = {};
 
   /// Stores a list of patches to be applied to each in-progress file.
-  final Map<String, List<Patch>> _patches = {};
+  final Map<Path, List<Patch>> _patches = {};
 
-  /// Stores a mapping of namespaces to file paths for each in-progress file.
-  final Map<String, Map<String, String>> _allNamespaces = {};
+  /// Stores a mapping of namespaces to file paths for each file.
+  /// i.e Map<path, Map<namespace, path>>
+  final Map<Path, Map<Namespace, Path>> _allNamespaces = {};
 
   /// Stack of files whose migration is in progress (last item is current).
-  final List<String> _migrationStack = [];
+  final List<Path> _migrationStack = [];
 
-  FileLoader loader = (path) => File(path).readAsStringSync();
-  AbsolutePathResolver pathResolver = (rawPath) => File(rawPath).absolute.path;
+  /// The path of the file that is currently being migrated
+  Path get currentPath => _migrationStack.isEmpty ? null : _migrationStack.last;
 
-  String get currentPath =>
-      _migrationStack.isEmpty ? null : _migrationStack.last;
+  /// The namespaces imported in the file that is currently being migrated
+  Map<Namespace, Path> get namespaces => _allNamespaces[currentPath];
 
-  Map<String, String> get namespaces => _allNamespaces[currentPath];
+  /// Migrates [entrypoint] and all of its dependencies, returning a map from
+  /// absolute file paths to the migrated contents of that file.
+  ///
+  /// This does not actually write any changes to disk.
+  Map<String, String> runMigration(String entrypoint) {
+    _migrated.clear();
+    _apis.clear();
+    _patches.clear();
+    _allNamespaces.clear();
+    _migrationStack.clear();
+    if (!migrate(resolvePath(entrypoint))) return null;
+    return _migrated.map((path, contents) => MapEntry(path.path, contents));
+  }
 
-  bool migrate(String path) {
+  /// Migrates [path].
+  ///
+  /// This assumes that a migration has already been started. Use [runMigration]
+  /// to start a new migration.
+  bool migrate(Path path) {
     if (_apis.containsKey(path)) {
-      print("Already migrated $path");
+      log("Already migrated $path");
       return true;
     }
-    var sheet = new Stylesheet.parseScss(loader(path), url: path);
+    var sheet = new Stylesheet.parseScss(loadFile(path), url: path.path);
     _migrationStack.add(path);
     _patches[path] = [];
     _allNamespaces[path] = {};
     _apis[path] = StylesheetApi(sheet);
     if (!visitStylesheet(sheet)) {
-      print("FAILURE: Could not migrate $path");
+      log("FAILURE: Could not migrate $path");
       return false;
     }
     if (applyPatches(path)) {
-      print("Successfully migrated $path");
+      log("Successfully migrated $path");
     } else {
-      print("Nothing to migrate in $path");
+      log("Nothing to migrate in $path");
     }
     _patches.remove(path);
-    _allNamespaces.remove(path);
     _migrationStack.removeLast();
     // TODO(jathak): Eventually, it might make sense to update the sheet's API
     //   after migration, but we can't do that yet since @use won't parse.
     return true;
   }
 
-  bool applyPatches(String path) {
+  /// Applies all patches to the file at [path] and stores the patched contents
+  /// in _migrated. Returns false if there are no patches to apply.
+  bool applyPatches(Path path) {
     if (_patches[path].isEmpty) {
       return false;
     }
     var file = _patches[path].first.selection.file;
-    migrated[path] = Patch.applyAll(file, _patches[path]);
+    _migrated[path] = Patch.applyAll(file, _patches[path]);
     return true;
   }
 
+  /// Migrates an @import rule to @use, in the process migrating the imported
+  /// file.
   @override
   bool visitImportRule(ImportRule importRule) {
     if (importRule.imports.length != 1) {
-      print("Multiple imports in single rule not supported yet");
+      log("Multiple imports in single rule not supported yet");
       return false;
     }
+    // TODO(jathak): Check for nested imports
     var import = importRule.imports.first;
     if (import is DynamicImport) {
       var path = resolveImport(import.url);
       bool pass = migrate(path);
-      if (!pass) return false;
       namespaces[findNamespace(import.url)] = path;
       _patches[currentPath]
-          .add(Patch(importRule.span, '@use ${import.span.text};'));
+          .add(Patch(importRule.span, '@use ${import.span.text}'));
+      if (!pass) return false;
     }
     return true;
   }
 
+  /// Adds a namespace to a variable if it is necessary.
   @override
   bool visitVariableExpression(VariableExpression node) {
-    var validNamespaces = resolveVariableNamespaces(node.name);
-    if (validNamespaces.isEmpty) return true;
-    // TODO(jathak): Give user a choice of namespaces
-    var ns = validNamespaces.first;
+    var ns = findNamespaceFor(node.name, ApiType.variables);
+    if (ns == null) {
+      ns = makeImplicitDependencyExplicit(node.name, ApiType.variables);
+      if (ns == null) return true;
+    }
+    // TODO(jathak): Confirm that this isn't a local variable before namespacing
     _patches[currentPath].add(Patch(node.span, "\$$ns.${node.name}"));
     return true;
   }
 
-  String findNamespace(String importUrl) {
-    return importUrl.split('/').last.split('.').last;
+  /// Finds the namespace that corresponds to a given import URL.
+  Namespace findNamespace(String importUrl) {
+    return Namespace(importUrl.split('/').last.split('.').last);
   }
 
-  String resolveImport(String importUrl) {
+  /// Finds the absolute path for an import URL.
+  Path resolveImport(String importUrl) {
     // TODO(jathak): Actually handle this robustly
     if (!importUrl.endsWith('.scss')) importUrl += '.scss';
-    return pathResolver(importUrl);
+    return resolvePath(importUrl);
   }
 
-  List<String> resolveVariableNamespaces(String varName) {
-    var validNamespaces = <String>[];
+  /// Find the last namespace that contains a member [name] of [type].
+  /// We return the last namespace here b/c a new import of the same member
+  /// would override any previous ones.
+  Namespace findNamespaceFor(String name, ApiType type) {
+    Namespace lastValidNamespace;
     for (var ns in namespaces.keys) {
       var api = _apis[namespaces[ns]];
-      if (api.variables.containsKey(varName)) validNamespaces.add(ns);
+      if (api.namesOfType(type).contains(name)) lastValidNamespace = ns;
     }
-    return validNamespaces;
+    return lastValidNamespace;
   }
+
+  /// Finds a transient import that contains a member [name] of [type] and
+  /// makes it an explicit dependency so we can namespace [name].
+  /// We use the last namespace here b/c a new import of the same member
+  /// would override any previous ones.
+  Namespace makeImplicitDependencyExplicit(String name, ApiType type) {
+    Namespace lastImplicitNamespace;
+    Path lastImplicitPath;
+    _dfs(Namespace namespace, Path path) {
+      for (var ns in _allNamespaces[path].keys) {
+        var nsPath = _allNamespaces[path][ns];
+        _allNamespaces[nsPath].forEach(_dfs);
+        var api = _apis[nsPath];
+        if (api.namesOfType(type).contains(name)) {
+          lastImplicitNamespace = ns;
+          lastImplicitPath = nsPath;
+        }
+      }
+    }
+
+    namespaces.forEach(_dfs);
+    if (lastImplicitPath != null) {
+      var normalized = p.withoutExtension(
+          p.relative(lastImplicitPath.path, from: p.dirname(currentPath.path)));
+      _patches[currentPath].add(Patch.prepend('@use "$normalized";\n'));
+      namespaces[lastImplicitNamespace] = lastImplicitPath;
+    }
+    return lastImplicitNamespace;
+  }
+
+  /// Resolves a relative path into an absolute path.
+  Path resolvePath(String rawPath) => Path(File(rawPath).absolute.path);
+
+  /// Loads the file at the given absolute path.
+  String loadFile(Path path) => File(path.path).readAsStringSync();
+
+  void log(String text) => print(text);
 }
 
-typedef FileLoader = String Function(String path);
-typedef AbsolutePathResolver = String Function(String rawPath);
+/// This only wraps a string to make the typing more explicit.
+/// Do not use outside of the file and its tests.
+class Namespace {
+  final String namespace;
+  const Namespace(this.namespace);
+  toString() => namespace;
+  int get hashCode => namespace.hashCode;
+  operator ==(other) => namespace == other.namespace;
+}
+
+/// This only wraps a string to make the typing more explicit.
+/// Do not use outside of the file and its tests.
+class Path {
+  final String path;
+  const Path(this.path);
+  toString() => path;
+  int get hashCode => path.hashCode;
+  operator ==(other) => path == other.path;
+}

@@ -41,12 +41,12 @@ abstract class BaseVisitor
 
   @override
   bool visitBooleanExpression(BooleanExpression node) {
-    return _notImplemented(node);
+    return true;
   }
 
   @override
   bool visitColorExpression(ColorExpression node) {
-    return _notImplemented(node);
+    return true;
   }
 
   @override

@@ -11,18 +11,32 @@ class Patch {
   /// Text to replace the selection with.
   final String replacement;
 
-  const Patch(this.selection, this.replacement);
+  final PatchType type;
+
+  /// Constructs a normal patch that replaces [selection] with [replacement].
+  const Patch(this.selection, this.replacement) : type = PatchType.normal;
+
+  const Patch.prepend(this.replacement)
+      : type = PatchType.prepend,
+        selection = null;
+
+  const Patch.append(this.replacement)
+      : type = PatchType.append,
+        selection = null;
 
   /// Applies a series of non-overlapping patches to the text of a file.
   static String applyAll(SourceFile file, List<Patch> patches) {
-    patches.sort((a, b) => a.selection.compareTo(b.selection));
+    var normalPatches =
+        patches.where((p) => p.type == PatchType.normal).toList();
+    normalPatches.sort((a, b) => a.selection.compareTo(b.selection));
     var buffer = StringBuffer();
     int offset = 0;
-    for (var patch in patches) {
+    patches
+        .where((p) => p.type == PatchType.prepend)
+        .map((p) => p.replacement)
+        .forEach(buffer.write);
+    for (var patch in normalPatches) {
       if (patch.selection.start.offset < offset) {
-        for (var patch in patches) {
-          print("${patch.selection.text} ===> ${patch.replacement}");
-        }
         throw new Exception("Can't apply overlapping patches.");
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));
@@ -30,6 +44,12 @@ class Patch {
       offset = patch.selection.end.offset;
     }
     buffer.write(file.getText(offset));
+    patches
+        .where((p) => p.type == PatchType.append)
+        .map((p) => p.replacement)
+        .forEach(buffer.write);
     return buffer.toString();
   }
 }
+
+enum PatchType { normal, prepend, append }
