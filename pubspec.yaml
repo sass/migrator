@@ -1,4 +1,4 @@
-name: sass_migrate
+name: sass_migrate_to_modules
 version: 0.0.1-dev
 description: A tool for migrating Sass files to the new module system
 

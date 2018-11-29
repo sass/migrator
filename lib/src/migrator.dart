@@ -47,13 +47,25 @@ class Migrator extends BaseVisitor {
   /// absolute file paths to the migrated contents of that file.
   ///
   /// This does not actually write any changes to disk.
-  Map<String, String> runMigration(String entrypoint) {
+  Map<String, String> runMigration(String entrypoint) =>
+      runMigrations([entrypoint]);
+
+  /// Migrates [entrypoints] and all of their dependencies, returning a map from
+  /// absolute file paths to the migrated contents of that file.
+  ///
+  /// This does not actually write any changes to disk.
+  Map<String, String> runMigrations(List<String> entrypoints) {
     _migrated.clear();
     _apis.clear();
     _patches.clear();
     _allNamespaces.clear();
     _migrationStack.clear();
-    if (!migrate(resolvePath(entrypoint))) return null;
+    for (var entrypoint in entrypoints) {
+      if (!migrate(resolvePath(entrypoint))) {
+        print("Failure when migrating $entrypoint");
+        return null;
+      }
+    }
     return _migrated.map((path, contents) => MapEntry(path.path, contents));
   }
 
@@ -155,7 +167,7 @@ class Migrator extends BaseVisitor {
 
   /// Finds the namespace that corresponds to a given import URL.
   Namespace findNamespace(String importUrl) {
-    return Namespace(importUrl.split('/').last.split('.').last);
+    return Namespace(importUrl.split('/').last.split('.').first);
   }
 
   /// Finds the absolute path for an import URL.
