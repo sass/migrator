@@ -23,9 +23,11 @@ All submissions, including submissions by project members, require review.
 ### File headers
 All files in the project must start with the following header.
 
-    // Copyright (c) 2018, the Dart project authors.  Please see the AUTHORS file
-    // for details. All rights reserved. Use of this source code is governed by a
-    // BSD-style license that can be found in the LICENSE file.
+    // Copyright 2018 Google LLC
+    //
+    // Use of this source code is governed by an MIT-style
+    // license that can be found in the LICENSE file or at
+    // https://opensource.org/licenses/MIT.
 
 ### The small print
 Contributions made by corporations are covered by a different agreement than the
