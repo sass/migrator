@@ -21,10 +21,13 @@ a {
 }
 """,
     "three.scss": r"""$b: blue;
-$c: 5px;
+$c: 5px !default;
 b {
   width: 0;
 }
+""",
+    "four.scss": r"""$c: 4px;
+@import "three";
 """
   };
   final expectedMigrations = {
@@ -42,7 +45,12 @@ a {
   background: $three.b;
 }
 """,
-    "three.scss": null
+    "three.scss": null,
+    "four.scss": r"""$c: 4px;
+@use "three" with (
+  $c: 4px
+);
+"""
   };
   @override
   String loadFile(Path path) => testFiles[path.path];
@@ -90,6 +98,20 @@ void main() {
           "Nothing to migrate in three.scss",
           "Successfully migrated two.scss",
           "Successfully migrated one.scss"
+        ]));
+  });
+
+  test("overriden variable becomes configured @use", () {
+    var migrator = TestMigrator();
+    var migrated = migrator.runMigration("four.scss");
+    expect(migrated, hasLength(1));
+    expect(migrated, contains("four.scss"));
+    expect(migrated["four.scss"], migrator.expectedMigrations["four.scss"]);
+    expect(
+        migrator.logged,
+        equals([
+          "Nothing to migrate in three.scss",
+          "Successfully migrated four.scss"
         ]));
   });
 }

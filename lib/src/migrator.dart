@@ -34,8 +34,11 @@ class Migrator extends BaseVisitor {
   /// Stack of files whose migration is in progress (last item is current).
   final List<Path> _migrationStack = [];
 
-  /// The path of the file that is currently being migrated
+  /// The path of the file that is currently being migrated.
   Path get currentPath => _migrationStack.isEmpty ? null : _migrationStack.last;
+
+  /// The parsed stylesheet for the file that is currently being migrated.
+  Stylesheet get currentSheet => _apis[currentPath]?.sheet;
 
   /// The namespaces imported in the file that is currently being migrated
   Map<Namespace, Path> get namespaces => _allNamespaces[currentPath];
@@ -103,17 +106,38 @@ class Migrator extends BaseVisitor {
       log("Multiple imports in single rule not supported yet");
       return false;
     }
-    // TODO(jathak): Check for nested imports
-    var import = importRule.imports.first;
-    if (import is DynamicImport) {
-      var path = resolveImport(import.url);
-      bool pass = migrate(path);
-      namespaces[findNamespace(import.url)] = path;
-      _patches[currentPath]
-          .add(Patch(importRule.span, '@use ${import.span.text}'));
-      if (!pass) return false;
+    if (importRule.imports.first is! DynamicImport) return true;
+    var import = importRule.imports.first as DynamicImport;
+
+    var potentialOverrides = <VariableDeclaration>[];
+    var isTopLevel = false;
+    for (var statement in currentSheet.children) {
+      if (statement == importRule) {
+        isTopLevel = true;
+        break;
+      }
+      if (statement is VariableDeclaration) {
+        potentialOverrides.add(statement);
+      }
     }
-    return true;
+    if (!isTopLevel) {
+      // TODO(jathak): Handle nested imports
+      return true;
+    }
+    var path = resolveImport(import.url);
+    bool pass = migrate(path);
+    namespaces[findNamespace(import.url)] = path;
+
+    var overrides = potentialOverrides.where((declaration) =>
+        _apis[path].variables.containsKey(declaration.name) &&
+        _apis[path].variables[declaration.name].isGuarded);
+    var config = overrides
+        .map((decl) => "\$${decl.name}: ${decl.expression}")
+        .join(",\n  ");
+    if (config != "") config = " with (\n  $config\n)";
+    _patches[currentPath]
+        .add(Patch(importRule.span, '@use ${import.span.text}$config'));
+    return pass;
   }
 
   /// Adds a namespace to a variable if it is necessary.
