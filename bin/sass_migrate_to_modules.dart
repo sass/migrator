@@ -7,7 +7,6 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:meta/meta.dart';
 
 import 'package:sass_migrate_to_modules/src/migrator.dart';
 
@@ -19,19 +18,23 @@ void main(List<String> args) {
     ..addFlag('verbose',
         abbr: 'v',
         help: 'Print text of migrated files when running with --dry-run.')
-    ..addFlag('help', abbr: 'h', help: 'Print help text.', negatable: false);
+    ..addFlag('help', abbr: 'h', help: 'Print help text.', negatable: false)
+    ..addFlag('recursive',
+        abbr: 'r',
+        help:
+            'Migrate all dependencies in addition to the entrypoints themselves.');
   var argResults = argParser.parse(args);
 
   if (argResults['help'] == true || argResults.rest.isEmpty) {
-    print(
-        'Migrates a scss file and its dependencies to the new module system.\n\n'
+    print('Migrates one or more .scss files to the new module system.\n\n'
         'Usage: sass_migrate_to_modules [options] <entrypoint.scss ...>\n\n'
         '${argParser.usage}');
     exitCode = 64;
     return;
   }
 
-  var migrated = Migrator().runMigrations(argResults.rest);
+  var migrated = Migrator().runMigrations(argResults.rest,
+      migrateDependencies: argResults['recursive']);
 
   if (migrated.isEmpty) {
     print('Nothing to migrate!');

@@ -5,6 +5,7 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:sass_migrate_to_modules/src/migrator.dart';
+import 'package:sass_migrate_to_modules/src/stylesheet_api.dart';
 import 'package:test/test.dart';
 
 class TestMigrator extends Migrator {
@@ -57,8 +58,10 @@ a {
   @override
   String loadFile(Path path) => testFiles[path.path];
 
-  @override
-  Path resolvePath(String rawPath) => Path(rawPath);
+  Path resolveImport(String importUrl) {
+    if (!importUrl.endsWith('.scss')) importUrl += '.scss';
+    return Path(importUrl);
+  }
 
   final List<String> logged = [];
 
@@ -70,50 +73,26 @@ void main() {
   test("file that needs no migrations", () {
     var migrator = TestMigrator();
     var migrated = migrator.runMigration("three.scss");
-    expect(migrated, isEmpty);
+    expect(migrated, isNull);
     expect(migrator.logged, equals(["Nothing to migrate in three.scss"]));
   });
   test("single import and variable use", () {
     var migrator = TestMigrator();
     var migrated = migrator.runMigration("two.scss");
-    expect(migrated, hasLength(1));
-    expect(migrated, contains("two.scss"));
-    expect(migrated["two.scss"], migrator.expectedMigrations["two.scss"]);
-    expect(
-        migrator.logged,
-        equals([
-          "Nothing to migrate in three.scss",
-          "Successfully migrated two.scss"
-        ]));
+    expect(migrated, equals(migrator.expectedMigrations["two.scss"]));
+    expect(migrator.logged, equals(["Successfully migrated two.scss"]));
   });
   test("variable used without explicit import", () {
     var migrator = TestMigrator();
     var migrated = migrator.runMigration("one.scss");
-    expect(migrated, hasLength(2));
-    expect(migrated, contains("one.scss"));
-    expect(migrated, contains("two.scss"));
-    expect(migrated["one.scss"], migrator.expectedMigrations["one.scss"]);
-    expect(migrated["two.scss"], migrator.expectedMigrations["two.scss"]);
-    expect(
-        migrator.logged,
-        equals([
-          "Nothing to migrate in three.scss",
-          "Successfully migrated two.scss",
-          "Successfully migrated one.scss"
-        ]));
+    expect(migrated, equals(migrator.expectedMigrations["one.scss"]));
+    expect(migrator.logged, equals(["Successfully migrated one.scss"]));
   });
 
   test("overriden variable becomes configured @use", () {
     var migrator = TestMigrator();
     var migrated = migrator.runMigration("four.scss");
-    expect(migrated, hasLength(1));
-    expect(migrated, contains("four.scss"));
-    expect(migrated["four.scss"], migrator.expectedMigrations["four.scss"]);
-    expect(
-        migrator.logged,
-        equals([
-          "Nothing to migrate in three.scss",
-          "Successfully migrated four.scss"
-        ]));
+    expect(migrated, equals(migrator.expectedMigrations["four.scss"]));
+    expect(migrator.logged, equals(["Successfully migrated four.scss"]));
   });
 }

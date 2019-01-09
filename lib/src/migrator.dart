@@ -20,21 +20,23 @@ import 'stylesheet_api.dart';
 /// A visitor that can migrate a stylesheet and its dependencies to the new
 /// module system.
 class Migrator extends BaseVisitor {
-  /// Maps absolute file paths to migrated source code.
+  /// Maps canonical file paths to migrated source code.
   final Map<Path, String> _migrated = {};
 
-  /// Maps absolute file paths to the API of that stylesheet.
+  /// Maps canonical file paths to the API of that stylesheet.
   final Map<Path, StylesheetApi> _apis = {};
 
   /// Stores a list of patches to be applied to each in-progress file.
   final Map<Path, List<Patch>> _patches = {};
 
-  /// Stores a mapping of namespaces to file paths for each file.
-  /// i.e Map<path, Map<namespace, path>>
-  final Map<Path, Map<Namespace, Path>> _allNamespaces = {};
+  /// Stores a mapping of namespaces to file paths for each in-progress file.
+  final List<Map<Namespace, Path>> _namespaceStack = [];
 
   /// Stack of files whose migration is in progress (last item is current).
   final List<Path> _migrationStack = [];
+
+  /// If true, stylesheets will be recursively migrated with their dependencies.
+  bool _migrateDependencies;
 
   /// The path of the file that is currently being migrated.
   Path get currentPath => _migrationStack.isEmpty ? null : _migrationStack.last;
@@ -43,49 +45,52 @@ class Migrator extends BaseVisitor {
   Stylesheet get currentSheet => _apis[currentPath]?.sheet;
 
   /// The namespaces imported in the file that is currently being migrated
-  Map<Namespace, Path> get namespaces => _allNamespaces[currentPath];
+  Map<Namespace, Path> get namespaces => _namespaceStack.last;
 
-  /// Migrates [entrypoint] and all of its dependencies, returning a map from
-  /// absolute file paths to the migrated contents of that file.
+  /// Migrates [entrypoints] (and optionally dependencies), returning a map from
+  /// canonical file paths to the migrated contents of that file.
   ///
   /// This does not actually write any changes to disk.
-  Map<String, String> runMigration(String entrypoint) =>
-      runMigrations([entrypoint]);
-
-  /// Migrates [entrypoints] and all of their dependencies, returning a map from
-  /// absolute file paths to the migrated contents of that file.
-  ///
-  /// This does not actually write any changes to disk.
-  Map<String, String> runMigrations(List<String> entrypoints) {
+  Map<String, String> runMigrations(List<String> entrypoints,
+      {bool migrateDependencies}) {
+    _migrateDependencies = migrateDependencies;
     _migrated.clear();
-    _apis.clear();
     _patches.clear();
-    _allNamespaces.clear();
+    _namespaceStack.clear();
     _migrationStack.clear();
-    for (var entrypoint in entrypoints) {
-      if (!migrate(resolvePath(entrypoint))) {
-        print("Failure when migrating $entrypoint");
-        return null;
+    _apis.clear();
+    var paths = entrypoints.map(resolveImport);
+    for (var path in paths) {
+      StylesheetApi(path, resolveImport, loadFile, existingApis: _apis);
+    }
+    for (var path in paths) {
+      if (!migrate(path)) {
+        throw Exception("Failure when migrating $path");
       }
     }
     return _migrated.map((path, contents) => MapEntry(path.path, contents));
   }
+
+  /// Migrates [entrypoint], returning its migrated contents (or null if the
+  /// file needed no migration).
+  ///
+  /// This does not actually write any changes to disk.
+  String runMigration(String entrypoint) =>
+      runMigrations([entrypoint], migrateDependencies: false)[entrypoint];
 
   /// Migrates [path].
   ///
   /// This assumes that a migration has already been started. Use [runMigration]
   /// to start a new migration.
   bool migrate(Path path) {
-    if (_apis.containsKey(path)) {
+    if (_migrated.containsKey(path)) {
       log("Already migrated $path");
       return true;
     }
-    var sheet = new Stylesheet.parseScss(loadFile(path), url: path.path);
     _migrationStack.add(path);
+    _namespaceStack.add({});
     _patches[path] = [];
-    _allNamespaces[path] = {};
-    _apis[path] = StylesheetApi(sheet);
-    if (!visitStylesheet(sheet)) {
+    if (!visitStylesheet(currentSheet)) {
       log("FAILURE: Could not migrate $path");
       return false;
     }
@@ -96,8 +101,7 @@ class Migrator extends BaseVisitor {
     }
     _patches.remove(path);
     _migrationStack.removeLast();
-    // TODO(jathak): Eventually, it might make sense to update the sheet's API
-    //   after migration, but we can't do that yet since @use won't parse.
+    _namespaceStack.removeLast();
     return true;
   }
 
@@ -112,13 +116,11 @@ class Migrator extends BaseVisitor {
     return true;
   }
 
-  /// Migrates an @import rule to @use, in the process migrating the imported
-  /// file.
+  /// Migrates an @import rule to @use.
   @override
   bool visitImportRule(ImportRule importRule) {
     if (importRule.imports.length != 1) {
-      log("Multiple imports in single rule not supported yet");
-      return false;
+      throw Exception("Multiple imports in single rule not supported yet");
     }
     if (importRule.imports.first is! DynamicImport) return true;
     var import = importRule.imports.first as DynamicImport;
@@ -139,19 +141,19 @@ class Migrator extends BaseVisitor {
       return true;
     }
     var path = resolveImport(import.url);
-    bool pass = migrate(path);
+    var importedSheetApi = _apis[path];
     namespaces[findNamespace(import.url)] = path;
 
     var overrides = potentialOverrides.where((declaration) =>
-        _apis[path].variables.containsKey(declaration.name) &&
-        _apis[path].variables[declaration.name].isGuarded);
+        importedSheetApi.variables.containsKey(declaration.name) &&
+        importedSheetApi.variables[declaration.name].isGuarded);
     var config = overrides
         .map((decl) => "\$${decl.name}: ${decl.expression}")
         .join(",\n  ");
     if (config != "") config = " with (\n  $config\n)";
     _patches[currentPath]
         .add(Patch(importRule.span, '@use ${import.span.text}$config'));
-    return pass;
+    return _migrateDependencies ? migrate(path) : true;
   }
 
   /// Adds a namespace to a variable if it is necessary.
@@ -172,13 +174,6 @@ class Migrator extends BaseVisitor {
     return Namespace(importUrl.split('/').last.split('.').first);
   }
 
-  /// Finds the absolute path for an import URL.
-  Path resolveImport(String importUrl) {
-    // TODO(jathak): Actually handle this robustly
-    if (!importUrl.endsWith('.scss')) importUrl += '.scss';
-    return resolvePath(importUrl);
-  }
-
   /// Find the last namespace that contains a member [name] of [type].
   /// We return the last namespace here b/c a new import of the same member
   /// would override any previous ones.
@@ -196,55 +191,34 @@ class Migrator extends BaseVisitor {
   /// We use the last namespace here b/c a new import of the same member
   /// would override any previous ones.
   Namespace makeImplicitDependencyExplicit(String name, ApiType type) {
-    Namespace lastImplicitNamespace;
     Path lastImplicitPath;
-    _dfs(Namespace namespace, Path path) {
-      for (var ns in _allNamespaces[path].keys) {
-        var nsPath = _allNamespaces[path][ns];
-        _allNamespaces[nsPath].forEach(_dfs);
-        var api = _apis[nsPath];
-        if (api.namesOfType(type).contains(name)) {
-          lastImplicitNamespace = ns;
-          lastImplicitPath = nsPath;
-        }
+    _dfs(Path path, StylesheetApi api) {
+      api.imports.forEach(_dfs);
+      if (api.namesOfType(type).contains(name)) {
+        lastImplicitPath = path;
       }
     }
 
-    namespaces.forEach(_dfs);
-    if (lastImplicitPath != null) {
-      var normalized = p.withoutExtension(
-          p.relative(lastImplicitPath.path, from: p.dirname(currentPath.path)));
-      _patches[currentPath].add(Patch.prepend('@use "$normalized";\n'));
-      namespaces[lastImplicitNamespace] = lastImplicitPath;
-    }
-    return lastImplicitNamespace;
+    _apis[currentPath].imports.forEach(_dfs);
+
+    if (lastImplicitPath == null) return null;
+    var normalized = p.withoutExtension(
+        p.relative(lastImplicitPath.path, from: p.dirname(currentPath.path)));
+    _patches[currentPath].add(Patch.prepend('@use "$normalized";\n'));
+    var ns = findNamespace(lastImplicitPath.path);
+    namespaces[ns] = lastImplicitPath;
+    return ns;
   }
 
-  /// Resolves a relative path into an absolute path.
-  Path resolvePath(String rawPath) => Path(File(rawPath).absolute.path);
+  /// Finds the canonical path for an import URL.
+  Path resolveImport(String importUrl) {
+    // TODO(jathak): Actually handle this robustly
+    if (!importUrl.endsWith('.scss')) importUrl += '.scss';
+    return Path(File(importUrl).absolute.path);
+  }
 
-  /// Loads the file at the given absolute path.
+  /// Loads the file at the given canonical path.
   String loadFile(Path path) => File(path.path).readAsStringSync();
 
   void log(String text) => print(text);
-}
-
-/// This only wraps a string to make the typing more explicit.
-/// Do not use outside of the file and its tests.
-class Namespace {
-  final String namespace;
-  const Namespace(this.namespace);
-  toString() => namespace;
-  int get hashCode => namespace.hashCode;
-  operator ==(other) => namespace == other.namespace;
-}
-
-/// This only wraps a string to make the typing more explicit.
-/// Do not use outside of the file and its tests.
-class Path {
-  final String path;
-  const Path(this.path);
-  toString() => path;
-  int get hashCode => path.hashCode;
-  operator ==(other) => path == other.path;
 }

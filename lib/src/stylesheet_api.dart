@@ -11,6 +11,32 @@ import 'package:sass/src/ast/sass.dart';
 
 enum ApiType { variables, functions, mixins }
 
+/// A Sass module namespace.
+class Namespace {
+  final String namespace;
+  const Namespace(this.namespace);
+  toString() => namespace;
+  int get hashCode => namespace.hashCode;
+  operator ==(other) => namespace == other.namespace;
+}
+
+/// The canonical path for a Sass file.
+class Path {
+  final String path;
+  const Path(this.path);
+  toString() => path;
+  int get hashCode => path.hashCode;
+  operator ==(other) => path == other.path;
+}
+
+/// Takes a URL from an import rule and returns its canonical path.
+typedef PathResolver = Path Function(String importUrl);
+
+/// Returns the contents of the file at [path].
+typedef FileLoader = String Function(Path path);
+
+// The API of a stylesheet, which consists of its variables, functions, mixins,
+// and imported dependencies.
 class StylesheetApi {
   final Stylesheet sheet;
 
@@ -20,10 +46,17 @@ class StylesheetApi {
 
   Map<String, MixinRule> mixins = {};
 
+  Map<Path, StylesheetApi> imports = {};
+
   StylesheetApi._(this.sheet);
 
-  factory StylesheetApi(Stylesheet sheet) {
+  factory StylesheetApi(Path path, PathResolver resolver, FileLoader loader,
+      {Map<Path, StylesheetApi> existingApis}) {
+    existingApis ??= {};
+    if (existingApis.containsKey(path)) return existingApis[path];
+    var sheet = Stylesheet.parseScss(loader(path));
     var api = StylesheetApi._(sheet);
+    existingApis[path] = api;
     for (var statement in sheet.children) {
       if (statement is VariableDeclaration) {
         api.variables[statement.name] = statement;
@@ -31,6 +64,15 @@ class StylesheetApi {
         api.functions[statement.name] = statement;
       } else if (statement is MixinRule) {
         api.mixins[statement.name] = statement;
+      } else if (statement is ImportRule) {
+        for (var import in statement.imports) {
+          if (import is DynamicImport) {
+            var importedPath = resolver(import.url);
+            api.imports[importedPath] = StylesheetApi(
+                importedPath, resolver, loader,
+                existingApis: existingApis);
+          }
+        }
       }
     }
     // TODO(jathak): Handle !global variable declarations in other contexts
