@@ -52,6 +52,11 @@ abstract class BaseVisitor
   }
 
   @override
+  bool visitContentBlock(ContentBlock node) {
+    return _notImplemented(node);
+  }
+
+  @override
   bool visitContentRule(ContentRule node) {
     return _notImplemented(node);
   }

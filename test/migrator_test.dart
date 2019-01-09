@@ -4,8 +4,8 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:sass_migrate_to_modules/src/migrator.dart';
-import 'package:sass_migrate_to_modules/src/stylesheet_api.dart';
+import 'package:sass_module_migrator/src/migrator.dart';
+import 'package:sass_module_migrator/src/stylesheet_api.dart';
 import 'package:test/test.dart';
 
 class TestMigrator extends Migrator {

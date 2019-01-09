@@ -8,7 +8,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 
-import 'package:sass_migrate_to_modules/src/migrator.dart';
+import 'package:sass_module_migrator/src/migrator.dart';
 
 void main(List<String> args) {
   var argParser = new ArgParser()
