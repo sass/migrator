@@ -63,11 +63,7 @@ class Migrator extends BaseVisitor {
     for (var path in paths) {
       StylesheetApi(path, resolveImport, loadFile, existingApis: _apis);
     }
-    for (var path in paths) {
-      if (!migrate(path)) {
-        throw Exception("Failure when migrating $path");
-      }
-    }
+    paths.forEach(migrate);
     return _migrated.map((path, contents) => MapEntry(path.path, contents));
   }
 
@@ -82,18 +78,15 @@ class Migrator extends BaseVisitor {
   ///
   /// This assumes that a migration has already been started. Use [runMigration]
   /// to start a new migration.
-  bool migrate(Path path) {
+  void migrate(Path path) {
     if (_migrated.containsKey(path)) {
       log("Already migrated $path");
-      return true;
+      return;
     }
     _migrationStack.add(path);
     _namespaceStack.add({});
     _patches[path] = [];
-    if (!visitStylesheet(currentSheet)) {
-      log("FAILURE: Could not migrate $path");
-      return false;
-    }
+    visitStylesheet(currentSheet);
     if (applyPatches(path)) {
       log("Successfully migrated $path");
     } else {
@@ -102,7 +95,6 @@ class Migrator extends BaseVisitor {
     _patches.remove(path);
     _migrationStack.removeLast();
     _namespaceStack.removeLast();
-    return true;
   }
 
   /// Applies all patches to the file at [path] and stores the patched contents
@@ -118,11 +110,11 @@ class Migrator extends BaseVisitor {
 
   /// Migrates an @import rule to @use.
   @override
-  bool visitImportRule(ImportRule importRule) {
+  void visitImportRule(ImportRule importRule) {
     if (importRule.imports.length != 1) {
       throw Exception("Multiple imports in single rule not supported yet");
     }
-    if (importRule.imports.first is! DynamicImport) return true;
+    if (importRule.imports.first is! DynamicImport) return;
     var import = importRule.imports.first as DynamicImport;
 
     var potentialOverrides = <VariableDeclaration>[];
@@ -138,7 +130,7 @@ class Migrator extends BaseVisitor {
     }
     if (!isTopLevel) {
       // TODO(jathak): Handle nested imports
-      return true;
+      return;
     }
     var path = resolveImport(import.url);
     var importedSheetApi = _apis[path];
@@ -153,20 +145,20 @@ class Migrator extends BaseVisitor {
     if (config != "") config = " with (\n  $config\n)";
     _patches[currentPath]
         .add(Patch(importRule.span, '@use ${import.span.text}$config'));
-    return _migrateDependencies ? migrate(path) : true;
+
+    if (_migrateDependencies) migrate(path);
   }
 
   /// Adds a namespace to a variable if it is necessary.
   @override
-  bool visitVariableExpression(VariableExpression node) {
+  void visitVariableExpression(VariableExpression node) {
     var ns = findNamespaceFor(node.name, ApiType.variables);
     if (ns == null) {
       ns = makeImplicitDependencyExplicit(node.name, ApiType.variables);
-      if (ns == null) return true;
+      if (ns == null) return;
     }
     // TODO(jathak): Confirm that this isn't a local variable before namespacing
     _patches[currentPath].add(Patch(node.span, "\$$ns.${node.name}"));
-    return true;
   }
 
   /// Finds the namespace that corresponds to a given import URL.

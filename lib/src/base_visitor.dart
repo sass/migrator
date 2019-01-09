@@ -13,272 +13,233 @@ import 'package:sass/src/visitor/interface/statement.dart';
 
 /// Base class for [Migrator] that traverses the stylesheet to ensure the
 /// code of the actual Migrator class is focused on migration.
-abstract class BaseVisitor
-    implements StatementVisitor<bool>, ExpressionVisitor<bool> {
-  bool _notImplemented(SassNode node) {
-    print("${node.runtimeType} not implemented");
-    return false;
+abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
+  @override
+  void visitAtRootRule(AtRootRule node) {
+    if (node.query != null) _visitInterpolation(node.query);
+    _visitChildren(node);
   }
 
   @override
-  bool visitAtRootRule(AtRootRule node) {
-    bool pass = node.query == null || _visitInterpolation(node.query);
-    for (var child in node.children) {
-      pass = child.accept(this) && pass;
-    }
-    return pass;
+  void visitAtRule(AtRule node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitAtRule(AtRule node) {
-    return _notImplemented(node);
+  void visitBinaryOperationExpression(BinaryOperationExpression node) {
+    node.left.accept(this);
+    node.right.accept(this);
   }
 
   @override
-  bool visitBinaryOperationExpression(BinaryOperationExpression node) {
-    bool passLeft = node.left.accept(this);
-    bool passRight = node.right.accept(this);
-    return passLeft && passRight;
+  void visitBooleanExpression(BooleanExpression node) {}
+
+  @override
+  void visitColorExpression(ColorExpression node) {}
+
+  @override
+  void visitContentBlock(ContentBlock node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitBooleanExpression(BooleanExpression node) {
-    return true;
+  void visitContentRule(ContentRule node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitColorExpression(ColorExpression node) {
-    return true;
+  void visitDebugRule(DebugRule node) {
+    node.expression.accept(this);
   }
 
   @override
-  bool visitContentBlock(ContentBlock node) {
-    return _notImplemented(node);
-  }
-
-  @override
-  bool visitContentRule(ContentRule node) {
-    return _notImplemented(node);
-  }
-
-  @override
-  bool visitDebugRule(DebugRule node) {
-    return node.expression.accept(this);
-  }
-
-  @override
-  bool visitDeclaration(Declaration node) {
+  void visitDeclaration(Declaration node) {
     // TODO(jathak): Visit and test children.
-    bool passName = _visitInterpolation(node.name);
-    bool passValue = node.value.accept(this);
-    return passName && passValue;
+    _visitInterpolation(node.name);
+    node.value.accept(this);
   }
 
   @override
-  bool visitEachRule(EachRule node) {
-    bool pass = node.list.accept(this);
-    for (var child in node.children) {
-      pass = child.accept(this) && pass;
-    }
-    return pass;
+  void visitEachRule(EachRule node) {
+    node.list.accept(this);
+    _visitChildren(node);
   }
 
   @override
-  bool visitErrorRule(ErrorRule node) {
-    return node.expression.accept(this);
+  void visitErrorRule(ErrorRule node) {
+    node.expression.accept(this);
   }
 
   @override
-  bool visitExtendRule(ExtendRule node) {
-    return _visitInterpolation(node.selector);
+  void visitExtendRule(ExtendRule node) {
+    _visitInterpolation(node.selector);
   }
 
   @override
-  bool visitForRule(ForRule node) {
-    var pass = node.from.accept(this);
-    pass = node.to.accept(this) && pass;
-    for (var child in node.children) {
-      pass = child.accept(this) && pass;
-    }
-    return pass;
+  void visitForRule(ForRule node) {
+    node.from.accept(this);
+    node.to.accept(this);
+    _visitChildren(node);
   }
 
   @override
-  bool visitFunctionExpression(FunctionExpression node) {
-    return _notImplemented(node);
+  void visitFunctionExpression(FunctionExpression node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitFunctionRule(FunctionRule node) {
+  void visitFunctionRule(FunctionRule node) {
     // TODO(jathak): visit and test `arguments`.
-    bool pass = true;
-    for (var child in node.children) {
-      pass = child.accept(this) && pass;
-    }
-    return pass;
+    _visitChildren(node);
   }
 
   @override
-  bool visitIfExpression(IfExpression node) {
-    return _notImplemented(node);
+  void visitIfExpression(IfExpression node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitIfRule(IfRule node) {
-    var pass = true;
+  void visitIfRule(IfRule node) {
     for (var clause in node.clauses) {
-      pass = clause.expression.accept(this) && pass;
+      clause.expression.accept(this);
       for (var child in clause.children) {
-        pass = child.accept(this) && pass;
+        child.accept(this);
       }
     }
     if (node.lastClause != null) {
       for (var child in node.lastClause.children) {
-        pass = child.accept(this) && pass;
+        child.accept(this);
       }
     }
-    return pass;
   }
 
   @override
-  bool visitImportRule(ImportRule node) {
-    return _notImplemented(node);
+  void visitImportRule(ImportRule node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitIncludeRule(IncludeRule node) {
-    return _notImplemented(node);
+  void visitIncludeRule(IncludeRule node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitListExpression(ListExpression node) {
-    var pass = true;
+  void visitListExpression(ListExpression node) {
     for (var value in node.contents) {
-      pass = value.accept(this) && pass;
+      value.accept(this);
     }
-    return pass;
   }
 
   @override
-  bool visitLoudComment(LoudComment node) {
-    return _visitInterpolation(node.text);
+  void visitLoudComment(LoudComment node) {
+    _visitInterpolation(node.text);
   }
 
   @override
-  bool visitMapExpression(MapExpression node) {
-    bool pass = true;
+  void visitMapExpression(MapExpression node) {
     for (var pair in node.pairs) {
-      pass = pair.item1.accept(this) && pass;
-      pass = pair.item2.accept(this) && pass;
+      pair.item1.accept(this);
+      pair.item2.accept(this);
     }
-    return pass;
   }
 
   @override
-  bool visitMediaRule(MediaRule node) {
-    return _notImplemented(node);
+  void visitMediaRule(MediaRule node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitMixinRule(MixinRule node) {
-    return _notImplemented(node);
+  void visitMixinRule(MixinRule node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitNullExpression(NullExpression node) {
-    return true;
-  }
+  void visitNullExpression(NullExpression node) {}
 
   @override
-  bool visitNumberExpression(NumberExpression node) {
-    return true;
-  }
+  void visitNumberExpression(NumberExpression node) {}
 
   @override
-  bool visitParenthesizedExpression(ParenthesizedExpression node) {
+  void visitParenthesizedExpression(ParenthesizedExpression node) {
     return node.expression.accept(this);
   }
 
   @override
-  bool visitReturnRule(ReturnRule node) {
+  void visitReturnRule(ReturnRule node) {
     return node.expression.accept(this);
   }
 
   @override
-  bool visitSelectorExpression(SelectorExpression node) {
-    return _notImplemented(node);
+  void visitSelectorExpression(SelectorExpression node) {
+    _notImplemented(node);
   }
 
   @override
-  bool visitSilentComment(SilentComment node) {
-    return true;
-  }
+  void visitSilentComment(SilentComment node) {}
 
   @override
-  bool visitStringExpression(StringExpression node) {
+  void visitStringExpression(StringExpression node) {
     // TODO(jathak): visit and test `text`.
-    return true;
   }
 
   @override
-  bool visitStyleRule(StyleRule node) {
-    bool pass = _visitInterpolation(node.selector);
+  void visitStyleRule(StyleRule node) {
+    _visitInterpolation(node.selector);
+    _visitChildren(node);
+  }
+
+  @override
+  void visitStylesheet(Stylesheet node) {
+    _visitChildren(node);
+  }
+
+  @override
+  void visitSupportsRule(SupportsRule node) {
+    _notImplemented(node);
+  }
+
+  @override
+  void visitUnaryOperationExpression(UnaryOperationExpression node) {
+    _notImplemented(node);
+  }
+
+  @override
+  void visitValueExpression(ValueExpression node) {
+    _notImplemented(node);
+  }
+
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    node.expression.accept(this);
+  }
+
+  @override
+  void visitVariableExpression(VariableExpression node) {}
+
+  @override
+  void visitWarnRule(WarnRule node) {
+    node.expression.accept(this);
+  }
+
+  @override
+  void visitWhileRule(WhileRule node) {
+    _notImplemented(node);
+  }
+
+  void _notImplemented(SassNode node) {
+    throw Exception("${node.runtimeType} not implemented");
+  }
+
+  void _visitChildren(ParentStatement node) {
     for (var child in node.children) {
-      pass = child.accept(this) && pass;
+      child.accept(this);
     }
-    return pass;
   }
 
-  @override
-  bool visitStylesheet(Stylesheet node) {
-    var pass = true;
-    for (var child in node.children) {
-      pass = child.accept(this) && pass;
-    }
-    return pass;
-  }
-
-  @override
-  bool visitSupportsRule(SupportsRule node) {
-    return _notImplemented(node);
-  }
-
-  @override
-  bool visitUnaryOperationExpression(UnaryOperationExpression node) {
-    return _notImplemented(node);
-  }
-
-  @override
-  bool visitValueExpression(ValueExpression node) {
-    return _notImplemented(node);
-  }
-
-  @override
-  bool visitVariableDeclaration(VariableDeclaration node) {
-    return node.expression.accept(this);
-  }
-
-  @override
-  bool visitVariableExpression(VariableExpression node) {
-    return true;
-  }
-
-  @override
-  bool visitWarnRule(WarnRule node) {
-    return node.expression.accept(this);
-  }
-
-  @override
-  bool visitWhileRule(WhileRule node) {
-    return _notImplemented(node);
-  }
-
-  bool _visitInterpolation(Interpolation node) {
-    var pass = true;
+  void _visitInterpolation(Interpolation node) {
     for (var value in node.contents) {
       if (value is String) continue;
-      pass = (value as Expression).accept(this) && pass;
+      (value as Expression).accept(this);
     }
-    return pass;
   }
 }
