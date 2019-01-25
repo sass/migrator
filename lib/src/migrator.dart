@@ -67,8 +67,7 @@ class Migrator extends BaseVisitor {
     return _migrated.map((path, contents) => MapEntry(path.path, contents));
   }
 
-  /// Migrates [entrypoint], returning its migrated contents (or null if the
-  /// file needed no migration).
+  /// Migrates [entrypoint], returning its migrated contents
   ///
   /// This does not actually write any changes to disk.
   String runMigration(String entrypoint) =>
@@ -87,25 +86,17 @@ class Migrator extends BaseVisitor {
     _namespaceStack.add({});
     _patches[path] = [];
     visitStylesheet(currentSheet);
-    if (applyPatches(path)) {
-      log("Successfully migrated $path");
-    } else {
-      log("Nothing to migrate in $path");
-    }
+    applyPatches(path);
     _patches.remove(path);
     _migrationStack.removeLast();
     _namespaceStack.removeLast();
   }
 
   /// Applies all patches to the file at [path] and stores the patched contents
-  /// in _migrated. Returns false if there are no patches to apply.
-  bool applyPatches(Path path) {
-    if (_patches[path].isEmpty) {
-      return false;
-    }
-    var file = _patches[path].first.selection.file;
+  /// in _migrated.
+  applyPatches(Path path) {
+    var file = _apis[path].sheet.span.file;
     _migrated[path] = Patch.applyAll(file, _patches[path]);
-    return true;
   }
 
   /// Migrates an @import rule to @use.
