@@ -84,5 +84,6 @@ class StylesheetApi {
     if (type == ApiType.variables) return variables.keys;
     if (type == ApiType.functions) return functions.keys;
     if (type == ApiType.mixins) return mixins.keys;
+    return null;
   }
 }
