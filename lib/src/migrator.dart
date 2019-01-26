@@ -14,6 +14,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:path/path.dart' as p;
 
 import 'base_visitor.dart';
+import 'built_in_functions.dart';
 import 'patch.dart';
 import 'stylesheet_api.dart';
 
@@ -26,26 +27,26 @@ class Migrator extends BaseVisitor {
   /// Maps canonical file paths to the API of that stylesheet.
   final Map<Path, StylesheetApi> _apis = {};
 
-  /// Stores a list of patches to be applied to each in-progress file.
-  final Map<Path, List<Patch>> _patches = {};
+  /// The path of the current file.
+  Path currentPath;
 
-  /// Stores a mapping of namespaces to file paths for each in-progress file.
-  final List<Map<Namespace, Path>> _namespaceStack = [];
+  /// The parsed stylesheet for the current file.
+  Stylesheet get currentSheet => _apis[currentPath]?.sheet;
 
-  /// Stack of files whose migration is in progress (last item is current).
-  final List<Path> _migrationStack = [];
+  /// The namespaces imported in the current file.
+  Map<Namespace, Path> namespaces;
+
+  /// The patches that will be applied to the current file.
+  List<Patch> patches;
+
+  /// Built-in modules that have already been imported.
+  Set<String> builtInModules;
+
+  /// Files that still need to be migrated.
+  List<Path> _migrationQueue = [];
 
   /// If true, stylesheets will be recursively migrated with their dependencies.
   bool _migrateDependencies;
-
-  /// The path of the file that is currently being migrated.
-  Path get currentPath => _migrationStack.isEmpty ? null : _migrationStack.last;
-
-  /// The parsed stylesheet for the file that is currently being migrated.
-  Stylesheet get currentSheet => _apis[currentPath]?.sheet;
-
-  /// The namespaces imported in the file that is currently being migrated
-  Map<Namespace, Path> get namespaces => _namespaceStack.last;
 
   /// Migrates [entrypoints] (and optionally dependencies), returning a map from
   /// canonical file paths to the migrated contents of that file.
@@ -55,15 +56,15 @@ class Migrator extends BaseVisitor {
       {bool migrateDependencies}) {
     _migrateDependencies = migrateDependencies;
     _migrated.clear();
-    _patches.clear();
-    _namespaceStack.clear();
-    _migrationStack.clear();
     _apis.clear();
     var paths = entrypoints.map(resolveImport);
     for (var path in paths) {
       StylesheetApi(path, resolveImport, loadFile, existingApis: _apis);
     }
-    paths.forEach(migrate);
+    _migrationQueue.addAll(paths);
+    while (_migrationQueue.isNotEmpty) {
+      migrate(_migrationQueue.removeAt(0));
+    }
     return _migrated.map((path, contents) => MapEntry(path.path, contents));
   }
 
@@ -78,25 +79,20 @@ class Migrator extends BaseVisitor {
   /// This assumes that a migration has already been started. Use [runMigration]
   /// to start a new migration.
   void migrate(Path path) {
-    if (_migrated.containsKey(path)) {
-      log("Already migrated $path");
-      return;
-    }
-    _migrationStack.add(path);
-    _namespaceStack.add({});
-    _patches[path] = [];
+    if (_migrated.containsKey(path)) return;
+    namespaces = {};
+    patches = [];
+    builtInModules = Set();
+    currentPath = path;
     visitStylesheet(currentSheet);
     applyPatches(path);
-    _patches.remove(path);
-    _migrationStack.removeLast();
-    _namespaceStack.removeLast();
   }
 
   /// Applies all patches to the file at [path] and stores the patched contents
   /// in _migrated.
   applyPatches(Path path) {
     var file = _apis[path].sheet.span.file;
-    _migrated[path] = Patch.applyAll(file, _patches[path]);
+    _migrated[path] = Patch.applyAll(file, patches);
   }
 
   /// Migrates an @import rule to @use.
@@ -135,10 +131,9 @@ class Migrator extends BaseVisitor {
         .map((decl) => "\$${decl.name}: ${decl.expression}")
         .join(",\n  ");
     if (config != "") config = " with (\n  $config\n)";
-    _patches[currentPath]
-        .add(Patch(importRule.span, '@use ${import.span.text}$config'));
+    patches.add(Patch(importRule.span, '@use ${import.span.text}$config'));
 
-    if (_migrateDependencies) migrate(path);
+    if (_migrateDependencies) _migrationQueue.add(path);
   }
 
   /// Adds a namespace to a function call if it is necessary.
@@ -151,13 +146,24 @@ class Migrator extends BaseVisitor {
       return;
     }
     var name = node.name.asPlain;
-    if (_apis[currentPath].functions.containsKey(name)) return;
     var ns = findNamespaceFor(name, ApiType.functions);
     if (ns == null) {
       ns = makeImplicitDependencyExplicit(name, ApiType.functions);
-      if (ns == null) return;
+      if (ns == null) {
+        if (_apis[currentPath].functions.containsKey(name)) return;
+        if (builtInFunctionModules.containsKey(name)) {
+          ns = Namespace(builtInFunctionModules[name]);
+          if (builtInFunctionNameChanges.containsKey(name)) {
+            name = builtInFunctionNameChanges[name];
+          }
+          if (!builtInModules.contains(ns.namespace)) {
+            builtInModules.add(ns.namespace);
+            patches.add(Patch.prepend('@use "sass:$ns";\n'));
+          }
+        }
+      }
     }
-    _patches[currentPath].add(Patch(node.name.span, "$ns.${node.name}"));
+    patches.add(Patch(node.name.span, "$ns.$name"));
   }
 
   /// Adds a namespace to a variable if it is necessary.
@@ -171,7 +177,7 @@ class Migrator extends BaseVisitor {
       if (ns == null) return;
     }
     // TODO(jathak): Confirm that this isn't a local variable before namespacing
-    _patches[currentPath].add(Patch(node.span, "\$$ns.${node.name}"));
+    patches.add(Patch(node.span, "\$$ns.${node.name}"));
   }
 
   /// Finds the namespace that corresponds to a given import URL.
@@ -209,7 +215,7 @@ class Migrator extends BaseVisitor {
     if (lastImplicitPath == null) return null;
     var normalized = p.withoutExtension(
         p.relative(lastImplicitPath.path, from: p.dirname(currentPath.path)));
-    _patches[currentPath].add(Patch.prepend('@use "$normalized";\n'));
+    patches.add(Patch.prepend('@use "$normalized";\n'));
     var ns = findNamespace(lastImplicitPath.path);
     namespaces[ns] = lastImplicitPath;
     return ns;
