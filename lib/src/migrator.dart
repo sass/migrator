@@ -171,12 +171,12 @@ class Migrator extends BaseVisitor {
   void visitVariableExpression(VariableExpression node) {
     super.visitVariableExpression(node);
     if (_apis[currentPath].variables.containsKey(node.name)) return;
+    if (isLocalVariable(node.name)) return;
     var ns = findNamespaceFor(node.name, ApiType.variables);
     if (ns == null) {
       ns = makeImplicitDependencyExplicit(node.name, ApiType.variables);
       if (ns == null) return;
     }
-    // TODO(jathak): Confirm that this isn't a local variable before namespacing
     patches.add(Patch(node.span, "\$$ns.${node.name}"));
   }
 
