@@ -102,6 +102,7 @@ class Migrator extends BaseVisitor {
   /// Migrates an @import rule to @use.
   @override
   void visitImportRule(ImportRule importRule) {
+    super.visitImportRule(importRule);
     if (importRule.imports.length != 1) {
       throw Exception("Multiple imports in single rule not supported yet");
     }
@@ -140,9 +141,30 @@ class Migrator extends BaseVisitor {
     if (_migrateDependencies) migrate(path);
   }
 
+  /// Adds a namespace to a function call if it is necessary.
+  @override
+  void visitFunctionExpression(FunctionExpression node) {
+    super.visitFunctionExpression(node);
+    if (node.name.contents.length != 1 || node.name.contents.first is! String) {
+      // This is a plain CSS invocation if it is interpolated, so there's no
+      // need to namespace.
+      return;
+    }
+    var name = node.name.asPlain;
+    if (_apis[currentPath].functions.containsKey(name)) return;
+    var ns = findNamespaceFor(name, ApiType.functions);
+    if (ns == null) {
+      ns = makeImplicitDependencyExplicit(name, ApiType.functions);
+      if (ns == null) return;
+    }
+    _patches[currentPath].add(Patch(node.name.span, "$ns.${node.name}"));
+  }
+
   /// Adds a namespace to a variable if it is necessary.
   @override
   void visitVariableExpression(VariableExpression node) {
+    super.visitVariableExpression(node);
+    if (_apis[currentPath].variables.containsKey(node.name)) return;
     var ns = findNamespaceFor(node.name, ApiType.variables);
     if (ns == null) {
       ns = makeImplicitDependencyExplicit(node.name, ApiType.variables);
@@ -209,6 +231,7 @@ class Migrator extends BaseVisitor {
   }
 
   Path _resolveRealPath(String absolutePath) {
+    absolutePath = p.canonicalize(absolutePath);
     if (absolutePath.endsWith('.css')) {
       throw Exception("This should never happen $absolutePath");
     }

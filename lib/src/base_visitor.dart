@@ -14,6 +14,32 @@ import 'package:sass/src/visitor/interface/statement.dart';
 /// Base class for [Migrator] that traverses the stylesheet to ensure the
 /// code of the actual Migrator class is focused on migration.
 abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
+  List<String> _localVarsInScope = [];
+  List<int> _counts = [];
+
+  void newScope() {
+    _counts.add(0);
+  }
+
+  void addInNewScope(Iterable<String> names) {
+    _counts.add(names.length);
+    _localVarsInScope.addAll(names);
+  }
+
+  void addInScope(String name) {
+    _counts.last += 1;
+    _localVarsInScope.add(name);
+  }
+
+  void exitScope() {
+    while (_counts.last > 0) {
+      _localVarsInScope.removeLast();
+      _counts.last--;
+    }
+  }
+
+  bool isLocalVariable(String name) => _localVarsInScope.contains(name);
+
   @override
   void visitAtRootRule(AtRootRule node) {
     if (node.query != null) _visitInterpolation(node.query);
@@ -54,15 +80,17 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitDeclaration(Declaration node) {
-    // TODO(jathak): Visit and test children.
     _visitInterpolation(node.name);
     node.value.accept(this);
+    _visitChildren(node);
   }
 
   @override
   void visitEachRule(EachRule node) {
     node.list.accept(this);
+    addInNewScope(node.variables);
     _visitChildren(node);
+    exitScope();
   }
 
   @override
@@ -79,48 +107,55 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
   void visitForRule(ForRule node) {
     node.from.accept(this);
     node.to.accept(this);
+    addInNewScope([node.variable]);
     _visitChildren(node);
+    exitScope();
   }
 
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    _notImplemented(node);
+    _visitInterpolation(node.name);
+    _visitArguments(node.arguments);
   }
 
   @override
   void visitFunctionRule(FunctionRule node) {
-    // TODO(jathak): visit and test `arguments`.
+    _visitParametersAndScope(node.arguments);
     _visitChildren(node);
+    exitScope();
   }
 
   @override
   void visitIfExpression(IfExpression node) {
-    _notImplemented(node);
+    _visitArguments(node.arguments);
   }
 
   @override
   void visitIfRule(IfRule node) {
     for (var clause in node.clauses) {
       clause.expression.accept(this);
+      newScope();
       for (var child in clause.children) {
         child.accept(this);
       }
+      exitScope();
     }
     if (node.lastClause != null) {
+      newScope();
       for (var child in node.lastClause.children) {
         child.accept(this);
       }
+      exitScope();
     }
   }
 
   @override
-  void visitImportRule(ImportRule node) {
-    _notImplemented(node);
-  }
+  void visitImportRule(ImportRule node) {}
 
   @override
   void visitIncludeRule(IncludeRule node) {
-    _notImplemented(node);
+    _visitArguments(node.arguments);
+    node.content?.accept(this);
   }
 
   @override
@@ -150,7 +185,9 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitMixinRule(MixinRule node) {
-    _notImplemented(node);
+    _visitParametersAndScope(node.arguments);
+    _visitChildren(node);
+    exitScope();
   }
 
   @override
@@ -161,31 +198,31 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitParenthesizedExpression(ParenthesizedExpression node) {
-    return node.expression.accept(this);
+    node.expression.accept(this);
   }
 
   @override
   void visitReturnRule(ReturnRule node) {
-    return node.expression.accept(this);
+    node.expression.accept(this);
   }
 
   @override
-  void visitSelectorExpression(SelectorExpression node) {
-    _notImplemented(node);
-  }
+  void visitSelectorExpression(SelectorExpression node) {}
 
   @override
   void visitSilentComment(SilentComment node) {}
 
   @override
   void visitStringExpression(StringExpression node) {
-    // TODO(jathak): visit and test `text`.
+    _visitInterpolation(node.asInterpolation());
   }
 
   @override
   void visitStyleRule(StyleRule node) {
     _visitInterpolation(node.selector);
+    newScope();
     _visitChildren(node);
+    exitScope();
   }
 
   @override
@@ -200,7 +237,7 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitUnaryOperationExpression(UnaryOperationExpression node) {
-    _notImplemented(node);
+    node.operand.accept(this);
   }
 
   @override
@@ -211,6 +248,7 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
     node.expression.accept(this);
+    if (_counts.isNotEmpty) addInScope(node.name);
   }
 
   @override
@@ -223,15 +261,37 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitWhileRule(WhileRule node) {
-    _notImplemented(node);
+    node.condition.accept(this);
+    newScope();
+    _visitChildren(node);
+    exitScope();
   }
 
   void _notImplemented(SassNode node) {
     throw Exception("${node.runtimeType} not implemented");
   }
 
+  void _visitParametersAndScope(ArgumentDeclaration args) {
+    for (var arg in args.arguments) {
+      arg.defaultValue?.accept(this);
+    }
+    addInNewScope(args.arguments.map((a) => a.name));
+    addInScope(args.restArgument);
+  }
+
+  void _visitArguments(ArgumentInvocation args) {
+    for (var expression in args.positional) {
+      expression.accept(this);
+    }
+    for (var expression in args.named.values) {
+      expression.accept(this);
+    }
+    args.rest?.accept(this);
+    args.keywordRest?.accept(this);
+  }
+
   void _visitChildren(ParentStatement node) {
-    for (var child in node.children) {
+    for (var child in node.children ?? []) {
       child.accept(this);
     }
   }

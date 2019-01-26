@@ -14,6 +14,7 @@ import 'package:test/test.dart';
 void main() {
   testHrx("simple_variables");
   testHrx("subdirectories");
+  testHrx("functions");
 }
 
 const testDirectory = "/test/";
@@ -99,11 +100,11 @@ testHrx(String hrxName) {
           var migrator = TestMigrator(files.testFiles);
           var migrated =
               migrator.runMigrations([entry], migrateDependencies: true);
-          expect(migrated[entry],
-              equals(files.expectedOutput[p.join(testDirectory, entry)]));
+          expect(migrated[p.join(testDirectory, entry)],
+              equals(files.expectedOutput[entry]));
           for (var dep in files.recursiveManifest[entry]) {
-            expect(migrated[dep],
-                equals(files.expectedOutput[p.join(testDirectory, dep)]));
+            expect(migrated[p.join(testDirectory, dep)],
+                equals(files.expectedOutput[dep]));
           }
           expect(migrated.length,
               equals(files.recursiveManifest[entry].length + 1));
