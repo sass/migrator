@@ -15,7 +15,9 @@ span {
 @import "three";
 $a: green;
 a {
+  $c: red;
   background: $b;
+  color: $c;
 }
 
 <==> input/three.scss
@@ -42,7 +44,9 @@ span {
 @use "three";
 $a: green;
 a {
+  $c: red;
   background: $three.b;
+  color: $c;
 }
 
 <==> expected/three.scss
