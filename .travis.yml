@@ -1,0 +1,15 @@
+language: dart
+dart:
+  - stable
+  - dev
+branches:
+  only:
+    - master
+cache:
+  directories:
+    - $HOME/.pub-cache
+
+script:
+  - dartanalyzer --fatal-warnings ./
+  - dartfmt -n --set-exit-if-changed .
+  - pub run test
