@@ -65,12 +65,14 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitContentBlock(ContentBlock node) {
-    _notImplemented(node);
+    _visitParametersAndScope(node.arguments);
+    _visitChildren(node);
+    exitScope();
   }
 
   @override
   void visitContentRule(ContentRule node) {
-    _notImplemented(node);
+    _visitArguments(node.arguments);
   }
 
   @override
@@ -180,7 +182,10 @@ abstract class BaseVisitor implements StatementVisitor, ExpressionVisitor {
 
   @override
   void visitMediaRule(MediaRule node) {
-    _notImplemented(node);
+    _visitInterpolation(node.query);
+    newScope();
+    _visitChildren(node);
+    exitScope();
   }
 
   @override
