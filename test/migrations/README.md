@@ -25,6 +25,7 @@ contain the entrypoint to test, followed by `->`, followed by a space separated
 list of the entrypoint's direct and indirect dependencies. The test will
 confirm that starting a recursive migration from the given entrypoint will
 properly migrate it and all of the specified dependencies and that no
-additional files are migrated.
+additional files are migrated. Lines in this file that start with `#` will be
+ignored.
 
 See `simple_variables.hrx` for an example.

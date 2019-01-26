@@ -30,7 +30,7 @@ class Path {
 }
 
 /// Takes a URL from an import rule and returns its canonical path.
-typedef PathResolver = Path Function(String importUrl);
+typedef PathResolver = Path Function(String importUrl, {Path from});
 
 /// Returns the contents of the file at [path].
 typedef FileLoader = String Function(Path path);
@@ -67,7 +67,7 @@ class StylesheetApi {
       } else if (statement is ImportRule) {
         for (var import in statement.imports) {
           if (import is DynamicImport) {
-            var importedPath = resolver(import.url);
+            var importedPath = resolver(import.url, from: path);
             api.imports[importedPath] = StylesheetApi(
                 importedPath, resolver, loader,
                 existingApis: existingApis);

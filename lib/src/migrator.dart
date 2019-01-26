@@ -70,8 +70,8 @@ class Migrator extends BaseVisitor {
   /// Migrates [entrypoint], returning its migrated contents
   ///
   /// This does not actually write any changes to disk.
-  String runMigration(String entrypoint) =>
-      runMigrations([entrypoint], migrateDependencies: false)[entrypoint];
+  String runMigration(String entrypoint) => runMigrations([entrypoint],
+      migrateDependencies: false)[p.join(entrypointDirectory, entrypoint)];
 
   /// Migrates [path].
   ///
@@ -123,7 +123,7 @@ class Migrator extends BaseVisitor {
       // TODO(jathak): Handle nested imports
       return;
     }
-    var path = resolveImport(import.url);
+    var path = resolveImport(import.url, from: currentPath);
     var importedSheetApi = _apis[path];
     namespaces[findNamespace(import.url)] = path;
 
@@ -194,11 +194,57 @@ class Migrator extends BaseVisitor {
   }
 
   /// Finds the canonical path for an import URL.
-  Path resolveImport(String importUrl) {
-    // TODO(jathak): Actually handle this robustly
-    if (!importUrl.endsWith('.scss')) importUrl += '.scss';
-    return Path(File(importUrl).absolute.path);
+  Path resolveImport(String importUrl, {Path from}) {
+    var absolutePath = importUrl;
+    if (from != null && !p.isAbsolute(importUrl)) {
+      absolutePath = p.join(p.dirname(from.path), importUrl);
+    } else if (!p.isAbsolute(importUrl)) {
+      absolutePath = p.join(entrypointDirectory, importUrl);
+    }
+    var result = _resolveRealPath(absolutePath);
+    if (result == null) {
+      throw Exception("Could not resolve $absolutePath");
+    }
+    return result;
   }
+
+  Path _resolveRealPath(String absolutePath) {
+    if (absolutePath.endsWith('.css')) {
+      throw Exception("This should never happen $absolutePath");
+    }
+    if (absolutePath.endsWith('.scss') || absolutePath.endsWith('.sass')) {
+      return _findPotentialPartials(absolutePath);
+    } else {
+      var sass = _findPotentialPartials(absolutePath + '.sass');
+      var scss = _findPotentialPartials(absolutePath + '.scss');
+      if (sass != null && scss != null) {
+        throw Exception("$absolutePath exists as both .sass and .scss");
+      }
+      if (sass != null) return sass;
+      if (scss != null) return scss;
+      return _findPotentialPartials(absolutePath + '.css');
+    }
+  }
+
+  Path _findPotentialPartials(String absolutePath) {
+    var regular = Path(absolutePath);
+    var partial =
+        Path(p.join(p.dirname(absolutePath), '_' + p.basename(absolutePath)));
+    var regularExists = exists(regular);
+    var partialExists = exists(partial);
+    if (regularExists && partialExists) {
+      throw Exception("$regular and $partial both exist");
+    }
+    if (regularExists) return regular;
+    if (partialExists) return partial;
+    return null;
+  }
+
+  // Returns the absolute directory path the migrator is run from.
+  String get entrypointDirectory => Directory.current.path;
+
+  /// Returns whether or not a file at [path] exists.
+  bool exists(Path path) => File(path.path).existsSync();
 
   /// Loads the file at the given canonical path.
   String loadFile(Path path) => File(path.path).readAsStringSync();

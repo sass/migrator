@@ -6,9 +6,17 @@
 
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:sass_module_migrator/src/migrator.dart';
 import 'package:sass_module_migrator/src/stylesheet_api.dart';
 import 'package:test/test.dart';
+
+void main() {
+  testHrx("simple_variables");
+  testHrx("subdirectories");
+}
+
+const testDirectory = "/test/";
 
 class TestMigrator extends Migrator {
   Map<String, String> testFiles = {};
@@ -16,12 +24,15 @@ class TestMigrator extends Migrator {
   TestMigrator(this.testFiles);
 
   @override
-  String loadFile(Path path) => testFiles[path.path];
+  String loadFile(Path path) =>
+      testFiles[p.relative(path.path, from: testDirectory)];
 
-  Path resolveImport(String importUrl) {
-    if (!importUrl.endsWith('.scss')) importUrl += '.scss';
-    return Path(importUrl);
-  }
+  @override
+  bool exists(Path path) =>
+      testFiles.containsKey(p.relative(path.path, from: testDirectory));
+
+  @override
+  String entrypointDirectory = testDirectory;
 
   final List<String> logged = [];
 
@@ -60,6 +71,7 @@ class HrxTestFiles {
       expectedOutput[filename.substring(9)] = contents;
     } else if (filename == "recursive_manifest") {
       for (var line in contents.trim().split("\n")) {
+        if (line.startsWith("#")) continue;
         var source = line.split("->").first.trim();
         var deps = line.split("->").last.trim();
         recursiveManifest[source] =
@@ -67,10 +79,6 @@ class HrxTestFiles {
       }
     }
   }
-}
-
-void main() {
-  testHrx("simple_variables");
 }
 
 testHrx(String hrxName) {
@@ -91,9 +99,11 @@ testHrx(String hrxName) {
           var migrator = TestMigrator(files.testFiles);
           var migrated =
               migrator.runMigrations([entry], migrateDependencies: true);
-          expect(migrated[entry], equals(files.expectedOutput[entry]));
+          expect(migrated[entry],
+              equals(files.expectedOutput[p.join(testDirectory, entry)]));
           for (var dep in files.recursiveManifest[entry]) {
-            expect(migrated[dep], equals(files.expectedOutput[dep]));
+            expect(migrated[dep],
+                equals(files.expectedOutput[p.join(testDirectory, dep)]));
           }
           expect(migrated.length,
               equals(files.recursiveManifest[entry].length + 1));
