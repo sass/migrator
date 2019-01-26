@@ -12,9 +12,10 @@ import 'package:sass_module_migrator/src/stylesheet_api.dart';
 import 'package:test/test.dart';
 
 void main() {
-  testHrx("simple_variables");
+  testHrx("variables");
   testHrx("subdirectories");
   testHrx("functions");
+  testHrx("mixins");
 }
 
 const testDirectory = "/test/";
@@ -85,15 +86,13 @@ class HrxTestFiles {
 testHrx(String hrxName) {
   var files = HrxTestFiles(hrxName);
   group(hrxName, () {
-    group("solo", () {
-      for (var file in files.testFiles.keys) {
-        test(file, () {
-          var migrator = TestMigrator(files.testFiles);
-          var migrated = migrator.runMigration(file);
-          expect(migrated, equals(files.expectedOutput[file]));
-        });
-      }
-    });
+    for (var file in files.testFiles.keys) {
+      test(file, () {
+        var migrator = TestMigrator(files.testFiles);
+        var migrated = migrator.runMigration(file);
+        expect(migrated, equals(files.expectedOutput[file]));
+      });
+    }
     group("recursive from", () {
       for (var entry in files.recursiveManifest.keys) {
         test(entry, () {

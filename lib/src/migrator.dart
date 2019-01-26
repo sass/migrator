@@ -166,6 +166,20 @@ class Migrator extends BaseVisitor {
     patches.add(Patch(node.name.span, "$ns.$name"));
   }
 
+  /// Adds a namespace to an include rule if it is necessary.
+  @override
+  void visitIncludeRule(IncludeRule node) {
+    var ns = findNamespaceFor(node.name, ApiType.mixins);
+    if (ns == null) {
+      ns = makeImplicitDependencyExplicit(node.name, ApiType.mixins);
+      if (ns == null) return;
+    }
+    var endName = node.arguments.span.start.offset;
+    var startName = endName - node.name.length;
+    var nameSpan = node.span.file.span(startName, endName);
+    patches.add(Patch(nameSpan, "$ns.${node.name}"));
+  }
+
   /// Adds a namespace to a variable if it is necessary.
   @override
   void visitVariableExpression(VariableExpression node) {
