@@ -1,0 +1,15 @@
+name: sass_module_migrator
+version: 0.0.1-dev
+description: A tool for migrating Sass files to the new module system
+
+environment:
+  sdk: '>=2.1.0 <3.0.0'
+
+dependencies:
+  args: "^1.4.0"
+  sass: "^1.15.3"
+  source_span: "^1.4.0"
+  path: "^1.6.0"
+
+dev_dependencies:
+  test: ">=0.12.29 <2.0.0"

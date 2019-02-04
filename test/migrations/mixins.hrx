@@ -1,0 +1,48 @@
+<==> recursive_manifest
+entrypoint.scss -> _theme.scss
+
+<==> input/entrypoint.scss
+@import "theme";
+
+$mobile-color: green;
+
+div {
+  @include background;
+  @include min-width-only(500px) {
+    background-color: $mobile-color;
+  }
+}
+
+<==> input/_theme.scss
+@mixin background {
+  background-color: #57f;
+}
+$mobile-color: red;
+@mixin min-width-only($width) {
+  @media (min-width: $width) {
+    @content;
+  }
+}
+
+<==> expected/entrypoint.scss
+@use "theme";
+
+$mobile-color: green;
+
+div {
+  @include theme.background;
+  @include theme.min-width-only(500px) {
+    background-color: $mobile-color;
+  }
+}
+
+<==> expected/_theme.scss
+@mixin background {
+  background-color: #57f;
+}
+$mobile-color: red;
+@mixin min-width-only($width) {
+  @media (min-width: $width) {
+    @content;
+  }
+}

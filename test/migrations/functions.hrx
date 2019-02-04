@@ -1,0 +1,33 @@
+<==> recursive_manifest
+entrypoint.scss -> _functions.scss
+
+<==> input/entrypoint.scss
+@import "functions";
+$three: plus(1, 2);
+$five: subtract_all($twelve, 2, $three, 2);
+
+<==> input/_functions.scss
+$twelve: 12;
+
+@function plus($a, $b) {
+  @return $a + $b;
+}
+@function subtract_all($first, $rest...) {
+  @return $first - nth($rest, 1) - nth($rest, 2) - nth($rest, 3);
+}
+
+<==> expected/entrypoint.scss
+@use "functions";
+$three: functions.plus(1, 2);
+$five: functions.subtract_all($functions.twelve, 2, $three, 2);
+
+<==> expected/_functions.scss
+@use "sass:list";
+$twelve: 12;
+
+@function plus($a, $b) {
+  @return $a + $b;
+}
+@function subtract_all($first, $rest...) {
+  @return $first - list.nth($rest, 1) - list.nth($rest, 2) - list.nth($rest, 3);
+}

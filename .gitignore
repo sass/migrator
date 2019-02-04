@@ -1,0 +1,4 @@
+# Dart stuff
+.dart_tool
+.packages
+pubspec.lock
