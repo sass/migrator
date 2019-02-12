@@ -1,6 +1,3 @@
-<==> recursive_manifest
-entrypoint.scss -> _functions.scss
-
 <==> input/entrypoint.scss
 @import "functions";
 $three: plus(1, 2);

@@ -19,13 +19,4 @@ For each source file in `input`, there should be a corresponding file in
 By default, each source file in `input` will be individually migrated and then
 compared to the corresponding file in `expected`.
 
-Optionally, the `recursive_manifest` file can be used to specify entrypoints
-that should be tested for a recursive migration. Each line of this file should
-contain the entrypoint to test, followed by `->`, followed by a space separated
-list of the entrypoint's direct and indirect dependencies. The test will
-confirm that starting a recursive migration from the given entrypoint will
-properly migrate it and all of the specified dependencies and that no
-additional files are migrated. Lines in this file that start with `#` will be
-ignored.
-
-See `simple_variables.hrx` for an example.
+See `variables.hrx` for an example.

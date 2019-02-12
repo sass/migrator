@@ -33,8 +33,9 @@ void main(List<String> args) {
     return;
   }
 
-  var migrated = Migrator().runMigrations(argResults.rest,
-      migrateDependencies: argResults['recursive']);
+  var migrated = migrateFiles(argResults.rest);
+  /*,
+      migrateDependencies: argResults['recursive']);*/
 
   if (migrated.isEmpty) {
     print('Nothing to migrate!');

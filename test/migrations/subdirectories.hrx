@@ -1,7 +1,3 @@
-<==> recursive_manifest
-outer1.scss -> folder/inner1.scss folder/_inner2.scss _outer2.scss
-folder/inner1.scss -> folder/_inner2.scss _outer2.scss
-
 <==> input/outer1.scss
 @import "folder/inner1";
 $result: $a * $a;

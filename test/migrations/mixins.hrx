@@ -1,6 +1,3 @@
-<==> recursive_manifest
-entrypoint.scss -> _theme.scss
-
 <==> input/entrypoint.scss
 @import "theme";
 
