@@ -1,8 +1,3 @@
-<==> recursive_manifest
-one.scss -> two.scss three.scss
-two.scss -> three.scss
-four.scss -> three.scss
-
 <==> input/one.scss
 @import "two";
 span {
@@ -31,7 +26,7 @@ b {
 $c: 4px;
 @import "three";
 
-<==> expected/one.scss
+<==> output/one.scss
 @use "three";
 @use "two";
 span {
@@ -40,7 +35,7 @@ span {
   height: $three.c;
 }
 
-<==> expected/two.scss
+<==> output/two.scss
 @use "three";
 $a: green;
 a {
@@ -49,14 +44,14 @@ a {
   color: $c;
 }
 
-<==> expected/three.scss
+<==> output/three.scss
 $b: blue;
 $c: 5px !default;
 b {
   width: 0;
 }
 
-<==> expected/four.scss
+<==> output/four.scss
 $c: 4px;
 @use "three" with (
   $c: 4px

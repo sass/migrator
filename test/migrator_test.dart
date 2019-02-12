@@ -6,10 +6,11 @@
 
 import 'dart:io';
 
-import 'package:path/path.dart' as p;
 import 'package:sass_module_migrator/src/migrator.dart';
-import 'package:sass_module_migrator/src/stylesheet_api.dart';
+
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:test_descriptor/test_descriptor.dart' as d;
 
 void main() {
   testHrx("variables");
@@ -18,36 +19,12 @@ void main() {
   testHrx("mixins");
 }
 
-const testDirectory = "/test/";
-
-class TestMigrator extends Migrator {
-  Map<String, String> testFiles = {};
-
-  TestMigrator(this.testFiles);
-
-  @override
-  String loadFile(Path path) =>
-      testFiles[p.relative(path.path, from: testDirectory)];
-
-  @override
-  bool exists(Path path) =>
-      testFiles.containsKey(p.relative(path.path, from: testDirectory));
-
-  @override
-  String entrypointDirectory = testDirectory;
-
-  final List<String> logged = [];
-
-  @override
-  void log(String text) => logged.add(text);
-}
-
 class HrxTestFiles {
-  Map<String, String> testFiles = {};
-  Map<String, String> expectedOutput = {};
-  Map<String, List<String>> recursiveManifest = {};
+  String hrxName;
+  Map<String, String> input = {};
+  Map<String, String> output = {};
 
-  HrxTestFiles(String hrxName) {
+  HrxTestFiles(this.hrxName) {
     var hrxText = File("test/migrations/$hrxName.hrx").readAsStringSync();
     // TODO(jathak): Replace this with an actual HRX parser.
     String filename;
@@ -66,19 +43,22 @@ class HrxTestFiles {
     if (filename != null) _load(filename, contents);
   }
 
-  _load(String filename, String contents) {
+  void _load(String filename, String contents) {
     if (filename.startsWith("input/")) {
-      testFiles[filename.substring(6)] = contents;
-    } else if (filename.startsWith("expected/")) {
-      expectedOutput[filename.substring(9)] = contents;
-    } else if (filename == "recursive_manifest") {
-      for (var line in contents.trim().split("\n")) {
-        if (line.startsWith("#")) continue;
-        var source = line.split("->").first.trim();
-        var deps = line.split("->").last.trim();
-        recursiveManifest[source] =
-            deps.split(" ").map((x) => x.trim()).toList();
+      input[filename.substring(6)] = contents;
+    } else if (filename.startsWith("output/")) {
+      output[filename.substring(6)] = contents;
+    }
+  }
+
+  Future unpack() async {
+    for (var file in input.keys) {
+      var parts = p.split(file);
+      d.Descriptor descriptor = d.file(parts.removeLast(), input[file]);
+      while (parts.isNotEmpty) {
+        descriptor = d.dir(parts.removeLast(), [descriptor]);
       }
+      await descriptor.create();
     }
   }
 }
@@ -86,29 +66,13 @@ class HrxTestFiles {
 testHrx(String hrxName) {
   var files = HrxTestFiles(hrxName);
   group(hrxName, () {
-    for (var file in files.testFiles.keys) {
-      test(file, () {
-        var migrator = TestMigrator(files.testFiles);
-        var migrated = migrator.runMigration(file);
-        expect(migrated, equals(files.expectedOutput[file]));
+    for (var file in files.input.keys) {
+      test(file, () async {
+        await files.unpack();
+        var path = p.join(d.sandbox, file);
+        var migrated = migrateFiles([path]);
+        expect(migrated[path], equals(files.output[file]));
       });
     }
-    group("recursive from", () {
-      for (var entry in files.recursiveManifest.keys) {
-        test(entry, () {
-          var migrator = TestMigrator(files.testFiles);
-          var migrated =
-              migrator.runMigrations([entry], migrateDependencies: true);
-          expect(migrated[p.join(testDirectory, entry)],
-              equals(files.expectedOutput[entry]));
-          for (var dep in files.recursiveManifest[entry]) {
-            expect(migrated[p.join(testDirectory, dep)],
-                equals(files.expectedOutput[dep]));
-          }
-          expect(migrated.length,
-              equals(files.recursiveManifest[entry].length + 1));
-        });
-      }
-    });
   });
 }

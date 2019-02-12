@@ -9,7 +9,7 @@ cache:
   directories:
     - $HOME/.pub-cache
 
-script:
-  - dartanalyzer --fatal-warnings ./
-  - dartfmt -n --set-exit-if-changed .
-  - pub run test
+dart_task:
+  - dartanalyzer: --fatal-warnings
+  - dartfmt
+  - test
