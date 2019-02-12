@@ -10,6 +10,6 @@ cache:
     - $HOME/.pub-cache
 
 dart_task:
-  - dartanalyzer: --fatal-warnings
+  - dartanalyzer: --fatal-warnings ./
   - dartfmt
   - test
