@@ -29,7 +29,7 @@ class HrxTestFiles {
     // TODO(jathak): Replace this with an actual HRX parser.
     String filename;
     String contents;
-    for (String line in hrxText.substring(0, hrxText.length - 1).split("\n")) {
+    for (var line in hrxText.substring(0, hrxText.length - 1).split("\n")) {
       if (line.startsWith("<==> ")) {
         if (filename != null) {
           _load(filename, contents.substring(0, contents.length - 1));
