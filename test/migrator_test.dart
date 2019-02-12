@@ -47,7 +47,7 @@ class HrxTestFiles {
     if (filename.startsWith("input/")) {
       input[filename.substring(6)] = contents;
     } else if (filename.startsWith("output/")) {
-      output[filename.substring(6)] = contents;
+      output[filename.substring(7)] = contents;
     }
   }
 
