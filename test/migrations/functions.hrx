@@ -13,12 +13,12 @@ $twelve: 12;
   @return $first - nth($rest, 1) - nth($rest, 2) - nth($rest, 3);
 }
 
-<==> expected/entrypoint.scss
+<==> output/entrypoint.scss
 @use "functions";
 $three: functions.plus(1, 2);
 $five: functions.subtract_all($functions.twelve, 2, $three, 2);
 
-<==> expected/_functions.scss
+<==> output/_functions.scss
 @use "sass:list";
 $twelve: 12;
 

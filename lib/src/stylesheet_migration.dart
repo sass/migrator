@@ -36,12 +36,13 @@ class StylesheetMigration {
   final p.PathMap<String> namespaces = p.PathMap();
 
   /// List of additional use rules necessary for referencing members of
-  /// transient dependencies.
+  /// implicit dependencies / built-in modules.
   ///
   /// This list contains the path provided in the use rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
   final List<String> additionalUseRules = [];
 
+  /// List of patches to be applied to this file.
   final List<Patch> patches = [];
 
   /// Global variables in this stylesheet and its dependencies.
@@ -57,6 +58,9 @@ class StylesheetMigration {
   final Map<String, FunctionRule> functions = normalizedMap();
 
   /// Local variables, mixins, and functions for migrations in progress.
+  ///
+  /// The migrator will modify this as it traverses the stylesheet. When at the
+  /// top-level of the stylesheet, this will be null.
   LocalScope localScope;
 
   StylesheetMigration._(this.stylesheet, this.path, this.contents, this.syntax);
@@ -69,6 +73,8 @@ class StylesheetMigration {
     return StylesheetMigration._(stylesheet, path, contents, syntax);
   }
 
+  /// Returns the migrated contents of this file, based on [additionalUseRules]
+  /// and [patches].
   String get migratedContents {
     var semicolon = syntax == Syntax.sass ? "" : ";";
     var uses = additionalUseRules.map((use) => '@use "$use"$semicolon\n');

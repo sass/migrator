@@ -21,7 +21,7 @@ $mobile-color: red;
   }
 }
 
-<==> expected/entrypoint.scss
+<==> output/entrypoint.scss
 @use "theme";
 
 $mobile-color: green;
@@ -33,7 +33,7 @@ div {
   }
 }
 
-<==> expected/_theme.scss
+<==> output/_theme.scss
 @mixin background {
   background-color: #57f;
 }

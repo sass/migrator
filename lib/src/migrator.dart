@@ -21,19 +21,21 @@ import 'utils.dart';
 
 /// Runs a migration of [entrypoints] and their dependencies without writing
 /// any changes to disk.
-///
-/// Note: The resulting map will only include files that required changes.
 p.PathMap<String> migrateFiles(List<String> entrypoints) =>
     _Migrator().migrate(entrypoints);
 
 class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
+  /// List of all migrations for files touched by this run.
   p.PathMap<StylesheetMigration> _migrations = p.PathMap();
 
+  /// List of migrations in progress. The last item in the current migration.
   List<StylesheetMigration> _activeMigrations = [];
 
   StylesheetMigration get _currentMigration =>
       _activeMigrations.isNotEmpty ? _activeMigrations.last : null;
 
+  /// Runs the migrator on each item in [entrypoints] in turn and returns a
+  /// map of migrated contents.
   p.PathMap<String> migrate(List<String> entrypoints) {
     for (var entrypoint in entrypoints) {
       _migrateStylesheet(entrypoint);
@@ -62,6 +64,9 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   }
 
   /// Visits the children of [node] with a local scope.
+  ///
+  /// Note: The children of a stylesheet are at the root, so we should not add
+  /// a local scope.
   @override
   visitChildren(ParentStatement node) {
     if (node is Stylesheet) {
@@ -88,9 +93,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     if (namespace == null) {
       if (!builtInFunctionModules.containsKey(name)) return;
       namespace = builtInFunctionModules[name];
-      if (builtInFunctionNameChanges.containsKey(name)) {
-        name = builtInFunctionNameChanges[name];
-      }
+      name = builtInFunctionNameChanges[name] ?? name;
       if (!_currentMigration.additionalUseRules.contains("sass:$namespace")) {
         _currentMigration.additionalUseRules.add("sass:$namespace");
       }
@@ -152,6 +155,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     _currentMigration.functions.addEntries(importMigration.functions.entries);
   }
 
+  /// Adds a namespace to any mixin includes that require them.
   @override
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
@@ -166,6 +170,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     _currentMigration.patches.add(Patch(nameSpan, "$namespace.${node.name}"));
   }
 
+  /// Declares the mixin within the current scope before visiting it.
   @override
   void visitMixinRule(MixinRule node) {
     _currentMigration.declareMixin(node);
@@ -185,6 +190,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
         .add(Patch(node.span, "\$$namespace.${node.name}"));
   }
 
+  /// Declares a variable within the current scope before visiting it.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
     _currentMigration.declareVariable(node);

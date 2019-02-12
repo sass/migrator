@@ -13,17 +13,17 @@ $b: 2
 <==> input/_outer2.scss
 $c: 3
 
-<==> expected/outer1.scss
+<==> output/outer1.scss
 @use "folder/inner1";
 $result: $inner1.a * $inner1.a;
 
-<==> expected/folder/inner1.scss
+<==> output/folder/inner1.scss
 @use "inner2";
 @use "../outer2";
 $a: $inner2.b + $outer2.c;
 
-<==> expected/folder/_inner2.scss
+<==> output/folder/_inner2.scss
 $b: 2
 
-<==> expected/_outer2.scss
+<==> output/_outer2.scss
 $c: 3

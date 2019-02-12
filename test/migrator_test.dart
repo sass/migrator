@@ -21,9 +21,8 @@ void main() {
 
 class HrxTestFiles {
   String hrxName;
-  Map<String, String> testFiles = {};
-  Map<String, String> expectedOutput = {};
-  Map<String, List<String>> recursiveManifest = {};
+  Map<String, String> input = {};
+  Map<String, String> output = {};
 
   HrxTestFiles(this.hrxName) {
     var hrxText = File("test/migrations/$hrxName.hrx").readAsStringSync();
@@ -44,18 +43,18 @@ class HrxTestFiles {
     if (filename != null) _load(filename, contents);
   }
 
-  _load(String filename, String contents) {
+  void _load(String filename, String contents) {
     if (filename.startsWith("input/")) {
-      testFiles[filename.substring(6)] = contents;
-    } else if (filename.startsWith("expected/")) {
-      expectedOutput[filename.substring(9)] = contents;
+      input[filename.substring(6)] = contents;
+    } else if (filename.startsWith("output/")) {
+      output[filename.substring(6)] = contents;
     }
   }
 
   Future unpack() async {
-    for (var file in testFiles.keys) {
+    for (var file in input.keys) {
       var parts = p.split(file);
-      d.Descriptor descriptor = d.file(parts.removeLast(), testFiles[file]);
+      d.Descriptor descriptor = d.file(parts.removeLast(), input[file]);
       while (parts.isNotEmpty) {
         descriptor = d.dir(parts.removeLast(), [descriptor]);
       }
@@ -67,12 +66,12 @@ class HrxTestFiles {
 testHrx(String hrxName) {
   var files = HrxTestFiles(hrxName);
   group(hrxName, () {
-    for (var file in files.testFiles.keys) {
+    for (var file in files.input.keys) {
       test(file, () async {
         await files.unpack();
         var path = p.join(d.sandbox, file);
         var migrated = migrateFiles([path]);
-        expect(migrated[path], equals(files.expectedOutput[file]));
+        expect(migrated[path], equals(files.output[file]));
       });
     }
   });
