@@ -26,11 +26,12 @@ p.PathMap<String> migrateFiles(List<String> entrypoints) =>
 
 class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// List of all migrations for files touched by this run.
-  p.PathMap<StylesheetMigration> _migrations = p.PathMap();
+  final _migrations = p.PathMap();
 
-  /// List of migrations in progress. The last item in the current migration.
+  /// List of migrations in progress. The last item is the current migration.
   List<StylesheetMigration> _activeMigrations = [];
 
+  /// Current stylesheet being actively migrated.
   StylesheetMigration get _currentMigration =>
       _activeMigrations.isNotEmpty ? _activeMigrations.last : null;
 
@@ -50,17 +51,17 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Migrates the stylesheet at [path] if it hasn't already been migrated and
   /// returns the StylesheetMigration instance for it regardless.
   StylesheetMigration _migrateStylesheet(String path) {
-    path = canonicalizePath(path,
-        loadPath: _currentMigration == null
-            ? p.current
-            : p.dirname(_currentMigration.path));
-    if (_migrations.containsKey(path)) return _migrations[path];
-    var migration = StylesheetMigration(path);
-    _migrations[path] = migration;
-    _activeMigrations.add(migration);
-    visitStylesheet(migration.stylesheet);
-    _activeMigrations.remove(migration);
-    return migration;
+    path = canonicalizePath(_currentMigration == null
+        ? path
+        : p.join(p.dirname(_currentMigration.path), path));
+    return _migrations.putIfAbsent(path, () {
+      var migration = StylesheetMigration(path);
+      _migrations[path] = migration;
+      _activeMigrations.add(migration);
+      visitStylesheet(migration.stylesheet);
+      _activeMigrations.remove(migration);
+      return migration;
+    });
   }
 
   /// Visits the children of [node] with a local scope.
@@ -68,7 +69,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Note: The children of a stylesheet are at the root, so we should not add
   /// a local scope.
   @override
-  visitChildren(ParentStatement node) {
+  void visitChildren(ParentStatement node) {
     if (node is Stylesheet) {
       super.visitChildren(node);
       return;
@@ -78,25 +79,25 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     _currentMigration.localScope = _currentMigration.localScope.parent;
   }
 
-  /// Adds a namespace to any function calls that require them.
+  /// Adds a namespace to any function call that require it.
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
     visitArgumentInvocation(node.arguments);
+
     if (node.name.asPlain == null) return;
     var name = node.name.asPlain;
     if (_currentMigration.localScope?.isLocalFunction(name) ?? false) return;
-    var namespace;
-    if (_currentMigration.functions.containsKey(name)) {
-      namespace =
-          _currentMigration.namespaceForNode(_currentMigration.functions[name]);
-    }
+
+    var namespace = _currentMigration.functions.containsKey(name)
+        ? _currentMigration.namespaceForNode(_currentMigration.functions[name])
+        : null;
+
     if (namespace == null) {
       if (!builtInFunctionModules.containsKey(name)) return;
+
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
-      if (!_currentMigration.additionalUseRules.contains("sass:$namespace")) {
-        _currentMigration.additionalUseRules.add("sass:$namespace");
-      }
+      _currentMigration.additionalUseRules.add("sass:$namespace");
     }
     _currentMigration.patches.add(Patch(node.name.span, "$namespace.$name"));
   }
@@ -148,14 +149,14 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     _currentMigration.namespaces[importMigration.path] =
         namespaceForPath(import.url);
 
-    // Ensure that references to members transient dependencies can be
+    // Ensure that references to members' transient dependencies can be
     // namespaced.
     _currentMigration.variables.addEntries(importMigration.variables.entries);
     _currentMigration.mixins.addEntries(importMigration.mixins.entries);
     _currentMigration.functions.addEntries(importMigration.functions.entries);
   }
 
-  /// Adds a namespace to any mixin includes that require them.
+  /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
@@ -177,7 +178,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     super.visitMixinRule(node);
   }
 
-  /// Adds namespaces to any variables that require them.
+  /// Adds a namespace to any variable that requires it.
   visitVariableExpression(VariableExpression node) {
     if (_currentMigration.localScope?.isLocalVariable(node.name) ?? false) {
       return;

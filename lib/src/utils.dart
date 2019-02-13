@@ -9,13 +9,12 @@ import 'package:path/path.dart' as p;
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/importer/filesystem.dart';
+import 'package:sass/src/importer/utils.dart' show resolveImportPath;
 export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
 
 /// Returns the canonical version of [path].
-String canonicalizePath(String path, {String loadPath}) {
-  return p.fromUri(
-      FilesystemImporter(loadPath ?? p.current).canonicalize(p.toUri(path)));
+String canonicalizePath(String path) {
+  return p.canonicalize(resolveImportPath(p.join(p.current, path)));
 }
 
 /// Returns the default namespace for a use rule with [path].
