@@ -33,29 +33,29 @@ class StylesheetMigration {
   final Syntax syntax;
 
   /// Namespaces of modules used in this stylesheet.
-  final p.PathMap<String> namespaces = p.PathMap();
+  final namespaces = p.PathMap<String>();
 
-  /// List of additional use rules necessary for referencing members of
+  /// Set of additional use rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
-  /// This list contains the path provided in the use rule, not the canonical
+  /// This set contains the path provided in the use rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
-  final List<String> additionalUseRules = [];
+  final additionalUseRules = Set<String>();
 
   /// List of patches to be applied to this file.
-  final List<Patch> patches = [];
+  final patches = <Patch>[];
 
   /// Global variables in this stylesheet and its dependencies.
-  final Map<String, VariableDeclaration> variables = normalizedMap();
+  final variables = normalizedMap<VariableDeclaration>();
 
   /// Global variables declared with !default that could be configured.
-  final Set<String> configurableVariables = normalizedSet();
+  final configurableVariables = normalizedSet();
 
   /// Global mixins in this stylesheet and its dependencies.
-  final Map<String, MixinRule> mixins = normalizedMap();
+  final mixins = normalizedMap<MixinRule>();
 
   /// Global functions in this stylesheet and its dependencies.
-  final Map<String, FunctionRule> functions = normalizedMap();
+  final functions = normalizedMap<FunctionRule>();
 
   /// Local variables, mixins, and functions for migrations in progress.
   ///
@@ -116,7 +116,7 @@ class StylesheetMigration {
   /// Finds the namespace for the stylesheet containing [node], adding a new use
   /// rule if necessary.
   String namespaceForNode(SassNode node) {
-    var nodePath = node.span.sourceUrl.path;
+    var nodePath = p.fromUri(node.span.sourceUrl);
     if (p.equals(nodePath, path)) return null;
     if (!namespaces.containsKey(nodePath)) {
       /// Add new use rule for indirect dependency

@@ -14,13 +14,13 @@ class LocalScope {
   final LocalScope parent;
 
   /// Variables defined in this scope.
-  final Set<String> variables = normalizedSet();
+  final variables = normalizedSet();
 
   /// Mixins defined in this scope.
-  final Set<String> mixins = normalizedSet();
+  final mixins = normalizedSet();
 
   /// Functions defined in this scope.
-  final Set<String> functions = normalizedSet();
+  final functions = normalizedSet();
 
   LocalScope(this.parent);
 
