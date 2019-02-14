@@ -26,10 +26,10 @@ p.PathMap<String> migrateFiles(List<String> entrypoints) =>
 
 class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// List of all migrations for files touched by this run.
-  final _migrations = p.PathMap();
+  final _migrations = p.PathMap<StylesheetMigration>();
 
   /// List of migrations in progress. The last item is the current migration.
-  List<StylesheetMigration> _activeMigrations = [];
+  final _activeMigrations = <StylesheetMigration>[];
 
   /// Current stylesheet being actively migrated.
   StylesheetMigration get _currentMigration =>
@@ -56,7 +56,6 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
         : p.join(p.dirname(_currentMigration.path), path));
     return _migrations.putIfAbsent(path, () {
       var migration = StylesheetMigration(path);
-      _migrations[path] = migration;
       _activeMigrations.add(migration);
       visitStylesheet(migration.stylesheet);
       _activeMigrations.remove(migration);
