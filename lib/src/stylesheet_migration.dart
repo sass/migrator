@@ -14,7 +14,6 @@ import 'package:path/path.dart' as p;
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/syntax.dart';
 
-import 'local_scope.dart';
 import 'patch.dart';
 import 'utils.dart';
 
@@ -45,23 +44,8 @@ class StylesheetMigration {
   /// List of patches to be applied to this file.
   final patches = <Patch>[];
 
-  /// Global variables in this stylesheet and its dependencies.
-  final variables = normalizedMap<VariableDeclaration>();
-
   /// Global variables declared with !default that could be configured.
   final configurableVariables = normalizedSet();
-
-  /// Global mixins in this stylesheet and its dependencies.
-  final mixins = normalizedMap<MixinRule>();
-
-  /// Global functions in this stylesheet and its dependencies.
-  final functions = normalizedMap<FunctionRule>();
-
-  /// Local variables, mixins, and functions for migrations in progress.
-  ///
-  /// The migrator will modify this as it traverses the stylesheet. When at the
-  /// top-level of the stylesheet, this will be null.
-  LocalScope localScope;
 
   StylesheetMigration._(this.stylesheet, this.path, this.contents, this.syntax);
 
@@ -80,37 +64,6 @@ class StylesheetMigration {
     var uses = additionalUseRules.map((use) => '@use "$use"$semicolon\n');
     var contents = Patch.applyAll(stylesheet.span.file, patches);
     return uses.join("") + contents;
-  }
-
-  /// Declares a variable within this stylesheet, in the current local scope if
-  /// it exists, or as a global variable otherwise.
-  void declareVariable(VariableDeclaration node) {
-    if (localScope == null || node.isGlobal) {
-      variables[node.name] = node;
-      if (node.isGuarded) configurableVariables.add(node.name);
-    } else {
-      localScope.variables.add(node.name);
-    }
-  }
-
-  /// Declares a mixin within this stylesheet, in the current local scope if
-  /// it exists, or as a global mixin otherwise.
-  void declareMixin(MixinRule node) {
-    if (localScope == null) {
-      mixins[node.name] = node;
-    } else {
-      localScope.mixins.add(node.name);
-    }
-  }
-
-  /// Declares a function within this stylesheet, in the current local scope if
-  /// it exists, or as a global function otherwise.
-  void declareFunction(FunctionRule node) {
-    if (localScope == null) {
-      functions[node.name] = node;
-    } else {
-      localScope.functions.add(node.name);
-    }
   }
 
   /// Finds the namespace for the stylesheet containing [node], adding a new use

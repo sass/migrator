@@ -19,10 +19,33 @@ import 'patch.dart';
 import 'stylesheet_migration.dart';
 import 'utils.dart';
 
-/// Runs a migration of [entrypoints] and their dependencies without writing
-/// any changes to disk.
-p.PathMap<String> migrateFiles(List<String> entrypoints) =>
-    _Migrator().migrate(entrypoints);
+/// Runs a migration of multiple [entrypoints] and their dependencies without
+/// writing any changes to disk.
+///
+/// Each entrypoint migrates all of its dependencies separately from the other
+/// entrypoints. Certain stylesheets may be migrated multiple times. If the
+/// migrated text of a stylesheet for each run is not identical, this will
+/// error.
+p.PathMap<String> migrateFiles(List<String> entrypoints) {
+  var allMigrated = p.PathMap<String>();
+  for (var entrypoint in entrypoints) {
+    var migrated = migrateFile(entrypoint);
+    for (var file in migrated.keys) {
+      if (allMigrated.containsKey(file) &&
+          migrated[file] != allMigrated[file]) {
+        throw UnsupportedError(
+            "$file is migrated in more than one way by these entrypoints.");
+      }
+      allMigrated[file] = migrated[file];
+    }
+  }
+  return allMigrated;
+}
+
+/// Runs the migrator on [entrypoint] and its dependencies and returns a map
+/// of migrated contents.
+p.PathMap<String> migrateFile(String entrypoint) =>
+    _Migrator().migrate(entrypoint);
 
 class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// List of all migrations for files touched by this run.
@@ -31,16 +54,29 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// List of migrations in progress. The last item is the current migration.
   final _activeMigrations = <StylesheetMigration>[];
 
+  /// Global variables defined at any time during the migrator run.
+  final _variables = normalizedMap<VariableDeclaration>();
+
+  /// Global mixins defined at any time during the migrator run.
+  final _mixins = normalizedMap<MixinRule>();
+
+  /// Global functions defined at any time during the migrator run.
+  final _functions = normalizedMap<FunctionRule>();
+
+  /// Local variables, mixins, and functions for migrations in progress.
+  ///
+  /// The migrator will modify this as it traverses stylesheets. When at the
+  /// top level of a stylesheet, this will be null.
+  LocalScope _localScope;
+
   /// Current stylesheet being actively migrated.
   StylesheetMigration get _currentMigration =>
       _activeMigrations.isNotEmpty ? _activeMigrations.last : null;
 
-  /// Runs the migrator on each item in [entrypoints] in turn and returns a
-  /// map of migrated contents.
-  p.PathMap<String> migrate(List<String> entrypoints) {
-    for (var entrypoint in entrypoints) {
-      _migrateStylesheet(entrypoint);
-    }
+  /// Runs the migrator on [entrypoint] and its dependencies and returns a map
+  /// of migrated contents.
+  p.PathMap<String> migrate(String entrypoint) {
+    _migrateStylesheet(entrypoint);
     var results = p.PathMap<String>();
     for (var migration in _migrations.values) {
       results[migration.path] = migration.migratedContents;
@@ -73,9 +109,9 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
       super.visitChildren(node);
       return;
     }
-    _currentMigration.localScope = LocalScope(_currentMigration.localScope);
+    _localScope = LocalScope(_localScope);
     super.visitChildren(node);
-    _currentMigration.localScope = _currentMigration.localScope.parent;
+    _localScope = _localScope.parent;
   }
 
   /// Adds a namespace to any function call that require it.
@@ -85,10 +121,10 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
 
     if (node.name.asPlain == null) return;
     var name = node.name.asPlain;
-    if (_currentMigration.localScope?.isLocalFunction(name) ?? false) return;
+    if (_localScope?.isLocalFunction(name) ?? false) return;
 
-    var namespace = _currentMigration.functions.containsKey(name)
-        ? _currentMigration.namespaceForNode(_currentMigration.functions[name])
+    var namespace = _functions.containsKey(name)
+        ? _currentMigration.namespaceForNode(_functions[name])
         : null;
 
     if (namespace == null) {
@@ -104,7 +140,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Declares the function within the current scope before visiting it.
   @override
   void visitFunctionRule(FunctionRule node) {
-    _currentMigration.declareFunction(node);
+    _declareFunction(node);
     super.visitFunctionRule(node);
   }
 
@@ -120,18 +156,20 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     }
     var import = node.imports.first as DynamicImport;
 
-    if (_currentMigration.localScope != null) {
+    if (_localScope != null) {
       // TODO(jathak): Handle nested imports
       return;
     }
     // TODO(jathak): Confirm that this import appears before other rules
 
     var importMigration = _migrateStylesheet(import.url);
+    _currentMigration.namespaces[importMigration.path] =
+        namespaceForPath(import.url);
 
     var overrides = [];
     for (var variable in importMigration.configurableVariables) {
-      if (_currentMigration.variables.containsKey(variable)) {
-        var declaration = _currentMigration.variables[variable];
+      if (_variables.containsKey(variable)) {
+        var declaration = _variables[variable];
         if (_currentMigration.namespaceForNode(declaration) == null) {
           overrides.add("\$${declaration.name}: ${declaration.expression}");
         }
@@ -145,24 +183,15 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     }
     _currentMigration.patches
         .add(Patch(node.span, '@use ${import.span.text}$config'));
-    _currentMigration.namespaces[importMigration.path] =
-        namespaceForPath(import.url);
-
-    // Ensure that references to members' transient dependencies can be
-    // namespaced.
-    _currentMigration.variables.addEntries(importMigration.variables.entries);
-    _currentMigration.mixins.addEntries(importMigration.mixins.entries);
-    _currentMigration.functions.addEntries(importMigration.functions.entries);
   }
 
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
-    if (_currentMigration.localScope?.isLocalMixin(node.name) ?? false) return;
-    if (!_currentMigration.mixins.containsKey(node.name)) return;
-    var namespace =
-        _currentMigration.namespaceForNode(_currentMigration.mixins[node.name]);
+    if (_localScope?.isLocalMixin(node.name) ?? false) return;
+    if (!_mixins.containsKey(node.name)) return;
+    var namespace = _currentMigration.namespaceForNode(_mixins[node.name]);
     if (namespace == null) return;
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
@@ -173,18 +202,17 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Declares the mixin within the current scope before visiting it.
   @override
   void visitMixinRule(MixinRule node) {
-    _currentMigration.declareMixin(node);
+    _declareMixin(node);
     super.visitMixinRule(node);
   }
 
   /// Adds a namespace to any variable that requires it.
   visitVariableExpression(VariableExpression node) {
-    if (_currentMigration.localScope?.isLocalVariable(node.name) ?? false) {
+    if (_localScope?.isLocalVariable(node.name) ?? false) {
       return;
     }
-    if (!_currentMigration.variables.containsKey(node.name)) return;
-    var namespace = _currentMigration
-        .namespaceForNode(_currentMigration.variables[node.name]);
+    if (!_variables.containsKey(node.name)) return;
+    var namespace = _currentMigration.namespaceForNode(_variables[node.name]);
     if (namespace == null) return;
     _currentMigration.patches
         .add(Patch(node.span, "\$$namespace.${node.name}"));
@@ -193,8 +221,45 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Declares a variable within the current scope before visiting it.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _currentMigration.declareVariable(node);
+    _declareVariable(node);
     super.visitVariableDeclaration(node);
+  }
+
+  /// Declares a variable within this stylesheet, in the current local scope if
+  /// it exists, or as a global variable otherwise.
+  void _declareVariable(VariableDeclaration node) {
+    if (_localScope == null || node.isGlobal) {
+      if (node.isGuarded) {
+        _currentMigration.configurableVariables.add(node.name);
+
+        // Don't override if variable already exists.
+        _variables.putIfAbsent(node.name, () => node);
+      } else {
+        _variables[node.name] = node;
+      }
+    } else {
+      _localScope.variables.add(node.name);
+    }
+  }
+
+  /// Declares a mixin within this stylesheet, in the current local scope if
+  /// it exists, or as a global mixin otherwise.
+  void _declareMixin(MixinRule node) {
+    if (_localScope == null) {
+      _mixins[node.name] = node;
+    } else {
+      _localScope.mixins.add(node.name);
+    }
+  }
+
+  /// Declares a function within this stylesheet, in the current local scope if
+  /// it exists, or as a global function otherwise.
+  void _declareFunction(FunctionRule node) {
+    if (_localScope == null) {
+      _functions[node.name] = node;
+    } else {
+      _localScope.functions.add(node.name);
+    }
   }
 
   // Expression Tree Treversal
