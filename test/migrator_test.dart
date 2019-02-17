@@ -70,7 +70,7 @@ testHrx(String hrxName) {
       test(file, () async {
         await files.unpack();
         var path = p.join(d.sandbox, file);
-        var migrated = migrateFiles([path]);
+        var migrated = migrateFile(path);
         expect(migrated[path], equals(files.output[file]));
       });
     }
