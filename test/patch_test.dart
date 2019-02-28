@@ -9,13 +9,13 @@ import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test("single patch applied", () {
+  test("a single patch replaces the original text", () {
     var file = SourceFile.fromString("abcde");
     var patch = Patch(file.span(2, 4), "fgh");
     expect(Patch.applyAll(file, [patch]), equals("abfghe"));
   });
 
-  test("multiple patches applied", () {
+  test("non-overlapping patches are applied correctly", () {
     var file = SourceFile.fromString("abcde");
     var patch1 = Patch(file.span(0, 2), "xyz");
     var patch2 = Patch(file.span(3, 4), "fgh");

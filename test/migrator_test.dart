@@ -13,10 +13,12 @@ import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
 void main() {
-  testHrx("variables");
-  testHrx("subdirectories");
-  testHrx("functions");
-  testHrx("mixins");
+  testHrx("variables/basic_namespace");
+  testHrx("variables/indirect_namespace");
+  testHrx("variables/globally_shadowed");
+  //testHrx("subdirectories");
+  //testHrx("functions");
+  //testHrx("mixins");
 }
 
 class HrxTestFiles {
@@ -64,15 +66,14 @@ class HrxTestFiles {
 }
 
 testHrx(String hrxName) {
-  var files = HrxTestFiles(hrxName);
-  group(hrxName, () {
+  test(hrxName, () async {
+    var files = HrxTestFiles(hrxName);
+    await files.unpack();
+    var entrypoints =
+        files.input.keys.where((path) => path.startsWith("entrypoint"));
+    var migrated = migrateFiles(entrypoints, directory: d.sandbox);
     for (var file in files.input.keys) {
-      test(file, () async {
-        await files.unpack();
-        var path = p.join(d.sandbox, file);
-        var migrated = migrateFile(path);
-        expect(migrated[path], equals(files.output[file]));
-      });
+      expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]));
     }
   });
 }

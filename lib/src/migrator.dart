@@ -26,10 +26,17 @@ import 'utils.dart';
 /// entrypoints. Certain stylesheets may be migrated multiple times. If the
 /// migrated text of a stylesheet for each run is not identical, this will
 /// error.
-p.PathMap<String> migrateFiles(List<String> entrypoints) {
+///
+/// If [directory] is provided, the entrypoints will be interpreted relative to
+/// it. Otherwise, they'll be interpreted relative to the current directory.
+///
+/// Entrypoints and dependencies that did not require any changes will not be
+/// included in the results.
+p.PathMap<String> migrateFiles(Iterable<String> entrypoints,
+    {String directory}) {
   var allMigrated = p.PathMap<String>();
   for (var entrypoint in entrypoints) {
-    var migrated = migrateFile(entrypoint);
+    var migrated = _Migrator(directory: directory).migrate(entrypoint);
     for (var file in migrated.keys) {
       if (allMigrated.containsKey(file) &&
           migrated[file] != allMigrated[file]) {
@@ -41,11 +48,6 @@ p.PathMap<String> migrateFiles(List<String> entrypoints) {
   }
   return allMigrated;
 }
-
-/// Runs the migrator on [entrypoint] and its dependencies and returns a map
-/// of migrated contents.
-p.PathMap<String> migrateFile(String entrypoint) =>
-    _Migrator().migrate(entrypoint);
 
 class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// List of all migrations for files touched by this run.
@@ -62,6 +64,11 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
 
   /// Global functions defined at any time during the migrator run.
   final _functions = normalizedMap<FunctionRule>();
+
+  /// Directory this migration is run from.
+  final String _directory;
+
+  _Migrator({String directory}) : _directory = directory ?? p.current;
 
   /// Local variables, mixins, and functions for migrations in progress.
   ///
@@ -87,9 +94,11 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Migrates the stylesheet at [path] if it hasn't already been migrated and
   /// returns the StylesheetMigration instance for it regardless.
   StylesheetMigration _migrateStylesheet(String path) {
-    path = canonicalizePath(_currentMigration == null
-        ? path
-        : p.join(p.dirname(_currentMigration.path), path));
+    path = canonicalizePath(p.join(
+        _currentMigration == null
+            ? _directory
+            : p.dirname(_currentMigration.path),
+        path));
     return _migrations.putIfAbsent(path, () {
       var migration = StylesheetMigration(path);
       _activeMigrations.add(migration);
