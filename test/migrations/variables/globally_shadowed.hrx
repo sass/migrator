@@ -1,0 +1,16 @@
+<==> input/entrypoint.scss
+@import "dependency";
+$variable : red;
+a {
+  color: $variable;
+}
+
+<==> input/dependency.scss
+$variable: blue;
+
+<==> output/entrypoint.scss
+@use "dependency";
+$variable : red;
+a {
+  color: $variable;
+}

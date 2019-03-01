@@ -1,0 +1,21 @@
+<==> input/entrypoint.scss
+@import "direct";
+a {
+  color: $variable;
+}
+
+<==> input/direct.scss
+@import "indirect";
+
+<==> input/indirect.scss
+$variable: blue;
+
+<==> output/entrypoint.scss
+@use "indirect";
+@use "direct";
+a {
+  color: $indirect.variable;
+}
+
+<==> output/direct.scss
+@use "indirect";
