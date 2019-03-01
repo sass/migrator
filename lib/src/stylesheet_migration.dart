@@ -79,7 +79,7 @@ class StylesheetMigration {
       if (basename.startsWith('_')) basename = basename.substring(1);
       var simplePath = p.relative(p.join(p.dirname(relativePath), basename));
       additionalUseRules.add(simplePath);
-      namespaces[nodePath] = namespaceForPath(nodePath);
+      namespaces[nodePath] = namespaceForPath(simplePath);
     }
     return namespaces[nodePath];
   }

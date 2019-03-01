@@ -4,10 +4,10 @@ a {
   color: $variable;
 }
 
-<==> input/direct.scss
+<==> input/_direct.scss
 @import "indirect";
 
-<==> input/indirect.scss
+<==> input/_indirect.scss
 $variable: blue;
 
 <==> output/entrypoint.scss
@@ -17,5 +17,5 @@ a {
   color: $indirect.variable;
 }
 
-<==> output/direct.scss
+<==> output/_direct.scss
 @use "indirect";
