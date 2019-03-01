@@ -13,21 +13,30 @@ import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
 void main() {
-  testHrx("variables/basic_namespace");
-  testHrx("variables/indirect_namespace");
-  testHrx("variables/globally_shadowed");
-  //testHrx("subdirectories");
-  //testHrx("functions");
-  //testHrx("mixins");
+  var migrationTests = Directory("test/migrations");
+  for (var file in migrationTests.listSync().whereType<File>()) {
+    if (file.path.endsWith(".hrx")) {
+      test(p.basenameWithoutExtension(file.path), () => testHrx(file));
+    }
+  }
+}
+
+testHrx(File hrxFile) async {
+  var files = HrxTestFiles(hrxFile.readAsStringSync());
+  await files.unpack();
+  var entrypoints =
+      files.input.keys.where((path) => path.startsWith("entrypoint"));
+  var migrated = migrateFiles(entrypoints, directory: d.sandbox);
+  for (var file in files.input.keys) {
+    expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]));
+  }
 }
 
 class HrxTestFiles {
-  String hrxName;
   Map<String, String> input = {};
   Map<String, String> output = {};
 
-  HrxTestFiles(this.hrxName) {
-    var hrxText = File("test/migrations/$hrxName.hrx").readAsStringSync();
+  HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
     String filename;
     String contents;
@@ -63,17 +72,4 @@ class HrxTestFiles {
       await descriptor.create();
     }
   }
-}
-
-testHrx(String hrxName) {
-  test(hrxName, () async {
-    var files = HrxTestFiles(hrxName);
-    await files.unpack();
-    var entrypoints =
-        files.input.keys.where((path) => path.startsWith("entrypoint"));
-    var migrated = migrateFiles(entrypoints, directory: d.sandbox);
-    for (var file in files.input.keys) {
-      expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]));
-    }
-  });
 }
