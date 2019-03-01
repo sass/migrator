@@ -215,6 +215,11 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     super.visitMixinRule(node);
   }
 
+  @override
+  void visitUseRule(UseRule node) {
+    // TODO(jathak): Handle existing @use rules.
+  }
+
   /// Adds a namespace to any variable that requires it.
   visitVariableExpression(VariableExpression node) {
     if (_localScope?.isLocalVariable(node.name) ?? false) {
