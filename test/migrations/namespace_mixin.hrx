@@ -1,0 +1,16 @@
+<==> input/entrypoint.scss
+@import "library";
+a {
+  @include helper;
+}
+
+<==> input/_library.scss
+@mixin helper {
+  display: block;
+}
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  @include library.helper;
+}

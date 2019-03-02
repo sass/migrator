@@ -1,0 +1,14 @@
+<==> input/entrypoint.scss
+@import "library";
+a {
+  color: $variable;
+}
+
+<==> input/_library.scss
+$variable: blue;
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  color: $library.variable;
+}

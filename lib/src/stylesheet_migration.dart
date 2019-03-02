@@ -58,8 +58,9 @@ class StylesheetMigration {
   }
 
   /// Returns the migrated contents of this file, based on [additionalUseRules]
-  /// and [patches].
+  /// and [patches], or null if no patches exist.
   String get migratedContents {
+    if (patches.isEmpty) return null;
     var semicolon = syntax == Syntax.sass ? "" : ";";
     var uses = additionalUseRules.map((use) => '@use "$use"$semicolon\n');
     var contents = Patch.applyAll(stylesheet.span.file, patches);
@@ -78,7 +79,7 @@ class StylesheetMigration {
       if (basename.startsWith('_')) basename = basename.substring(1);
       var simplePath = p.relative(p.join(p.dirname(relativePath), basename));
       additionalUseRules.add(simplePath);
-      namespaces[nodePath] = namespaceForPath(nodePath);
+      namespaces[nodePath] = namespaceForPath(simplePath);
     }
     return namespaces[nodePath];
   }

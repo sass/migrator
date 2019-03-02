@@ -14,7 +14,7 @@ export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
 
 /// Returns the canonical version of [path].
 String canonicalizePath(String path) {
-  return p.canonicalize(resolveImportPath(p.join(p.current, path)));
+  return p.canonicalize(resolveImportPath(path));
 }
 
 /// Returns the default namespace for a use rule with [path].
