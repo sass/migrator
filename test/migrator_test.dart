@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
+/// Runs all migration tests. See migrations/README.md for details.
 void main() {
   var migrationTests = Directory("test/migrations");
   for (var file in migrationTests.listSync().whereType<File>()) {
@@ -21,6 +22,7 @@ void main() {
   }
 }
 
+/// Run the migration test in [hrxFile]. See migrations/README.md for details.
 testHrx(File hrxFile) async {
   var files = HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
@@ -28,7 +30,8 @@ testHrx(File hrxFile) async {
       files.input.keys.where((path) => path.startsWith("entrypoint"));
   var migrated = migrateFiles(entrypoints, directory: d.sandbox);
   for (var file in files.input.keys) {
-    expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]));
+    expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]),
+        reason: 'Incorrect migration of $file.');
   }
 }
 
@@ -62,6 +65,7 @@ class HrxTestFiles {
     }
   }
 
+  /// Unpacks this test's input files into a temporary directory.
   Future unpack() async {
     for (var file in input.keys) {
       var parts = p.split(file);
