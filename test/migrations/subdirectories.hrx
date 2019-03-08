@@ -1,33 +1,23 @@
-<==> recursive_manifest
-outer1.scss -> folder/inner1.scss folder/_inner2.scss _outer2.scss
-folder/inner1.scss -> folder/_inner2.scss _outer2.scss
-
-<==> input/outer1.scss
+<==> input/entrypoint.scss
 @import "folder/inner1";
-$result: $a * $a;
+$result: $a;
 
-<==> input/folder/inner1.scss
+<==> input/folder/_inner1.scss
 @import "inner2";
-@import "../outer2";
+@import "../outer";
 $a: $b + $c;
 
 <==> input/folder/_inner2.scss
 $b: 2
 
-<==> input/_outer2.scss
+<==> input/_outer.scss
 $c: 3
 
-<==> expected/outer1.scss
+<==> output/entrypoint.scss
 @use "folder/inner1";
-$result: $inner1.a * $inner1.a;
+$result: $inner1.a;
 
-<==> expected/folder/inner1.scss
+<==> output/folder/_inner1.scss
 @use "inner2";
-@use "../outer2";
-$a: $inner2.b + $outer2.c;
-
-<==> expected/folder/_inner2.scss
-$b: 2
-
-<==> expected/_outer2.scss
-$c: 3
+@use "../outer";
+$a: $inner2.b + $outer.c;

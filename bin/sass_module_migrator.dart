@@ -26,15 +26,14 @@ void main(List<String> args) {
   var argResults = argParser.parse(args);
 
   if (argResults['help'] == true || argResults.rest.isEmpty) {
-    print('Migrates one or more .scss files to the new module system.\n\n'
+    print('Migrates one or more Sass files to the new module system.\n\n'
         'Usage: sass_migrate_to_modules [options] <entrypoint.scss ...>\n\n'
         '${argParser.usage}');
     exitCode = 64;
     return;
   }
 
-  var migrated = Migrator().runMigrations(argResults.rest,
-      migrateDependencies: argResults['recursive']);
+  var migrated = migrateFiles(argResults.rest);
 
   if (migrated.isEmpty) {
     print('Nothing to migrate!');
