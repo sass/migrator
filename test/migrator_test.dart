@@ -28,7 +28,12 @@ testHrx(File hrxFile) async {
   await files.unpack();
   var entrypoints =
       files.input.keys.where((path) => path.startsWith("entrypoint"));
-  var migrated = migrateFiles(entrypoints, directory: d.sandbox);
+  p.PathMap<String> migrated;
+  var migration = () {
+    migrated = migrateFiles(entrypoints, directory: d.sandbox);
+  };
+  expect(migration,
+      prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
   for (var file in files.input.keys) {
     expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]),
         reason: 'Incorrect migration of $file.');
@@ -38,6 +43,7 @@ testHrx(File hrxFile) async {
 class HrxTestFiles {
   Map<String, String> input = {};
   Map<String, String> output = {};
+  String expectedLog;
 
   HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
@@ -62,6 +68,8 @@ class HrxTestFiles {
       input[filename.substring(6)] = contents;
     } else if (filename.startsWith("output/")) {
       output[filename.substring(7)] = contents;
+    } else if (filename == "log.txt") {
+      expectedLog = contents;
     }
   }
 
