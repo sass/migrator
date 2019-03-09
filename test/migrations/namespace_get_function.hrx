@@ -1,0 +1,39 @@
+<==> input/entrypoint.scss
+@import "library";
+
+$fn1: get-function(increment);
+$fn2: get-function($name: "increment");
+$fn3: get-function("incre" + "ment");
+
+$x: "increment";
+$fn4: get-function($x);
+
+<==> input/_library.scss
+@function increment($x) {
+  @return $x + 1;
+}
+
+<==> output/entrypoint.scss
+@use "sass:meta";
+@use "library";
+
+$fn1: meta.get-function(library.increment);
+$fn2: meta.get-function($name: "library.increment");
+$fn3: meta.get-function("incre" + "ment");
+
+$x: "increment";
+$fn4: meta.get-function($x);
+
+<==> log.txt
+WARNING: Could not determine if namespace is required for get-function call @
+  ╷
+5 │ $fn3: get-function("incre" + "ment");
+  │                    ^^^^^^^^^^^^^^^^
+  ╵
+  $TEST_DIR/entrypoint.scss
+WARNING: Could not determine if namespace is required for get-function call @
+  ╷
+8 │ $fn4: get-function($x);
+  │                    ^^
+  ╵
+  $TEST_DIR/entrypoint.scss

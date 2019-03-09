@@ -11,6 +11,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/visitor/recursive_statement.dart';
 import 'package:sass/src/visitor/interface/expression.dart';
 
+import 'package:source_span/source_span.dart';
 import 'package:path/path.dart' as p;
 
 import 'built_in_functions.dart';
@@ -126,10 +127,36 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Adds a namespace to any function call that require it.
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
+    _visitFunctionName(node.name.asPlain, node.name.span);
     visitArgumentInvocation(node.arguments);
 
-    if (node.name.asPlain == null) return;
-    var name = node.name.asPlain;
+    if (node.name.asPlain == "get-function") {
+      var fnName = node.arguments.named['name'];
+      if (fnName == null) {
+        if (node.arguments.positional.isEmpty) {
+          throw ArgumentError("No name passed to $node");
+        } else {
+          fnName = node.arguments.positional.first;
+        }
+      }
+      if (fnName is StringExpression && fnName.text.asPlain != null) {
+        var span = fnName.span;
+        if (fnName.hasQuotes) {
+          span = span.file.span(span.start.offset + 1, span.end.offset - 1);
+        }
+        _visitFunctionName(fnName.text.asPlain, span);
+      } else {
+        _warn(
+            "WARNING: Could not determine if namespace is required for "
+            "get-function call @",
+            fnName.span);
+      }
+    }
+  }
+
+  /// Adds a namespace to function [name] if it requires one.
+  void _visitFunctionName(String name, FileSpan span) {
+    if (name == null) return;
     if (_localScope?.isLocalFunction(name) ?? false) return;
 
     var namespace = _functions.containsKey(name)
@@ -143,7 +170,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
       name = builtInFunctionNameChanges[name] ?? name;
       _currentMigration.additionalUseRules.add("sass:$namespace");
     }
-    _currentMigration.patches.add(Patch(node.name.span, "$namespace.$name"));
+    _currentMigration.patches.add(Patch(span, "$namespace.$name"));
   }
 
   /// Declares the function within the current scope before visiting it.
@@ -274,6 +301,13 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     } else {
       _localScope.functions.add(node.name);
     }
+  }
+
+  /// Emits a warning [message] with [span] and its context.
+  void _warn(String message, FileSpan span) {
+    print(message);
+    print(span.highlight());
+    print("  ${span.file.url}");
   }
 
   // Expression Tree Treversal
