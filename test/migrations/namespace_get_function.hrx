@@ -17,23 +17,21 @@ $fn4: get-function($x);
 @use "sass:meta";
 @use "library";
 
-$fn1: meta.get-function(library.increment);
-$fn2: meta.get-function($name: "library.increment");
+$fn1: meta.get-function(increment, $module: library);
+$fn2: meta.get-function($name: "increment", $module: library);
 $fn3: meta.get-function("incre" + "ment");
 
 $x: "increment";
 $fn4: meta.get-function($x);
 
 <==> log.txt
-WARNING: Could not determine if namespace is required for get-function call @
-  ╷
-5 │ $fn3: get-function("incre" + "ment");
-  │                    ^^^^^^^^^^^^^^^^
-  ╵
-  $TEST_DIR/entrypoint.scss
-WARNING: Could not determine if namespace is required for get-function call @
-  ╷
-8 │ $fn4: get-function($x);
-  │                    ^^
-  ╵
-  $TEST_DIR/entrypoint.scss
+line 5, column 20 of $TEST_DIR/entrypoint.scss: WARNING - get-function call may require $module parameter
+  ,
+5 | $fn3: get-function("incre" + "ment");
+  |                    ^^^^^^^^^^^^^^^^
+  '
+line 8, column 20 of $TEST_DIR/entrypoint.scss: WARNING - get-function call may require $module parameter
+  ,
+8 | $fn4: get-function($x);
+  |                    ^^
+  '

@@ -9,11 +9,13 @@ import 'dart:io';
 import 'package:sass_module_migrator/src/migrator.dart';
 
 import 'package:path/path.dart' as p;
+import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
 /// Runs all migration tests. See migrations/README.md for details.
 void main() {
+  glyph.ascii = true;
   var migrationTests = Directory("test/migrations");
   for (var file in migrationTests.listSync().whereType<File>()) {
     if (file.path.endsWith(".hrx")) {

@@ -127,35 +127,44 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Adds a namespace to any function call that require it.
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    _visitFunctionName(node.name.asPlain, node.name.span);
+    _patchNamespaceForFunction(node.name.asPlain, (name, namespace) {
+      _currentMigration.patches.add(Patch(node.name.span, "$namespace.$name"));
+    });
     visitArgumentInvocation(node.arguments);
 
     if (node.name.asPlain == "get-function") {
-      var fnName = node.arguments.named['name'];
-      if (fnName == null) {
-        if (node.arguments.positional.isEmpty) {
-          throw ArgumentError("No name passed to $node");
-        } else {
-          fnName = node.arguments.positional.first;
-        }
+      var nameArgument =
+          node.arguments.named['name'] ?? node.arguments.positional.first;
+      if (nameArgument is! StringExpression ||
+          (nameArgument as StringExpression).text.asPlain == null) {
+        print(nameArgument.span.message(
+            "WARNING - get-function call may require \$module parameter"));
+        return;
       }
-      if (fnName is StringExpression && fnName.text.asPlain != null) {
+      var fnName = nameArgument as StringExpression;
+      _patchNamespaceForFunction(fnName.text.asPlain, (name, namespace) {
         var span = fnName.span;
         if (fnName.hasQuotes) {
           span = span.file.span(span.start.offset + 1, span.end.offset - 1);
         }
-        _visitFunctionName(fnName.text.asPlain, span);
-      } else {
-        _warn(
-            "WARNING: Could not determine if namespace is required for "
-            "get-function call @",
-            fnName.span);
-      }
+        _currentMigration.patches.add(Patch(span, name));
+        var beforeParen = node.span.end.offset - 1;
+        _currentMigration.patches.add(Patch(
+            node.span.file.span(beforeParen, beforeParen),
+            ", \$module: $namespace"));
+      });
     }
   }
 
-  /// Adds a namespace to function [name] if it requires one.
-  void _visitFunctionName(String name, FileSpan span) {
+  /// Calls [patcher] when the function [name] requires a namespace and adds a
+  /// new use rule if necessary.
+  ///
+  /// [patcher] takes two arguments: the name used to refer to that function
+  /// when namespaced, and the namespace itself. The name will match the name
+  /// provided to the outer function except for built-in functions whose name
+  /// within a module differs from its original name.
+  void _patchNamespaceForFunction(
+      String name, void patcher(String name, String namespace)) {
     if (name == null) return;
     if (_localScope?.isLocalFunction(name) ?? false) return;
 
@@ -170,7 +179,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
       name = builtInFunctionNameChanges[name] ?? name;
       _currentMigration.additionalUseRules.add("sass:$namespace");
     }
-    _currentMigration.patches.add(Patch(span, "$namespace.$name"));
+    if (namespace != null) patcher(name, namespace);
   }
 
   /// Declares the function within the current scope before visiting it.
@@ -301,13 +310,6 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
     } else {
       _localScope.functions.add(node.name);
     }
-  }
-
-  /// Emits a warning [message] with [span] and its context.
-  void _warn(String message, FileSpan span) {
-    print(message);
-    print(span.highlight());
-    print("  ${span.file.url}");
   }
 
   // Expression Tree Treversal
