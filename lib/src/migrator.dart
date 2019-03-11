@@ -151,7 +151,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
         var beforeParen = node.span.end.offset - 1;
         _currentMigration.patches.add(Patch(
             node.span.file.span(beforeParen, beforeParen),
-            ", \$module: $namespace"));
+            ', \$module: "$namespace"'));
       });
     }
   }
