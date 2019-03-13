@@ -1,0 +1,51 @@
+<==> input/entrypoint.scss
+@import "library";
+@import "true";
+
+$fn1: get-function(increment);
+// This function's namespace is `true`, which is a boolean when unquoted.
+// This tests that the $module parameter is a quoted string.
+$fn2: get-function($name: "false");
+$fn3: get-function("str-length");
+$fn4: get-function("incre" + "ment");
+
+$x: "increment";
+$fn5: get-function($x);
+
+<==> input/_library.scss
+@function increment($x) {
+  @return $x + 1;
+}
+
+<==> input/_true.scss
+@function false($x) {
+  @return not $x;
+}
+
+<==> output/entrypoint.scss
+@use "sass:meta";
+@use "sass:string";
+@use "library";
+@use "true";
+
+$fn1: meta.get-function(increment, $module: "library");
+// This function's namespace is `true`, which is a boolean when unquoted.
+// This tests that the $module parameter is a quoted string.
+$fn2: meta.get-function($name: "false", $module: "true");
+$fn3: meta.get-function("length", $module: "string");
+$fn4: meta.get-function("incre" + "ment");
+
+$x: "increment";
+$fn5: meta.get-function($x);
+
+<==> log.txt
+line 9, column 20 of $TEST_DIR/entrypoint.scss: WARNING - get-function call may require $module parameter
+  ,
+9 | $fn4: get-function("incre" + "ment");
+  |                    ^^^^^^^^^^^^^^^^
+  '
+line 12, column 20 of $TEST_DIR/entrypoint.scss: WARNING - get-function call may require $module parameter
+   ,
+12 | $fn5: get-function($x);
+   |                    ^^
+   '

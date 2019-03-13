@@ -16,3 +16,6 @@ The migrator will run starting from these entrypoints.
 For each file in `input` that would be modified by this migration, there should
 be a corresponding file in `output` with the migrated contents. `output` should
 not contain a file if it would not be changed by the migrator.
+
+If any warnings should be emitted by this migration, there should be an
+additional file called `log.txt` that contains the expected printed text.

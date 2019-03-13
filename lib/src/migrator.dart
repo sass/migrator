@@ -11,6 +11,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/visitor/recursive_statement.dart';
 import 'package:sass/src/visitor/interface/expression.dart';
 
+import 'package:source_span/source_span.dart';
 import 'package:path/path.dart' as p;
 
 import 'built_in_functions.dart';
@@ -126,10 +127,45 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
   /// Adds a namespace to any function call that require it.
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
+    _patchNamespaceForFunction(node.name.asPlain, (name, namespace) {
+      _currentMigration.patches.add(Patch(node.name.span, "$namespace.$name"));
+    });
     visitArgumentInvocation(node.arguments);
 
-    if (node.name.asPlain == null) return;
-    var name = node.name.asPlain;
+    if (node.name.asPlain == "get-function") {
+      var nameArgument =
+          node.arguments.named['name'] ?? node.arguments.positional.first;
+      if (nameArgument is! StringExpression ||
+          (nameArgument as StringExpression).text.asPlain == null) {
+        print(nameArgument.span.message(
+            "WARNING - get-function call may require \$module parameter"));
+        return;
+      }
+      var fnName = nameArgument as StringExpression;
+      _patchNamespaceForFunction(fnName.text.asPlain, (name, namespace) {
+        var span = fnName.span;
+        if (fnName.hasQuotes) {
+          span = span.file.span(span.start.offset + 1, span.end.offset - 1);
+        }
+        _currentMigration.patches.add(Patch(span, name));
+        var beforeParen = node.span.end.offset - 1;
+        _currentMigration.patches.add(Patch(
+            node.span.file.span(beforeParen, beforeParen),
+            ', \$module: "$namespace"'));
+      });
+    }
+  }
+
+  /// Calls [patcher] when the function [name] requires a namespace and adds a
+  /// new use rule if necessary.
+  ///
+  /// [patcher] takes two arguments: the name used to refer to that function
+  /// when namespaced, and the namespace itself. The name will match the name
+  /// provided to the outer function except for built-in functions whose name
+  /// within a module differs from its original name.
+  void _patchNamespaceForFunction(
+      String name, void patcher(String name, String namespace)) {
+    if (name == null) return;
     if (_localScope?.isLocalFunction(name) ?? false) return;
 
     var namespace = _functions.containsKey(name)
@@ -143,7 +179,7 @@ class _Migrator extends RecursiveStatementVisitor implements ExpressionVisitor {
       name = builtInFunctionNameChanges[name] ?? name;
       _currentMigration.additionalUseRules.add("sass:$namespace");
     }
-    _currentMigration.patches.add(Patch(node.name.span, "$namespace.$name"));
+    if (namespace != null) patcher(name, namespace);
   }
 
   /// Declares the function within the current scope before visiting it.
