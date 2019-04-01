@@ -6,7 +6,8 @@
 
 import 'dart:io';
 
-import 'package:sass_module_migrator/src/migrator.dart';
+import 'package:sass_migrator/src/migrator.dart';
+import 'package:sass_migrator/src/migrators/module.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
@@ -16,26 +17,34 @@ import 'package:test_descriptor/test_descriptor.dart' as d;
 /// Runs all migration tests. See migrations/README.md for details.
 void main() {
   glyph.ascii = true;
-  var migrationTests = Directory("test/migrations");
-  for (var file in migrationTests.listSync().whereType<File>()) {
-    if (file.path.endsWith(".hrx")) {
-      test(p.basenameWithoutExtension(file.path), () => testHrx(file));
+  testMigrator(ModuleMigrator());
+}
+
+void testMigrator(Migrator migrator) {
+  var migrationTests = Directory("test/migrations/${migrator.name}");
+  group(migrator.name, () {
+    for (var file in migrationTests.listSync().whereType<File>()) {
+      if (file.path.endsWith(".hrx")) {
+        test(p.basenameWithoutExtension(file.path),
+            () => testHrx(file, migrator));
+      }
     }
-  }
+  });
 }
 
 /// Run the migration test in [hrxFile]. See migrations/README.md for details.
-testHrx(File hrxFile) async {
+testHrx(File hrxFile, Migrator migrator) async {
   var files = HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
   var entrypoints =
       files.input.keys.where((path) => path.startsWith("entrypoint"));
   p.PathMap<String> migrated;
-  var migration = () {
-    migrated = migrateFiles(entrypoints, directory: d.sandbox);
-  };
-  expect(migration,
-      prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
+  migrator.argResults = migrator.argParser.parse(files.arguments);
+  expect(() {
+    IOOverrides.runZoned(() {
+      migrated = migrator.migrateFiles(entrypoints);
+    }, getCurrentDirectory: () => Directory(d.sandbox));
+  }, prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
   for (var file in files.input.keys) {
     expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]),
         reason: 'Incorrect migration of $file.');
@@ -45,6 +54,7 @@ testHrx(File hrxFile) async {
 class HrxTestFiles {
   Map<String, String> input = {};
   Map<String, String> output = {};
+  List<String> arguments = [];
   String expectedLog;
 
   HrxTestFiles(String hrxText) {
@@ -72,6 +82,8 @@ class HrxTestFiles {
       output[filename.substring(7)] = contents;
     } else if (filename == "log.txt") {
       expectedLog = contents;
+    } else if (filename == "arguments") {
+      arguments = contents.trim().split(" ");
     }
   }
 

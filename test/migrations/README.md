@@ -1,6 +1,8 @@
 # Migration Tests
 
-Each set of source files used for a test of the migrator is represented a single
+For each migrator, this folder contains a subdirectory with tests.
+
+Each set of source files used for a test of a migrator is represented a single
 [HRX archive](https://github.com/google/hrx).
 
 > Note: The test script does not currently use a proper HRX parser, so `<==>` is

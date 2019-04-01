@@ -1,3 +1,6 @@
+<==> arguments
+--migrate-deps
+
 <==> input/entrypoint.scss
 @import "direct";
 a {

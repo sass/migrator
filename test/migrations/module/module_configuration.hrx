@@ -1,3 +1,6 @@
+<==> arguments
+--migrate-deps
+
 <==> input/entrypoint.scss
 $config: red;
 $no-config: blue;
