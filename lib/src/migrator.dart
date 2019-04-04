@@ -4,33 +4,44 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:args/args.dart';
+import 'dart:io';
+
+import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 
-abstract class Migrator {
-  /// Name passed at the command line to use this migrator.
-  String get name;
+import 'utils.dart';
 
-  /// Brief description of what this migrator does.
-  String get description;
+/// A migrator is a command the migrates the entrypoints provided to it and
+/// (optionally) their dependencies.
+///
+/// Migrators should provide their [name], [description], and optionally
+/// [aliases].
+///
+/// Subclasses need to implement [migrateFile], which takes an entrypoint,
+/// migrates it, and stores the results in [migrated]. If [migrateDependencies]
+/// is true, they should also migrate all of that entrypoint's direct and
+/// indirect dependencies.
+///
+/// Most migrators will want to create a subclass of [MigrationVisitor] and
+/// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
+abstract class Migrator extends Command<p.PathMap<String>> {
+  /// The entrypoints that this migrator will run from.
+  List<String> get entrypoints => argResults.rest;
 
-  /// Parser for the arguments that this migrator takes.
-  ArgParser get argParser => ArgParser();
+  /// If true, dependencies will be migrated in addition to the entrypoints.
+  bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 
-  /// Set by the executable based on [argParser] and the provided arguments.
-  ArgResults argResults;
+  /// Migrated contents of stylesheets that have already been migrated.
+  final migrated = p.PathMap<String>();
 
-  /// Runs this migrator on [entrypoint], returning a map of migrated contents.
+  /// Runs this migrator on [entrypoint] (and its dependencies, if the
+  /// --migrate-deps flag is passed).
   ///
-  /// This may also migrate dependencies of this entrypoint, depending on the
-  /// migrator and its configuration.
-  ///
-  /// Files that did not require migration, even if touched by the migrator,
+  /// Files that did not require any changes, even if touched by the migrator,
   /// should not be included map of results.
-  p.PathMap<String> migrateFile(String entrypoint);
+  void migrateFile(String entrypoint);
 
-  /// Runs this migrator on multiple [entrypoints], returning a merged map of
-  /// migrated contents.
+  /// Runs this migrator.
   ///
   /// Each entrypoint is migrated separately. If a stylesheet is migrated more
   /// than once, the resulting migrated contents must be the same each time, or
@@ -38,14 +49,15 @@ abstract class Migrator {
   ///
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
-  p.PathMap<String> migrateFiles(Iterable<String> entrypoints) {
+  p.PathMap<String> run() {
     var allMigrated = p.PathMap<String>();
     for (var entrypoint in entrypoints) {
-      var migrated = migrateFile(entrypoint);
+      migrated.clear();
+      migrateFile(canonicalizePath(p.join(Directory.current.path, entrypoint)));
       for (var file in migrated.keys) {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {
-          throw UnsupportedError(
+          throw MigrationException(
               "$file is migrated in more than one way by these entrypoints.");
         }
         allMigrated[file] = migrated[file];

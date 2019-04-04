@@ -6,8 +6,7 @@
 
 import 'dart:io';
 
-import 'package:sass_migrator/src/migrator.dart';
-import 'package:sass_migrator/src/migrators/module.dart';
+import 'package:sass_migrator/runner.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
@@ -17,12 +16,12 @@ import 'package:test_descriptor/test_descriptor.dart' as d;
 /// Runs all migration tests. See migrations/README.md for details.
 void main() {
   glyph.ascii = true;
-  testMigrator(ModuleMigrator());
+  testMigrator("module");
 }
 
-void testMigrator(Migrator migrator) {
-  var migrationTests = Directory("test/migrations/${migrator.name}");
-  group(migrator.name, () {
+void testMigrator(String migrator) {
+  var migrationTests = Directory("test/migrations/$migrator");
+  group(migrator, () {
     for (var file in migrationTests.listSync().whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
         test(p.basenameWithoutExtension(file.path),
@@ -33,18 +32,18 @@ void testMigrator(Migrator migrator) {
 }
 
 /// Run the migration test in [hrxFile]. See migrations/README.md for details.
-testHrx(File hrxFile, Migrator migrator) async {
+testHrx(File hrxFile, String migrator) async {
   var files = HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
+  p.PathMap<String> migrated;
   var entrypoints =
       files.input.keys.where((path) => path.startsWith("entrypoint"));
-  p.PathMap<String> migrated;
-  migrator.argResults = migrator.argParser.parse(files.arguments);
-  expect(() {
-    IOOverrides.runZoned(() {
-      migrated = migrator.migrateFiles(entrypoints);
-    }, getCurrentDirectory: () => Directory(d.sandbox));
-  }, prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
+  var arguments = [migrator]..addAll(files.arguments)..addAll(entrypoints);
+  await expect(
+      () => IOOverrides.runZoned(() async {
+            migrated = await MigratorRunner().run(arguments);
+          }, getCurrentDirectory: () => Directory(d.sandbox)),
+      prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
   for (var file in files.input.keys) {
     expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]),
         reason: 'Incorrect migration of $file.');

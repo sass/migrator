@@ -43,3 +43,18 @@ Patch patchAfter(AstNode node, String text) {
 void warn(String message, FileSpan context) {
   print(context.message("WARNING - $message"));
 }
+
+class MigrationException {
+  final String message;
+  final FileSpan context;
+
+  MigrationException(this.message, {this.context});
+
+  toString() {
+    if (context != null) {
+      return context.message(message);
+    } else {
+      return message;
+    }
+  }
+}

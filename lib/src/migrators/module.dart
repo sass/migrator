@@ -4,38 +4,27 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:io';
-
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/syntax.dart';
 
-import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:sass_migrator/src/migrator_base.dart';
+import 'package:sass_migrator/src/migration_visitor.dart';
+import 'package:sass_migrator/src/migrator.dart';
 import 'package:sass_migrator/src/patch.dart';
 import 'package:sass_migrator/src/utils.dart';
 
 import 'module/built_in_functions.dart';
 import 'module/local_scope.dart';
-import 'module/stylesheet_migration.dart';
 
-class ModuleMigrator extends MigratorBase {
+/// Migrates stylesheets to the new module system.
+class ModuleMigrator extends Migrator {
   final name = "module";
+  final aliases = ["modules", "module-system"];
   final description = "Migrates stylesheets to the new module system.";
-  final argParser = ArgParser()
-    ..addFlag('migrate-deps',
-        abbr: 'd', help: 'Migrate dependencies in addition to entrypoints.');
-
-  bool get _migrateDependencies => argResults['migrate-deps'];
-
-  /// List of all migrations for files touched by this run.
-  final _migrations = p.PathMap<StylesheetMigration>();
-
-  /// List of migrations in progress. The last item is the current migration.
-  final _activeMigrations = <StylesheetMigration>[];
 
   /// Global variables defined at any time during the migrator run.
   final _variables = normalizedMap<VariableDeclaration>();
@@ -46,54 +35,55 @@ class ModuleMigrator extends MigratorBase {
   /// Global functions defined at any time during the migrator run.
   final _functions = normalizedMap<FunctionRule>();
 
-  /// Local variables, mixins, and functions for migrations in progress.
-  ///
-  /// The migrator will modify this as it traverses stylesheets. When at the
-  /// top level of a stylesheet, this will be null.
-  LocalScope _localScope;
-
-  /// Current stylesheet being actively migrated.
-  StylesheetMigration get _currentMigration =>
-      _activeMigrations.isNotEmpty ? _activeMigrations.last : null;
-
-  /// The patches to be aplied to the stylesheet being actively migrated.
-  List<Patch> get patches => _currentMigration.patches;
-
   /// Runs the module migrator on [entrypoint] and its dependencies and returns
   /// a map of migrated contents.
   ///
-  /// If [_migrateDependencies] is false, the migrator will still be run on
+  /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
-  @override
-  p.PathMap<String> migrateFile(String entrypoint) {
-    var migration = _migrateStylesheet(entrypoint, Directory.current.path);
-    var results = p.PathMap<String>();
-    addMigration(StylesheetMigration migration) {
-      var migrated = migration.migratedContents;
-      if (migrated != migration.contents) {
-        results[migration.path] = migrated;
-      }
+  void migrateFile(String entrypoint) {
+    _ModuleMigrationVisitor(this, entrypoint).run();
+    if (!migrateDependencies) {
+      migrated.removeWhere((path, contents) => path != entrypoint);
     }
-
-    if (_migrateDependencies) {
-      _migrations.values.forEach(addMigration);
-    } else {
-      addMigration(migration);
-    }
-    return results;
   }
+}
 
-  /// Migrates the stylesheet at [path] if it hasn't already been migrated and
-  /// returns the StylesheetMigration instance for it regardless.
-  StylesheetMigration _migrateStylesheet(String path, String directory) {
-    path = canonicalizePath(p.join(directory, path));
-    return _migrations.putIfAbsent(path, () {
-      var migration = StylesheetMigration(path);
-      _activeMigrations.add(migration);
-      visitStylesheet(migration.stylesheet);
-      _activeMigrations.remove(migration);
-      return migration;
-    });
+class _ModuleMigrationVisitor extends MigrationVisitor {
+  final ModuleMigrator migrator;
+  final String path;
+
+  _ModuleMigrationVisitor(this.migrator, this.path);
+
+  _ModuleMigrationVisitor newInstance(String newPath) =>
+      _ModuleMigrationVisitor(migrator, newPath);
+
+  /// Namespaces of modules used in this stylesheet.
+  final namespaces = p.PathMap<String>();
+
+  /// Set of additional use rules necessary for referencing members of
+  /// implicit dependencies / built-in modules.
+  ///
+  /// This set contains the path provided in the use rule, not the canonical
+  /// path (e.g. "a" rather than "dir/a.scss").
+  final additionalUseRules = Set<String>();
+
+  /// Global variables declared with !default that could be configured.
+  final configurableVariables = normalizedSet();
+
+  /// Local variables, mixins, and functions for this migration.
+  ///
+  /// When at the top level of the stylesheet, this will be null.
+  LocalScope localScope;
+
+  /// Returns the migrated contents of this stylesheet, based on [patches] and
+  /// [additionalUseRules], or null if the stylesheet does not change.
+  @override
+  String getMigratedContents() {
+    if (patches.isEmpty && additionalUseRules.isEmpty) return null;
+    var semicolon = syntax == Syntax.sass ? "" : ";";
+    var uses = additionalUseRules.map((use) => '@use "$use"$semicolon\n');
+    var contents = Patch.applyAll(stylesheet.span.file, patches);
+    return uses.join("") + contents;
   }
 
   /// Visits the children of [node] with a local scope.
@@ -106,16 +96,17 @@ class ModuleMigrator extends MigratorBase {
       super.visitChildren(node);
       return;
     }
-    _localScope = LocalScope(_localScope);
+    localScope = LocalScope(localScope);
     super.visitChildren(node);
-    _localScope = _localScope.parent;
+    localScope = localScope.parent;
   }
 
   /// Adds a namespace to any function call that require it.
+  @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    _patchNamespaceForFunction(node.name.asPlain, (name, namespace) {
-      _currentMigration.patches.add(Patch(node.name.span, "$namespace.$name"));
+    patchNamespaceForFunction(node.name.asPlain, (name, namespace) {
+      patches.add(Patch(node.name.span, "$namespace.$name"));
     });
     visitArgumentInvocation(node.arguments);
 
@@ -129,15 +120,14 @@ class ModuleMigrator extends MigratorBase {
         return;
       }
       var fnName = nameArgument as StringExpression;
-      _patchNamespaceForFunction(fnName.text.asPlain, (name, namespace) {
+      patchNamespaceForFunction(fnName.text.asPlain, (name, namespace) {
         var span = fnName.span;
         if (fnName.hasQuotes) {
           span = span.file.span(span.start.offset + 1, span.end.offset - 1);
         }
-        _currentMigration.patches.add(Patch(span, name));
+        patches.add(Patch(span, name));
         var beforeParen = node.span.end.offset - 1;
-        _currentMigration.patches.add(Patch(
-            node.span.file.span(beforeParen, beforeParen),
+        patches.add(Patch(node.span.file.span(beforeParen, beforeParen),
             ', \$module: "$namespace"'));
       });
     }
@@ -150,13 +140,13 @@ class ModuleMigrator extends MigratorBase {
   /// when namespaced, and the namespace itself. The name will match the name
   /// provided to the outer function except for built-in functions whose name
   /// within a module differs from its original name.
-  void _patchNamespaceForFunction(
+  void patchNamespaceForFunction(
       String name, void patcher(String name, String namespace)) {
     if (name == null) return;
-    if (_localScope?.isLocalFunction(name) ?? false) return;
+    if (localScope?.isLocalFunction(name) ?? false) return;
 
-    var namespace = _functions.containsKey(name)
-        ? _currentMigration.namespaceForNode(_functions[name])
+    var namespace = migrator._functions.containsKey(name)
+        ? namespaceForNode(migrator._functions[name])
         : null;
 
     if (namespace == null) {
@@ -164,7 +154,7 @@ class ModuleMigrator extends MigratorBase {
 
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
-      _currentMigration.additionalUseRules.add("sass:$namespace");
+      additionalUseRules.add("sass:$namespace");
     }
     if (namespace != null) patcher(name, namespace);
   }
@@ -172,11 +162,12 @@ class ModuleMigrator extends MigratorBase {
   /// Declares the function within the current scope before visiting it.
   @override
   void visitFunctionRule(FunctionRule node) {
-    _declareFunction(node);
+    declareFunction(node);
     super.visitFunctionRule(node);
   }
 
   /// Migrates @import to @use after migrating the imported file.
+  @override
   void visitImportRule(ImportRule node) {
     if (node.imports.first is StaticImport) {
       super.visitImportRule(node);
@@ -188,22 +179,20 @@ class ModuleMigrator extends MigratorBase {
     }
     var import = node.imports.first as DynamicImport;
 
-    if (_localScope != null) {
+    if (localScope != null) {
       // TODO(jathak): Handle nested imports
       return;
     }
     // TODO(jathak): Confirm that this import appears before other rules
-
-    var importMigration =
-        _migrateStylesheet(import.url, p.dirname(_currentMigration.path));
-    _currentMigration.namespaces[importMigration.path] =
-        namespaceForPath(import.url);
+    var newPath = resolveImportUrl(import.url);
+    var importMigration = newInstance(newPath)..run();
+    namespaces[importMigration.path] = namespaceForPath(import.url);
 
     var overrides = [];
     for (var variable in importMigration.configurableVariables) {
-      if (_variables.containsKey(variable)) {
-        var declaration = _variables[variable];
-        if (_currentMigration.namespaceForNode(declaration) == null) {
+      if (migrator._variables.containsKey(variable)) {
+        var declaration = migrator._variables[variable];
+        if (namespaceForNode(declaration) == null) {
           overrides.add("\$${declaration.name}: ${declaration.expression}");
         }
         // TODO(jathak): Remove this declaration from the current stylesheet if
@@ -214,89 +203,107 @@ class ModuleMigrator extends MigratorBase {
     if (overrides.isNotEmpty) {
       config = " with (\n  " + overrides.join(',\n  ') + "\n)";
     }
-    _currentMigration.patches
-        .add(Patch(node.span, '@use ${import.span.text}$config'));
+    patches.add(Patch(node.span, '@use ${import.span.text}$config'));
   }
 
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
-    if (_localScope?.isLocalMixin(node.name) ?? false) return;
-    if (!_mixins.containsKey(node.name)) return;
-    var namespace = _currentMigration.namespaceForNode(_mixins[node.name]);
+    if (localScope?.isLocalMixin(node.name) ?? false) return;
+    if (!migrator._mixins.containsKey(node.name)) return;
+    var namespace = namespaceForNode(migrator._mixins[node.name]);
     if (namespace == null) return;
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
     var nameSpan = node.span.file.span(startName, endName);
-    _currentMigration.patches.add(Patch(nameSpan, "$namespace.${node.name}"));
+    patches.add(Patch(nameSpan, "$namespace.${node.name}"));
   }
 
   /// Declares the mixin within the current scope before visiting it.
   @override
   void visitMixinRule(MixinRule node) {
-    _declareMixin(node);
+    declareMixin(node);
     super.visitMixinRule(node);
   }
 
   @override
   void visitUseRule(UseRule node) {
     // TODO(jathak): Handle existing @use rules.
+    throw UnsupportedError(
+        "Migrating files with existing @use rules is not yet supported");
   }
 
   /// Adds a namespace to any variable that requires it.
+  @override
   visitVariableExpression(VariableExpression node) {
-    if (_localScope?.isLocalVariable(node.name) ?? false) {
+    if (localScope?.isLocalVariable(node.name) ?? false) {
       return;
     }
-    if (!_variables.containsKey(node.name)) return;
-    var namespace = _currentMigration.namespaceForNode(_variables[node.name]);
+    if (!migrator._variables.containsKey(node.name)) return;
+    var namespace = namespaceForNode(migrator._variables[node.name]);
     if (namespace == null) return;
-    _currentMigration.patches
-        .add(Patch(node.span, "\$$namespace.${node.name}"));
+    patches.add(Patch(node.span, "\$$namespace.${node.name}"));
   }
 
   /// Declares a variable within the current scope before visiting it.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _declareVariable(node);
+    declareVariable(node);
     super.visitVariableDeclaration(node);
   }
 
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
-  void _declareVariable(VariableDeclaration node) {
-    if (_localScope == null || node.isGlobal) {
+  void declareVariable(VariableDeclaration node) {
+    if (localScope == null || node.isGlobal) {
       if (node.isGuarded) {
-        _currentMigration.configurableVariables.add(node.name);
+        configurableVariables.add(node.name);
 
         // Don't override if variable already exists.
-        _variables.putIfAbsent(node.name, () => node);
+        migrator._variables.putIfAbsent(node.name, () => node);
       } else {
-        _variables[node.name] = node;
+        migrator._variables[node.name] = node;
       }
     } else {
-      _localScope.variables.add(node.name);
+      localScope.variables.add(node.name);
     }
   }
 
   /// Declares a mixin within this stylesheet, in the current local scope if
   /// it exists, or as a global mixin otherwise.
-  void _declareMixin(MixinRule node) {
-    if (_localScope == null) {
-      _mixins[node.name] = node;
+  void declareMixin(MixinRule node) {
+    if (localScope == null) {
+      migrator._mixins[node.name] = node;
     } else {
-      _localScope.mixins.add(node.name);
+      localScope.mixins.add(node.name);
     }
   }
 
   /// Declares a function within this stylesheet, in the current local scope if
   /// it exists, or as a global function otherwise.
-  void _declareFunction(FunctionRule node) {
-    if (_localScope == null) {
-      _functions[node.name] = node;
+  void declareFunction(FunctionRule node) {
+    if (localScope == null) {
+      migrator._functions[node.name] = node;
     } else {
-      _localScope.functions.add(node.name);
+      localScope.functions.add(node.name);
     }
+  }
+
+  /// Finds the namespace for the stylesheet containing [node], adding a new use
+  /// rule if necessary.
+  String namespaceForNode(SassNode node) {
+    var nodePath = p.fromUri(node.span.sourceUrl);
+    if (p.equals(nodePath, path)) return null;
+    if (!namespaces.containsKey(nodePath)) {
+      /// Add new use rule for indirect dependency
+      var relativePath = p.relative(nodePath, from: p.dirname(path));
+      var basename = p.basenameWithoutExtension(relativePath);
+      if (basename.startsWith('_')) basename = basename.substring(1);
+      var simplePath = p.relative(p.join(p.dirname(relativePath), basename));
+      additionalUseRules.add(simplePath);
+      namespaces[nodePath] = namespaceForPath(simplePath);
+    }
+    return namespaces[nodePath];
   }
 }

@@ -6,8 +6,10 @@ environment:
   sdk: '>=2.1.0 <3.0.0'
 
 dependencies:
-  args: "^1.4.0"
-  sass: "^1.17.3"
+  args: "^1.5.1"
+  sass:
+    # Temporary, until 1.17.5 is on pub
+    git: git://github.com/sass/dart-sass
   source_span: "^1.4.0"
   path: "^1.6.0"
 
