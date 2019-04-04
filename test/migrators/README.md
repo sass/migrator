@@ -1,6 +1,16 @@
 # Migration Tests
 
-For each migrator, this folder contains a subdirectory with tests.
+Each migrator should have a `<migrator-name>_test.dart` file that looks like:
+
+```dart
+import '../migrator_utils.dart';
+
+main() {
+  testMigrator("<migrator-name>");
+}
+```
+
+and a directory `<migrator-name>` that contains that migrator's HRX tests.
 
 Each set of source files used for a test of a migrator is represented a single
 [HRX archive](https://github.com/google/hrx).

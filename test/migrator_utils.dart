@@ -1,4 +1,4 @@
-// Copyright 2018 Google LLC
+// Copyright 2019 Google LLC
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file or at
@@ -13,27 +13,27 @@ import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
-/// Runs all migration tests. See migrations/README.md for details.
-void main() {
-  glyph.ascii = true;
-  testMigrator("module");
-}
-
+/// Runs all tests for [migrator].
+///
+/// HRX files should be stored in `test/migrators/<migrator name>/`.
 void testMigrator(String migrator) {
-  var migrationTests = Directory("test/migrations/$migrator");
+  glyph.ascii = true;
+  var migrationTests = Directory("test/migrators/$migrator");
   group(migrator, () {
     for (var file in migrationTests.listSync().whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
         test(p.basenameWithoutExtension(file.path),
-            () => testHrx(file, migrator));
+            () => _testHrx(file, migrator));
       }
     }
   });
 }
 
-/// Run the migration test in [hrxFile]. See migrations/README.md for details.
-testHrx(File hrxFile, String migrator) async {
-  var files = HrxTestFiles(hrxFile.readAsStringSync());
+/// Run the migration test in [hrxFile].
+///
+/// See migrations/README.md for details.
+_testHrx(File hrxFile, String migrator) async {
+  var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
   p.PathMap<String> migrated;
   var entrypoints =
@@ -50,13 +50,13 @@ testHrx(File hrxFile, String migrator) async {
   }
 }
 
-class HrxTestFiles {
+class _HrxTestFiles {
   Map<String, String> input = {};
   Map<String, String> output = {};
   List<String> arguments = [];
   String expectedLog;
 
-  HrxTestFiles(String hrxText) {
+  _HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
     String filename;
     String contents;
