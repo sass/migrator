@@ -13,7 +13,7 @@ import 'src/migrators/module.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<p.PathMap<String>> {
-  final invocation = "sass_migrator <migrator> [options] <entrypoint.scss ...>";
+  final invocation = "sass_migrator <migrator> [options] <entrypoint.scss...>";
 
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {

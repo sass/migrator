@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
 import 'utils.dart';
@@ -39,6 +40,7 @@ abstract class Migrator extends Command<p.PathMap<String>> {
   ///
   /// Files that did not require any changes, even if touched by the migrator,
   /// should not be included map of results.
+  @protected
   void migrateFile(String entrypoint);
 
   /// Runs this migrator.
