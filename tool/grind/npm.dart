@@ -42,7 +42,7 @@ void _js({@required bool release}) {
     args..add("-O4")..add("--fast-startup");
   }
 
-  Dart2js.compile(File('bin/sass_module_migrator.dart'),
+  Dart2js.compile(File('bin/sass_migrator.dart'),
       outFile: destination, extraArgs: args);
   var text = destination.readAsStringSync();
 
