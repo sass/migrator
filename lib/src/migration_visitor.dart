@@ -4,18 +4,16 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:io';
+import 'dart:collection';
 
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/syntax.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
-import 'package:path/path.dart' as p;
+import 'package:meta/meta.dart';
 
-import 'migrator.dart';
 import 'patch.dart';
 import 'utils.dart';
 
@@ -28,37 +26,46 @@ import 'utils.dart';
 ///
 /// If [migrateDependencies] is enabled, this visitor will construct and run a
 /// new instance of itself (using [newInstance]) each time it encounters an
-/// @import or @use rule.
+/// `@import` or `@use` rule.
 abstract class MigrationVisitor extends RecursiveAstVisitor {
-  /// The migrator running on this stylesheet.
-  Migrator get migrator;
-
-  /// The canonical path of the stylesheet being migrated.
-  String get path;
-
   /// The stylesheet being migrated.
-  Stylesheet stylesheet;
+  final Stylesheet stylesheet;
 
-  /// The syntax this stylesheet uses.
-  Syntax syntax;
+  /// A mapping from URLs to migrated contents for stylesheets already migrated.
+  final Map<Uri, String> migrated;
+
+  /// True if dependencies should be migrated as well.
+  final bool migrateDependencies;
 
   /// The patches to be applied to the stylesheet being migrated.
-  final List<Patch> patches = [];
+  UnmodifiableListView<Patch> get patches => UnmodifiableListView(_patches);
+  final List<Patch> _patches = [];
 
-  /// Returns a new instance of this MigrationVisitor with the same migrator
-  /// and [newPath].
-  MigrationVisitor newInstance(String newPath);
+  /// Constructs a new migration visitor, parsing the stylesheet at [url].
+  MigrationVisitor(Uri url, this.migrateDependencies,
+      {Map<Uri, String> migrated})
+      : stylesheet = parseStylesheet(url),
+        this.migrated = migrated ?? {};
 
-  /// Runs the migrator and stores the migrated contents in `migrator.migrated`.
-  void run() {
-    var contents = File(path).readAsStringSync();
-    syntax = Syntax.forPath(path);
-    stylesheet = Stylesheet.parse(contents, syntax, url: path);
+  /// Returns a new instance of this MigrationVisitor with the same [migrated]
+  /// and [migrateDependencies] and the new [url].
+  @protected
+  MigrationVisitor newInstance(Uri url);
+
+  /// Adds a new patch that should be applied as part of this migration.
+  @protected
+  void addPatch(Patch patch) {
+    _patches.add(patch);
+  }
+
+  /// Runs the migrator and returns the map of migrated contents.
+  Map<Uri, String> run() {
     visitStylesheet(stylesheet);
     var results = getMigratedContents();
     if (results != null) {
-      migrator.migrated[path] = results;
+      migrated[stylesheet.span.file.url] = results;
     }
+    return migrated;
   }
 
   /// Returns the migrated contents of this file, or null if the file does not
@@ -66,36 +73,37 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   ///
   /// This will be called by [run] and the results will be stored in
   /// `migrator.migrated`.
+  @protected
   String getMigratedContents() => patches.isNotEmpty
       ? Patch.applyAll(patches.first.selection.file, patches)
       : null;
 
-  /// Returns the canonical path of [url] when resolved relative to the current
-  /// path.
-  String resolveImportUrl(String url) =>
-      canonicalizePath(p.join(p.dirname(path), url));
+  /// Resolves [relativeUrl] relative to the current stylesheet's URL.
+  @protected
+  Uri resolveRelativeUrl(Uri relativeUrl) =>
+      stylesheet.span.file.url.resolveUri(relativeUrl);
 
-  /// If [migrator.migrateDependencies] is enabled, any dynamic imports within
+  /// If [migrateDependencies] is enabled, any dynamic imports within
   /// this [node] will be migrated before continuing.
   @override
   visitImportRule(ImportRule node) {
     super.visitImportRule(node);
-    for (var import in node.imports) {
-      if (import is DynamicImport) {
-        if (migrator.migrateDependencies) {
-          newInstance(resolveImportUrl(import.url)).run();
+    if (migrateDependencies) {
+      for (var import in node.imports) {
+        if (import is DynamicImport) {
+          newInstance(resolveRelativeUrl(Uri.parse(import.url))).run();
         }
       }
     }
   }
 
-  /// If [migrator.migrateDependencies] is enabled, this dependency will be
+  /// If [migrateDependencies] is enabled, this dependency will be
   /// migrated before continuing.
   @override
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
-    if (migrator.migrateDependencies) {
-      newInstance(resolveImportUrl(node.url.toString())).run();
+    if (migrateDependencies) {
+      newInstance(resolveRelativeUrl(node.url)).run();
     }
   }
 }

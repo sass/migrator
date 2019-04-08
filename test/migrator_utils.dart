@@ -6,12 +6,17 @@
 
 import 'dart:io';
 
-import 'package:sass_migrator/runner.dart';
+// The sass package's API is not necessarily stable. It is being imported with
+// the Sass team's explicit knowledge and approval. See
+// https://github.com/sass/dart-sass/issues/236.
+import 'package:sass/src/importer/filesystem.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
+
+import 'package:sass_migrator/runner.dart';
 
 /// Runs all tests for [migrator].
 ///
@@ -35,7 +40,7 @@ void testMigrator(String migrator) {
 _testHrx(File hrxFile, String migrator) async {
   var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
-  p.PathMap<String> migrated;
+  Map<Uri, String> migrated;
   var entrypoints =
       files.input.keys.where((path) => path.startsWith("entrypoint"));
   var arguments = [migrator]..addAll(files.arguments)..addAll(entrypoints);
@@ -44,8 +49,9 @@ _testHrx(File hrxFile, String migrator) async {
             migrated = await MigratorRunner().run(arguments);
           }, getCurrentDirectory: () => Directory(d.sandbox)),
       prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
+  var canonicalize = FilesystemImporter(d.sandbox).canonicalize;
   for (var file in files.input.keys) {
-    expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]),
+    expect(migrated[canonicalize(Uri.parse(file))], equals(files.output[file]),
         reason: 'Incorrect migration of $file.');
   }
 }

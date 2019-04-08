@@ -4,15 +4,12 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
-import 'package:path/path.dart' as p;
 
 import 'utils.dart';
 
-/// A migrator is a command the migrates the entrypoints provided to it and
+/// A migrator is a command that migrates the entrypoints provided to it and
 /// (optionally) their dependencies.
 ///
 /// Migrators should provide their [name], [description], and optionally
@@ -25,15 +22,9 @@ import 'utils.dart';
 ///
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
-abstract class Migrator extends Command<p.PathMap<String>> {
-  /// The entrypoints that this migrator will run from.
-  List<String> get entrypoints => argResults.rest;
-
+abstract class Migrator extends Command<Map<Uri, String>> {
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
-
-  /// Migrated contents of stylesheets that have already been migrated.
-  final migrated = p.PathMap<String>();
 
   /// Runs this migrator on [entrypoint] (and its dependencies, if the
   /// --migrate-deps flag is passed).
@@ -41,7 +32,7 @@ abstract class Migrator extends Command<p.PathMap<String>> {
   /// Files that did not require any changes, even if touched by the migrator,
   /// should not be included map of results.
   @protected
-  void migrateFile(String entrypoint);
+  Map<Uri, String> migrateFile(Uri entrypoint);
 
   /// Runs this migrator.
   ///
@@ -51,11 +42,10 @@ abstract class Migrator extends Command<p.PathMap<String>> {
   ///
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
-  p.PathMap<String> run() {
-    var allMigrated = p.PathMap<String>();
-    for (var entrypoint in entrypoints) {
-      migrated.clear();
-      migrateFile(canonicalizePath(p.join(Directory.current.path, entrypoint)));
+  Map<Uri, String> run() {
+    var allMigrated = Map<Uri, String>();
+    for (var entrypoint in argResults.rest) {
+      var migrated = migrateFile(canonicalize(Uri.parse(entrypoint)));
       for (var file in migrated.keys) {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {

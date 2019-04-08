@@ -7,12 +7,11 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
-import 'package:path/path.dart' as p;
 
 import 'src/migrators/module.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
-class MigratorRunner extends CommandRunner<p.PathMap<String>> {
+class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   final invocation = "sass_migrator <migrator> [options] <entrypoint.scss...>";
 
   MigratorRunner()
@@ -22,6 +21,7 @@ class MigratorRunner extends CommandRunner<p.PathMap<String>> {
     argParser.addFlag('dry-run',
         abbr: 'n',
         help: 'Show which files would be migrated but make no changes.');
+    // TODO(jathak): Make this flag print a diff instead.
     argParser.addFlag('verbose',
         abbr: 'v',
         help: 'Print text of migrated files when running with --dry-run.');
@@ -29,7 +29,7 @@ class MigratorRunner extends CommandRunner<p.PathMap<String>> {
   }
 
   /// Runs a migrator and then writes the migrated files to disk unless
-  /// --dry-run is passed.
+  /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
     var argResults = parse(args);
     var migrated = await runCommand(argResults);
@@ -42,17 +42,21 @@ class MigratorRunner extends CommandRunner<p.PathMap<String>> {
 
     if (argResults['dry-run']) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
-      for (var path in migrated.keys) {
-        print('$path');
+      for (var url in migrated.keys) {
+        print('$url');
         if (argResults['verbose']) {
           print('=' * 80);
-          print(migrated[path]);
+          print(migrated[url]);
+          print('-' * 80);
         }
       }
     } else {
-      for (var path in migrated.keys) {
-        if (argResults['verbose']) print("Overwriting $path...");
-        File(path).writeAsStringSync(migrated[path]);
+      for (var url in migrated.keys) {
+        if (url.scheme != null && url.scheme != "file") {
+          print("Cannot write to $url");
+        }
+        if (argResults['verbose']) print("Overwriting $url...");
+        File(url.toFilePath()).writeAsStringSync(migrated[url]);
       }
     }
   }
