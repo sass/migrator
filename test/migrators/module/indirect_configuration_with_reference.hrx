@@ -1,0 +1,30 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+$config: red;
+@import "direct";
+
+<==> input/_direct.scss
+@import "indirect";
+
+a {
+  b: $config;
+}
+
+<==> input/_indirect.scss
+$config: green !default;
+
+<==> output/entrypoint.scss
+$config: red;
+@use "direct" with (
+  $config: red
+);
+
+<==> output/_direct.scss
+@forward "indirect" show $config;
+@use "indirect";
+
+a {
+  b: $indirect.config;
+}

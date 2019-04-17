@@ -40,7 +40,10 @@ class ModuleMigrator extends Migrator {
 
 class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Global variables defined at any time during the migrator run.
-  final _globalVariables = normalizedMap<VariableDeclaration>();
+  ///
+  /// We store all declarations instead of just the most recent one for use in
+  /// detecting configurable variables.
+  final _globalVariables = normalizedMap<List<VariableDeclaration>>();
 
   /// Global mixins defined at any time during the migrator run.
   final _globalMixins = normalizedMap<MixinRule>();
@@ -204,9 +207,47 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     visitDependency(Uri.parse(import.url), _currentUrl);
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
-    // TODO(jathak): Support configurable variables
+    var configured = _findConfiguredVariables(node, import);
+    var config = "";
+    if (configured.isNotEmpty) {
+      config = " with (\n  " + configured.join(',\n  ') + "\n)";
+    }
+    addPatch(Patch(node.span, '@use ${import.span.text}$config'));
+  }
 
-    addPatch(Patch(node.span, '@use ${import.span.text}'));
+  /// Finds all configured variables from the given import.
+  ///
+  /// This returns a list of "$var: <expression>" strings that can be used to
+  /// construct the configuration for a use rule.
+  ///
+  /// If a variable was configured in a downstream stylesheet, this will instead
+  /// add a forward rule to make it accessible.
+  List<String> _findConfiguredVariables(ImportRule node, Import import) {
+    var configured = <String>[];
+    for (var name in _globalVariables.keys) {
+      var declarations = _globalVariables[name];
+      VariableDeclaration lastNonDefault = declarations[0];
+      for (var i = 1; i < declarations.length; i++) {
+        var declaration = declarations[i];
+        if (!declaration.isGuarded) {
+          lastNonDefault = declaration;
+        } else if (declaration.span.sourceUrl == _lastUrl) {
+          if (lastNonDefault.span.sourceUrl == _currentUrl) {
+            configured.add("\$$name: ${lastNonDefault.expression}");
+          } else if (lastNonDefault.span.sourceUrl != _lastUrl) {
+            // A downstream stylesheet configures this variable, so forward it.
+            var semicolon = _currentUrl.path.endsWith('.sass') ? '' : ';';
+            addPatch(patchBefore(
+                node, '@forward ${import.span.text} show \$$name$semicolon\n'));
+            // Add a fake variable declaration so that downstream stylesheets
+            // configure this module instead of the one we forwarded.
+            declarations.insert(i + 1,
+                VariableDeclaration(name, null, node.span, guarded: true));
+          }
+        }
+      }
+    }
+    return configured;
   }
 
   /// Adds a namespace to any mixin include that requires it.
@@ -244,7 +285,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
     if (!_globalVariables.containsKey(node.name)) return;
-    var namespace = _namespaceForNode(_globalVariables[node.name]);
+
+    /// Declarations where the expression is null are fake ones used to track
+    /// configured variables within indirect dependencies.
+    /// See [_findConfiguredVariables].
+    var lastRealDeclaration = _globalVariables[node.name]
+        .lastWhere((node) => node.expression != null);
+    var namespace = _namespaceForNode(lastRealDeclaration);
     if (namespace == null) return;
     addPatch(Patch(node.span, "\$$namespace.${node.name}"));
   }
@@ -260,8 +307,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
     if (_localScope == null || node.isGlobal) {
-      // TODO(jathak): Support configurable variables
-      _globalVariables[node.name] = node;
+      _globalVariables.putIfAbsent(node.name, () => []);
+      _globalVariables[node.name].add(node);
     } else {
       _localScope.variables.add(node.name);
     }
