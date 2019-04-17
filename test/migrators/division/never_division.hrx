@@ -1,0 +1,9 @@
+<==> input/entrypoint.scss
+a {
+  b: 6px / 3px;
+  c: 6px / 3px / 2;
+  d: #{4px + 2px} / 3px;
+  e: bold 6px/3px sans-serif;
+  f: (bold 6px/3px sans-serif);
+  g: (six / three);
+}
