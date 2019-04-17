@@ -28,44 +28,48 @@ import 'utils.dart';
 /// new instance of itself (using [newInstance]) each time it encounters an
 /// `@import` or `@use` rule.
 abstract class MigrationVisitor extends RecursiveAstVisitor {
-  /// The stylesheet being migrated.
-  final Stylesheet stylesheet;
-
   /// A mapping from URLs to migrated contents for stylesheets already migrated.
-  final Map<Uri, String> migrated;
+  final _migrated = <Uri, String>{};
 
   /// True if dependencies should be migrated as well.
   final bool migrateDependencies;
 
   /// The patches to be applied to the stylesheet being migrated.
   UnmodifiableListView<Patch> get patches => UnmodifiableListView(_patches);
-  final List<Patch> _patches = [];
+  List<Patch> _patches;
 
-  /// Constructs a new migration visitor, parsing the stylesheet at [url].
-  MigrationVisitor(Uri url, this.migrateDependencies,
-      {Map<Uri, String> migrated})
-      : stylesheet = parseStylesheet(url),
-        this.migrated = migrated ?? {};
+  MigrationVisitor({this.migrateDependencies = true});
 
-  /// Returns a new instance of this MigrationVisitor with the same [migrated]
-  /// and [migrateDependencies] and the new [url].
-  @protected
-  MigrationVisitor newInstance(Uri url);
-
-  /// Adds a new patch that should be applied as part of this migration.
-  @protected
-  void addPatch(Patch patch) {
-    _patches.add(patch);
+  /// Runs a new migration on [url] (and its dependencies, if
+  /// [migrateDependencies] is true) and returns a map of migrated contents.
+  Map<Uri, String> run(Uri url) {
+    visitStylesheet(parseStylesheet(url));
+    return _migrated;
   }
 
-  /// Runs the migrator and returns the map of migrated contents.
-  Map<Uri, String> run() {
-    visitStylesheet(stylesheet);
+  /// Visits stylesheet starting with an empty [_patches], adds the migrated
+  /// contents (if any) to [_migrated], and then restores the previous value of
+  /// [_patches].
+  ///
+  /// Migrators with per-file state should override this to store the current
+  /// file's state before calling the super method and restore it afterwards.
+  @override
+  void visitStylesheet(Stylesheet node) {
+    var oldPatches = _patches;
+    _patches = [];
+    super.visitStylesheet(node);
     var results = getMigratedContents();
     if (results != null) {
-      migrated[stylesheet.span.file.url] = results;
+      _migrated[node.span.sourceUrl] = results;
     }
-    return migrated;
+    _patches = oldPatches;
+  }
+
+  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  @protected
+  void visitDependency(Uri dependency, Uri source) {
+    var stylesheet = parseStylesheet(source.resolveUri(dependency));
+    visitStylesheet(stylesheet);
   }
 
   /// Returns the migrated contents of this file, or null if the file does not
@@ -78,10 +82,11 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
       ? Patch.applyAll(patches.first.selection.file, patches)
       : null;
 
-  /// Resolves [relativeUrl] relative to the current stylesheet's URL.
+  /// Adds a new patch that should be applied to the current stylesheet.
   @protected
-  Uri resolveRelativeUrl(Uri relativeUrl) =>
-      stylesheet.span.file.url.resolveUri(relativeUrl);
+  void addPatch(Patch patch) {
+    _patches.add(patch);
+  }
 
   /// If [migrateDependencies] is enabled, any dynamic imports within
   /// this [node] will be migrated before continuing.
@@ -91,7 +96,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          newInstance(resolveRelativeUrl(Uri.parse(import.url))).run();
+          visitDependency(Uri.parse(import.url), node.span.sourceUrl);
         }
       }
     }
@@ -103,7 +108,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
     if (migrateDependencies) {
-      newInstance(resolveRelativeUrl(node.url)).run();
+      visitDependency(node.url, node.span.sourceUrl);
     }
   }
 }

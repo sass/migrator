@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:path/path.dart' as p;
 
 import 'src/migrators/module.dart';
 
@@ -43,7 +44,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     if (argResults['dry-run']) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
       for (var url in migrated.keys) {
-        print('$url');
+        print(p.prettyUri(url));
         if (argResults['verbose']) {
           print('=' * 80);
           print(migrated[url]);
@@ -52,9 +53,8 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       }
     } else {
       for (var url in migrated.keys) {
-        if (url.scheme != null && url.scheme != "file") {
-          print("Cannot write to $url");
-        }
+        assert(url.scheme == null || url.scheme == "file",
+            "$url is not a file path.");
         if (argResults['verbose']) print("Overwriting $url...");
         File(url.toFilePath()).writeAsStringSync(migrated[url]);
       }

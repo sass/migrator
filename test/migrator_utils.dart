@@ -49,9 +49,10 @@ _testHrx(File hrxFile, String migrator) async {
             migrated = await MigratorRunner().run(arguments);
           }, getCurrentDirectory: () => Directory(d.sandbox)),
       prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
-  var canonicalize = FilesystemImporter(d.sandbox).canonicalize;
+  var importer = FilesystemImporter(d.sandbox);
   for (var file in files.input.keys) {
-    expect(migrated[canonicalize(Uri.parse(file))], equals(files.output[file]),
+    expect(migrated[importer.canonicalize(Uri.parse(file))],
+        equals(files.output[file]),
         reason: 'Incorrect migration of $file.');
   }
 }
