@@ -23,7 +23,7 @@ All submissions, including submissions by project members, require review.
 ### File headers
 All files in the project must start with the following header.
 
-    // Copyright 2018 Google LLC
+    // Copyright 2019 Google LLC
     //
     // Use of this source code is governed by an MIT-style
     // license that can be found in the LICENSE file or at

@@ -1,4 +1,4 @@
-// Copyright 2018 Google LLC
+// Copyright 2019 Google LLC
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file or at
@@ -6,48 +6,64 @@
 
 import 'dart:io';
 
-import 'package:sass_module_migrator/src/migrator.dart';
+// The sass package's API is not necessarily stable. It is being imported with
+// the Sass team's explicit knowledge and approval. See
+// https://github.com/sass/dart-sass/issues/236.
+import 'package:sass/src/importer/filesystem.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
-/// Runs all migration tests. See migrations/README.md for details.
-void main() {
+import 'package:sass_migrator/runner.dart';
+
+/// Runs all tests for [migrator].
+///
+/// HRX files should be stored in `test/migrators/<migrator name>/`.
+void testMigrator(String migrator) {
   glyph.ascii = true;
-  var migrationTests = Directory("test/migrations");
-  for (var file in migrationTests.listSync().whereType<File>()) {
-    if (file.path.endsWith(".hrx")) {
-      test(p.basenameWithoutExtension(file.path), () => testHrx(file));
+  var migrationTests = Directory("test/migrators/$migrator");
+  group(migrator, () {
+    for (var file in migrationTests.listSync().whereType<File>()) {
+      if (file.path.endsWith(".hrx")) {
+        test(p.basenameWithoutExtension(file.path),
+            () => _testHrx(file, migrator));
+      }
     }
-  }
+  });
 }
 
-/// Run the migration test in [hrxFile]. See migrations/README.md for details.
-testHrx(File hrxFile) async {
-  var files = HrxTestFiles(hrxFile.readAsStringSync());
+/// Run the migration test in [hrxFile].
+///
+/// See migrations/README.md for details.
+_testHrx(File hrxFile, String migrator) async {
+  var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
+  Map<Uri, String> migrated;
   var entrypoints =
       files.input.keys.where((path) => path.startsWith("entrypoint"));
-  p.PathMap<String> migrated;
-  var migration = () {
-    migrated = migrateFiles(entrypoints, directory: d.sandbox);
-  };
-  expect(migration,
+  var arguments = [migrator]..addAll(files.arguments)..addAll(entrypoints);
+  await expect(
+      () => IOOverrides.runZoned(() async {
+            migrated = await MigratorRunner().run(arguments);
+          }, getCurrentDirectory: () => Directory(d.sandbox)),
       prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
+  var importer = FilesystemImporter(d.sandbox);
   for (var file in files.input.keys) {
-    expect(migrated[p.join(d.sandbox, file)], equals(files.output[file]),
+    expect(migrated[importer.canonicalize(Uri.parse(file))],
+        equals(files.output[file]),
         reason: 'Incorrect migration of $file.');
   }
 }
 
-class HrxTestFiles {
+class _HrxTestFiles {
   Map<String, String> input = {};
   Map<String, String> output = {};
+  List<String> arguments = [];
   String expectedLog;
 
-  HrxTestFiles(String hrxText) {
+  _HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
     String filename;
     String contents;
@@ -72,6 +88,8 @@ class HrxTestFiles {
       output[filename.substring(7)] = contents;
     } else if (filename == "log.txt") {
       expectedLog = contents;
+    } else if (filename == "arguments") {
+      arguments = contents.trim().split(" ");
     }
   }
 

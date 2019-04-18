@@ -4,7 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'utils.dart';
+import 'package:sass_migrator/src/utils.dart';
 
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.

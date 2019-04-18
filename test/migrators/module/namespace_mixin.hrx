@@ -1,16 +1,19 @@
+<==> arguments
+--migrate-deps
+
 <==> input/entrypoint.scss
 @import "library";
 a {
-  b: increment(2);
+  @include helper;
 }
 
 <==> input/_library.scss
-@function increment($x) {
-  @return $x + 1;
+@mixin helper {
+  display: block;
 }
 
 <==> output/entrypoint.scss
 @use "library";
 a {
-  b: library.increment(2);
+  @include library.helper;
 }
