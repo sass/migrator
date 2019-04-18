@@ -54,8 +54,14 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
   expect(process.stdout, emitsDone);
   await process.shouldExit(0);
 
-  await Future.wait(files.output.keys
-      .map((path) => d.file(path, files.output[path]).validate()));
+  await Future.wait([
+    Future.wait(files.output.keys
+        .map((path) => d.file(path, files.output[path]).validate())),
+    // Ensure that the migrator *doesn't* migrate files it's not supposed to.
+    Future.wait(files.input.keys
+        .where((path) => !files.output.containsKey(path))
+        .map((path) => d.file(path, files.input[path]).validate()))
+  ]);
 }
 
 class _HrxTestFiles {
