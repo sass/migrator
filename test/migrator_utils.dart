@@ -6,23 +6,15 @@
 
 import 'dart:io';
 
-// The sass package's API is not necessarily stable. It is being imported with
-// the Sass team's explicit knowledge and approval. See
-// https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/importer/filesystem.dart';
-
 import 'package:path/path.dart' as p;
-import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
-
-import 'package:sass_migrator/runner.dart';
+import 'package:test_process/test_process.dart';
 
 /// Runs all tests for [migrator].
 ///
 /// HRX files should be stored in `test/migrators/<migrator name>/`.
 void testMigrator(String migrator) {
-  glyph.ascii = true;
   var migrationTests = Directory("test/migrators/$migrator");
   group(migrator, () {
     for (var file in migrationTests.listSync().whereType<File>()) {
@@ -37,24 +29,33 @@ void testMigrator(String migrator) {
 /// Run the migration test in [hrxFile].
 ///
 /// See migrations/README.md for details.
-_testHrx(File hrxFile, String migrator) async {
+Future<void> _testHrx(File hrxFile, String migrator) async {
   var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
-  Map<Uri, String> migrated;
-  var entrypoints =
-      files.input.keys.where((path) => path.startsWith("entrypoint"));
-  var arguments = [migrator]..addAll(files.arguments)..addAll(entrypoints);
-  await expect(
-      () => IOOverrides.runZoned(() async {
-            migrated = await MigratorRunner().run(arguments);
-          }, getCurrentDirectory: () => Directory(d.sandbox)),
-      prints(files.expectedLog?.replaceAll("\$TEST_DIR", d.sandbox) ?? ""));
-  var importer = FilesystemImporter(d.sandbox);
-  for (var file in files.input.keys) {
-    expect(migrated[importer.canonicalize(Uri.parse(file))],
-        equals(files.output[file]),
-        reason: 'Incorrect migration of $file.');
+
+  var process = await TestProcess.start(
+      Platform.executable,
+      [
+        "--enable-asserts",
+        p.absolute("bin/sass_migrator.dart"),
+        migrator,
+        '--no-unicode'
+      ]
+        ..addAll(files.arguments)
+        ..addAll(
+            files.input.keys.where((path) => path.startsWith("entrypoint"))),
+      workingDirectory: d.sandbox,
+      description: "migrator");
+
+  if (files.expectedLog != null) {
+    expect(process.stdout,
+        emitsInOrder(files.expectedLog.trimRight().split("\n")));
   }
+  expect(process.stdout, emitsDone);
+  await process.shouldExit(0);
+
+  await Future.wait(files.output.keys
+      .map((path) => d.file(path, files.output[path]).validate()));
 }
 
 class _HrxTestFiles {
