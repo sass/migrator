@@ -49,14 +49,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   final _globalFunctions = normalizedMap<FunctionRule>();
 
   /// Namespaces of modules used in this stylesheet.
-  Map<Uri, String> _namespaces = {};
+  Map<Uri, String> _namespaces;
 
   /// Set of additional use rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
   /// This set contains the path provided in the use rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
-  Set<String> _additionalUseRules = Set();
+  Set<String> _additionalUseRules;
 
   /// The URL of the current stylesheet.
   Uri _currentUrl;
@@ -84,7 +84,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (results == null) return null;
     var semicolon = _currentUrl.path.endsWith('.sass') ? "" : ";";
     var uses = _additionalUseRules.map((use) => '@use "$use"$semicolon\n');
-    return uses.join("") + results;
+    return uses.join() + results;
   }
 
   /// Stores per-file state before visiting [node] and restores it afterwards.
@@ -118,7 +118,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _localScope = _localScope.parent;
   }
 
-  /// Adds a namespace to any function call that require it.
+  /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
