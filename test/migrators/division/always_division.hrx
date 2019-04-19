@@ -32,10 +32,10 @@ a {
 }
 
 a {
-  b: divide((4px + 2px), 3px);
+  b: divide(4px + 2px, 3px);
   c: divide(6px, 3px) + 1;
   d: divide(6px, 3px);
-  e: divide(divide(6px, (2px + 1px)), 2);
+  e: divide(divide(6px, 2px + 1px), 2);
   $f: divide(6px, 3px);
 
   // * and % always return numbers, so we can assume division here

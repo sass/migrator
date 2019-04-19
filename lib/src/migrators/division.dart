@@ -59,7 +59,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       var numericResult = false;
       if (_shouldMigrate(node)) {
         addPatch(patchBefore(node, "divide("));
+        _patchParensIfAny(node.left);
         _patchSlashToComma(node);
+        _patchParensIfAny(node.right);
         addPatch(patchAfter(node, ")"));
         numericResult = true;
       }
@@ -90,7 +92,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           expression.operator == BinaryOperator.dividedBy) {
         if (_shouldMigrate(expression)) {
           addPatch(patchBefore(node, "divide"));
+          _patchParensIfAny(expression.left);
           _patchSlashToComma(expression);
+          _patchParensIfAny(expression.right);
         }
         super.visitBinaryOperationExpression(expression);
       } else {
@@ -201,6 +205,21 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     var start = node.left.span.end;
     var end = node.right.span.start;
     addPatch(Patch(start.file.span(start.offset, end.offset), ", "));
+  }
+
+  /// Adds patches removing unnecessary parentheses around [node] if it is a
+  /// ParenthesizedExpression.
+  void _patchParensIfAny(SassNode node) {
+    if (node is! ParenthesizedExpression) return;
+    var expression = (node as ParenthesizedExpression).expression;
+    if (expression is BinaryOperationExpression &&
+        expression.operator == BinaryOperator.dividedBy) {
+      return;
+    }
+    var start = node.span.start;
+    var end = node.span.end;
+    addPatch(Patch(start.file.span(start.offset, start.offset + 1), ""));
+    addPatch(Patch(start.file.span(end.offset - 1, end.offset), ""));
   }
 
   /// Runs [operation] with the given context.
