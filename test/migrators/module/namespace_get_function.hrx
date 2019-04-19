@@ -42,12 +42,12 @@ $x: "increment";
 $fn5: meta.get-function($x);
 
 <==> log.txt
-line 9, column 20 of $TEST_DIR/entrypoint.scss: WARNING - get-function call may require $module parameter
+line 9, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
   ,
 9 | $fn4: get-function("incre" + "ment");
   |                    ^^^^^^^^^^^^^^^^
   '
-line 12, column 20 of $TEST_DIR/entrypoint.scss: WARNING - get-function call may require $module parameter
+line 12, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
    ,
 12 | $fn5: get-function($x);
    |                    ^^
