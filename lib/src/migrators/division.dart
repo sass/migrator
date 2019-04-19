@@ -27,7 +27,7 @@ class DivisionMigrator extends Migrator {
   final argParser = ArgParser()
     ..addFlag('pessimistic',
         abbr: 'p',
-        help: r"Only migrate / expressions that are unambiguously division.");
+        help: "Only migrate / expressions that are unambiguously division.");
 
   bool get isPessimistic => argResults['pessimistic'] as bool;
 
@@ -100,13 +100,23 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         isDivisionAllowed: true);
   }
 
+  /// Visits a `/` operation [node] and migrates it to either the `division`
+  /// function or the `slash-list` function.
+  ///
+  /// If [surroundingParens] is provided, this will reuse the existing parens
+  /// instead of creating new ones.
   void _visitSlashOperation(BinaryOperationExpression node,
       {ParenthesizedExpression surroundingParens}) {
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
       // Definitely not division
-      // TODO(jathak): Convert to `slash-list`
-      super.visitBinaryOperationExpression(node);
+      if (surroundingParens != null) {
+        addPatch(patchBefore(surroundingParens, "slash-list"));
+      } else {
+        addPatch(patchBefore(node, "slash-list("));
+        addPatch(patchAfter(node, ")"));
+      }
+      _visitSlashListArguments(node);
     } else if (_expectsNumericResult || _isDefinitelyNumber(node)) {
       // Definitely division
       if (surroundingParens != null) {
@@ -123,6 +133,29 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     } else {
       warn("Could not determine whether this is division", node.span);
       super.visitBinaryOperationExpression(node);
+    }
+  }
+
+  /// Visits the arguments of a `/` operation that is being converted into a
+  /// call to `slash-list`, converting slashes to commas and removing
+  /// unnecessary interpolation.
+  void _visitSlashListArguments(Expression node) {
+    if (node is BinaryOperationExpression &&
+        node.operator == BinaryOperator.dividedBy) {
+      _visitSlashListArguments(node.left);
+      _patchSlashToComma(node);
+      _visitSlashListArguments(node.right);
+    } else if (node is StringExpression &&
+        node.text.contents.length == 1 &&
+        node.text.contents.first is Expression) {
+      var start = node.text.span.start.offset;
+      var end = node.text.span.end.offset;
+      // Remove `#{` and `}`
+      addPatch(Patch(node.span.file.span(start, start + 2), ""));
+      addPatch(Patch(node.span.file.span(end - 1, end), ""));
+      node.text.contents.first.accept(this);
+    } else {
+      node.accept(this);
     }
   }
 
