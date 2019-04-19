@@ -1,3 +1,6 @@
+<==> arguments
+--pessimistic
+
 <==> input/entrypoint.scss
 @function six-divided-by-three() {
   @return 6px / 3px;
@@ -12,9 +15,15 @@ a {
 
   // * and % always return numbers, so we can assume division here
   g: (3 * $x) / 4;
-  h: (3 / $x) % 4;
+  h: 3 / $x * 4;
+  i: (3 % $x) / 4;
+  j: 3 / $x % 4;
+
   // < and similar operators always operate on numbers
-  i: 3 / $x < 1;
+  k: 3 / $x < 1;
+  l: 3 / $x > 1;
+  m: 3 / $x <= 1;
+  n: 3 / $x >= 1;
 }
 
 <==> output/entrypoint.scss
@@ -31,7 +40,13 @@ a {
 
   // * and % always return numbers, so we can assume division here
   g: divide((3 * $x), 4);
-  h: divide(3, $x) % 4;
+  h: divide(3, $x) * 4;
+  i: divide((3 % $x), 4);
+  j: divide(3, $x) % 4;
+
   // < and similar operators always operate on numbers
-  i: divide(3, $x) < 1;
+  k: divide(3, $x) < 1;
+  l: divide(3, $x) > 1;
+  m: divide(3, $x) <= 1;
+  n: divide(3, $x) >= 1;
 }

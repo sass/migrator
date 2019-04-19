@@ -25,29 +25,29 @@ class DivisionMigrator extends Migrator {
 
   @override
   final argParser = ArgParser()
-    ..addFlag('aggressive',
-        abbr: 'a',
-        help: r"If set, expressions like '$x/3 + 1', '$x/3 - 1', and 'fn()/3' "
-            "will be migrated.");
+    ..addFlag('pessimistic',
+        abbr: 'p',
+        help: r"Only migrate / expressions that are unambiguously division.");
 
-  bool get isAggressive => argResults['aggressive'] as bool;
+  bool get isPessimistic => argResults['pessimistic'] as bool;
 
+  @override
   Map<Uri, String> migrateFile(Uri entrypoint) =>
-      _DivisionMigrationVisitor(this.isAggressive, migrateDependencies)
+      _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies)
           .run(entrypoint);
 }
 
 class _DivisionMigrationVisitor extends MigrationVisitor {
-  final bool isAggressive;
+  final bool isPessimistic;
 
-  _DivisionMigrationVisitor(this.isAggressive, bool migrateDependencies)
+  _DivisionMigrationVisitor(this.isPessimistic, bool migrateDependencies)
       : super(migrateDependencies: migrateDependencies);
 
   /// True when division is allowed by the context the current node is in.
-  bool _isDivisionAllowed = false;
+  var _isDivisionAllowed = false;
 
   /// True when the current node is expected to evaluate to a number.
-  bool _expectsNumericResult = false;
+  var _expectsNumericResult = false;
 
   /// If this is a division operation, migrates it.
   ///
@@ -56,81 +56,83 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
     if (node.operator == BinaryOperator.dividedBy) {
-      if (shouldMigrate(node)) {
+      var numericResult = false;
+      if (_shouldMigrate(node)) {
         addPatch(patchBefore(node, "divide("));
-        patchSlashToComma(node);
+        _patchSlashToComma(node);
         addPatch(patchAfter(node, ")"));
+        numericResult = true;
       }
-      super.visitBinaryOperationExpression(node);
+      _withContext(() => super.visitBinaryOperationExpression(node),
+          expectsNumericResult: numericResult);
     } else {
-      withContext(
-          true,
-          _expectsNumericResult || operatesOnNumbers(node.operator),
-          () => super.visitBinaryOperationExpression(node));
+      _withContext(() => super.visitBinaryOperationExpression(node),
+          isDivisionAllowed: true,
+          expectsNumericResult:
+              _expectsNumericResult || _operatesOnNumbers(node.operator));
     }
   }
 
   /// Disallows division within this list.
   @override
   void visitListExpression(ListExpression node) {
-    withContext(
-        false, _expectsNumericResult, () => super.visitListExpression(node));
+    _withContext(() => super.visitListExpression(node),
+        isDivisionAllowed: false, expectsNumericResult: false);
   }
 
   /// If this parenthesized expression contains a division operation, migrates
   /// it using the parentheses that already exist.
   @override
   void visitParenthesizedExpression(ParenthesizedExpression node) {
-    var expression = node.expression;
-    if (expression is BinaryOperationExpression &&
-        expression.operator == BinaryOperator.dividedBy) {
-      withContext(true, _expectsNumericResult, () {
-        if (shouldMigrate(expression)) {
+    _withContext(() {
+      var expression = node.expression;
+      if (expression is BinaryOperationExpression &&
+          expression.operator == BinaryOperator.dividedBy) {
+        if (_shouldMigrate(expression)) {
           addPatch(patchBefore(node, "divide"));
-          patchSlashToComma(expression);
+          _patchSlashToComma(expression);
         }
         super.visitBinaryOperationExpression(expression);
-      });
-      return;
-    }
-    withContext(true, _expectsNumericResult,
-        () => super.visitParenthesizedExpression(node));
+      } else {
+        super.visitParenthesizedExpression(node);
+      }
+    }, isDivisionAllowed: true);
   }
 
   /// Allows division within this return rule.
   @override
   void visitReturnRule(ReturnRule node) {
-    withContext(true, _expectsNumericResult, () => super.visitReturnRule(node));
+    _withContext(() => super.visitReturnRule(node), isDivisionAllowed: true);
   }
 
   /// Allows division within this variable declaration.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    withContext(true, _expectsNumericResult,
-        () => super.visitVariableDeclaration(node));
+    _withContext(() => super.visitVariableDeclaration(node),
+        isDivisionAllowed: true);
   }
 
   /// Returns true if we assume that [operator] always returns a number.
   ///
-  /// This is always true for * and %, and it's true for + and - as long as the
-  /// aggressive option is enabled.
-  bool returnsNumbers(BinaryOperator operator) =>
+  /// This is always true for `*` and `%`, and it's true for `+` and `-` as long
+  /// as the aggressive option is enabled.
+  bool _returnsNumbers(BinaryOperator operator) =>
       operator == BinaryOperator.times ||
       operator == BinaryOperator.modulo ||
-      isAggressive &&
+      !isPessimistic &&
           (operator == BinaryOperator.plus || operator == BinaryOperator.minus);
 
   /// Returns true if we assume that [operator] always operators on numbers.
   ///
-  /// This is always true for *, %, <, <=, >, and >=, and it's true for +, -,
-  /// ==, and != as long as the aggressive option is enabled.
-  bool operatesOnNumbers(BinaryOperator operator) =>
-      returnsNumbers(operator) ||
+  /// This is always true for `*`, `%`, `<`, `<=`, `>`, and `>=`, and it's true
+  /// for `+`, `-`, `==`, and `!=` as long as the aggressive option is enabled.
+  bool _operatesOnNumbers(BinaryOperator operator) =>
+      _returnsNumbers(operator) ||
       operator == BinaryOperator.lessThan ||
       operator == BinaryOperator.lessThanOrEquals ||
       operator == BinaryOperator.greaterThan ||
       operator == BinaryOperator.greaterThanOrEquals ||
-      isAggressive &&
+      !isPessimistic &&
           (operator == BinaryOperator.equals ||
               operator == BinaryOperator.notEquals);
 
@@ -138,46 +140,53 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   ///
   /// Warns if division is allowed but it's unclear whether or not all types
   /// are numeric.
-  bool shouldMigrate(BinaryOperationExpression node) {
-    if (!_isDivisionAllowed && onlySlash(node)) {
-      return false;
-    }
-    if (hasNonNumber(node)) return false;
-    if (_expectsNumericResult || _allNumeric(node)) return true;
+  bool _shouldMigrate(BinaryOperationExpression node) {
+    if (!_isDivisionAllowed && _onlySlash(node)) return false;
+    if (_isDefinitelyNotNumber(node)) return false;
+    if (_expectsNumericResult || _isDefinitelyNumber(node)) return true;
     warn("Could not determine whether this is division", node.span);
     return false;
   }
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
-  bool onlySlash(Expression node) {
+  bool _onlySlash(Expression node) {
     if (node is NumberExpression) return true;
     if (node is BinaryOperationExpression) {
       return node.operator == BinaryOperator.dividedBy &&
-          onlySlash(node.left) &&
-          onlySlash(node.right);
+          _onlySlash(node.left) &&
+          _onlySlash(node.right);
     }
     return false;
   }
 
   /// Returns true if [node] is believed to always evaluate to a number.
-  bool _allNumeric(Expression node) {
+  bool _isDefinitelyNumber(Expression node) {
     if (node is NumberExpression) return true;
-    if (node is ParenthesizedExpression) return _allNumeric(node.expression);
-    if (node is UnaryOperationExpression) return _allNumeric(node.operand);
-    if (node is FunctionExpression) return isAggressive;
+    if (node is ParenthesizedExpression) {
+      return _isDefinitelyNumber(node.expression);
+    }
+    if (node is UnaryOperationExpression) {
+      return _isDefinitelyNumber(node.operand);
+    }
+    if (node is FunctionExpression || node is VariableExpression) {
+      return !isPessimistic;
+    }
     if (node is BinaryOperationExpression) {
-      return returnsNumbers(node.operator) ||
-          (_allNumeric(node.left) && _allNumeric(node.right));
+      return _returnsNumbers(node.operator) ||
+          (_isDefinitelyNumber(node.left) && _isDefinitelyNumber(node.right));
     }
     return false;
   }
 
   /// Returns true if [node] contains a subexpression known to not be a number.
-  bool hasNonNumber(Expression node) {
-    if (node is ParenthesizedExpression) return hasNonNumber(node.expression);
+  bool _isDefinitelyNotNumber(Expression node) {
+    if (node is ParenthesizedExpression) {
+      return _isDefinitelyNotNumber(node.expression);
+    }
     if (node is BinaryOperationExpression) {
-      return hasNonNumber(node.left) || hasNonNumber(node.right);
+      return _isDefinitelyNotNumber(node.left) ||
+          _isDefinitelyNotNumber(node.right);
     }
     return node is BooleanExpression ||
         node is ColorExpression ||
@@ -188,19 +197,21 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   }
 
   /// Adds a patch replacing the operator of [node] with ", ".
-  void patchSlashToComma(BinaryOperationExpression node) {
+  void _patchSlashToComma(BinaryOperationExpression node) {
     var start = node.left.span.end;
     var end = node.right.span.start;
     addPatch(Patch(start.file.span(start.offset, end.offset), ", "));
   }
 
   /// Runs [operation] with the given context.
-  void withContext(
-      bool isDivisionAllowed, bool expectsNumericResult, void operation()) {
+  void _withContext(void operation(),
+      {bool isDivisionAllowed, bool expectsNumericResult}) {
     var previousDivisionAllowed = _isDivisionAllowed;
     var previousNumericResult = _expectsNumericResult;
-    _isDivisionAllowed = isDivisionAllowed;
-    _expectsNumericResult = expectsNumericResult;
+    if (isDivisionAllowed != null) _isDivisionAllowed = isDivisionAllowed;
+    if (expectsNumericResult != null) {
+      _expectsNumericResult = expectsNumericResult;
+    }
     operation();
     _isDivisionAllowed = previousDivisionAllowed;
     _expectsNumericResult = previousNumericResult;
