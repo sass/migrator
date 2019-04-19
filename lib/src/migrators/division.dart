@@ -56,17 +56,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
     if (node.operator == BinaryOperator.dividedBy) {
-      var numericResult = false;
-      if (_shouldMigrate(node)) {
-        addPatch(patchBefore(node, "divide("));
-        _patchParensIfAny(node.left);
-        _patchSlashToComma(node);
-        _patchParensIfAny(node.right);
-        addPatch(patchAfter(node, ")"));
-        numericResult = true;
-      }
-      _withContext(() => super.visitBinaryOperationExpression(node),
-          expectsNumericResult: numericResult);
+      _visitSlashOperation(node);
     } else {
       _withContext(() => super.visitBinaryOperationExpression(node),
           isDivisionAllowed: true,
@@ -90,13 +80,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       var expression = node.expression;
       if (expression is BinaryOperationExpression &&
           expression.operator == BinaryOperator.dividedBy) {
-        if (_shouldMigrate(expression)) {
-          addPatch(patchBefore(node, "divide"));
-          _patchParensIfAny(expression.left);
-          _patchSlashToComma(expression);
-          _patchParensIfAny(expression.right);
-        }
-        super.visitBinaryOperationExpression(expression);
+        _visitSlashOperation(expression, surroundingParens: node);
       } else {
         super.visitParenthesizedExpression(node);
       }
@@ -114,6 +98,32 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void visitVariableDeclaration(VariableDeclaration node) {
     _withContext(() => super.visitVariableDeclaration(node),
         isDivisionAllowed: true);
+  }
+
+  void _visitSlashOperation(BinaryOperationExpression node,
+      {ParenthesizedExpression surroundingParens}) {
+    if ((!_isDivisionAllowed && _onlySlash(node)) ||
+        _isDefinitelyNotNumber(node)) {
+      // Definitely not division
+      // TODO(jathak): Convert to `slash-list`
+      super.visitBinaryOperationExpression(node);
+    } else if (_expectsNumericResult || _isDefinitelyNumber(node)) {
+      // Definitely division
+      if (surroundingParens != null) {
+        addPatch(patchBefore(surroundingParens, "divide"));
+      } else {
+        addPatch(patchBefore(node, "divide("));
+        addPatch(patchAfter(node, ")"));
+      }
+      _patchParensIfAny(node.left);
+      _patchSlashToComma(node);
+      _patchParensIfAny(node.right);
+      _withContext(() => super.visitBinaryOperationExpression(node),
+          expectsNumericResult: true);
+    } else {
+      warn("Could not determine whether this is division", node.span);
+      super.visitBinaryOperationExpression(node);
+    }
   }
 
   /// Returns true if we assume that [operator] always returns a number.
@@ -140,18 +150,6 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           (operator == BinaryOperator.equals ||
               operator == BinaryOperator.notEquals);
 
-  /// Returns true if [node] should be treated as division and migrated.
-  ///
-  /// Warns if division is allowed but it's unclear whether or not all types
-  /// are numeric.
-  bool _shouldMigrate(BinaryOperationExpression node) {
-    if (!_isDivisionAllowed && _onlySlash(node)) return false;
-    if (_isDefinitelyNotNumber(node)) return false;
-    if (_expectsNumericResult || _isDefinitelyNumber(node)) return true;
-    warn("Could not determine whether this is division", node.span);
-    return false;
-  }
-
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
   bool _onlySlash(Expression node) {
@@ -169,14 +167,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if (node is NumberExpression) return true;
     if (node is ParenthesizedExpression) {
       return _isDefinitelyNumber(node.expression);
-    }
-    if (node is UnaryOperationExpression) {
+    } else if (node is UnaryOperationExpression) {
       return _isDefinitelyNumber(node.operand);
-    }
-    if (node is FunctionExpression || node is VariableExpression) {
+    } else if (node is FunctionExpression || node is VariableExpression) {
       return !isPessimistic;
-    }
-    if (node is BinaryOperationExpression) {
+    } else if (node is BinaryOperationExpression) {
       return _returnsNumbers(node.operator) ||
           (_isDefinitelyNumber(node.left) && _isDefinitelyNumber(node.right));
     }

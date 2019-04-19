@@ -39,9 +39,9 @@ a {
   $f: divide(6px, 3px);
 
   // * and % always return numbers, so we can assume division here
-  g: divide((3 * $x), 4);
+  g: divide(3 * $x, 4);
   h: divide(3, $x) * 4;
-  i: divide((3 % $x), 4);
+  i: divide(3 % $x, 4);
   j: divide(3, $x) % 4;
 
   // < and similar operators always operate on numbers
