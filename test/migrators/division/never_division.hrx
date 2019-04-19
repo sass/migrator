@@ -7,3 +7,6 @@ a {
   f: (bold 6px/3px sans-serif);
   g: (six / three);
 }
+
+<==> log.txt
+Nothing to migrate!

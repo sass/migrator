@@ -20,7 +20,7 @@ a {
 }
 
 <==> log.txt
-line 6, column 6 of $TEST_DIR/entrypoint.scss: WARNING - Could not determine whether this is division
+line 6, column 6 of entrypoint.scss: WARNING - Could not determine whether this is division
   ,
 6 |   f: 3 / $x;
   |      ^^^^^^

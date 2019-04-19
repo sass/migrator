@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
+import 'package:term_glyph/term_glyph.dart' as glyph;
 
 import 'src/migrators/division.dart';
 import 'src/migrators/module.dart';
@@ -18,15 +19,18 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
 
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
-    argParser.addFlag('migrate-deps',
-        abbr: 'd', help: 'Migrate dependencies in addition to entrypoints.');
-    argParser.addFlag('dry-run',
-        abbr: 'n',
-        help: 'Show which files would be migrated but make no changes.');
-    // TODO(jathak): Make this flag print a diff instead.
-    argParser.addFlag('verbose',
-        abbr: 'v',
-        help: 'Print text of migrated files when running with --dry-run.');
+    argParser
+      ..addFlag('migrate-deps',
+          abbr: 'd', help: 'Migrate dependencies in addition to entrypoints.')
+      ..addFlag('dry-run',
+          abbr: 'n',
+          help: 'Show which files would be migrated but make no changes.')
+      ..addFlag('unicode',
+          help: 'Whether to use Unicode characters for messages.')
+      // TODO(jathak): Make this flag print a diff instead.
+      ..addFlag('verbose',
+          abbr: 'v',
+          help: 'Print text of migrated files when running with --dry-run.');
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
   }
@@ -35,6 +39,10 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
     var argResults = parse(args);
+    if (argResults['unicode'] != null) {
+      glyph.ascii = !(argResults['unicode'] as bool);
+    }
+
     var migrated = await runCommand(argResults);
     if (migrated == null) return;
 

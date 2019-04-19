@@ -15,3 +15,4 @@ dev_dependencies:
   term_glyph: "^1.1.0"
   test: ">=0.12.29 <2.0.0"
   test_descriptor: "^1.1.1"
+  test_process: "^1.0.0"

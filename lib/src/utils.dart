@@ -18,18 +18,18 @@ export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
 
 import 'patch.dart';
 
+/// A filesystem importer that loads Sass files relative to the current working
+/// directory.
+final _filesystemImporter = FilesystemImporter('.');
+
 /// Returns the canonical version of [url].
-Uri canonicalize(Uri url) {
-  var importer = FilesystemImporter(Directory.current.path);
-  return importer.canonicalize(url);
-}
+Uri canonicalize(Uri url) => _filesystemImporter.canonicalize(url);
 
 /// Parses the file at [url] into a stylesheet.
 Stylesheet parseStylesheet(Uri url) {
-  var importer = FilesystemImporter(Directory.current.path);
-  url = importer.canonicalize(url);
-  var result = importer.load(url);
-  return Stylesheet.parse(result.contents, result.syntax, url: url);
+  var canonicalUrl = _filesystemImporter.canonicalize(url);
+  var result = _filesystemImporter.load(canonicalUrl);
+  return Stylesheet.parse(result.contents, result.syntax, url: canonicalUrl);
 }
 
 /// Returns the default namespace for a use rule with [path].
