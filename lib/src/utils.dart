@@ -4,8 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:io';
-
 import 'package:source_span/source_span.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -48,6 +46,16 @@ Patch patchBefore(AstNode node, String text) {
 Patch patchAfter(AstNode node, String text) {
   var end = node.span.end;
   return Patch(end.file.span(end.offset, end.offset), text);
+}
+
+/// Creates a patch deleting all of or part of [span].
+///
+/// By default, this deletes the entire span. If [start] and/or [end] are
+/// provided, this deletes only the portion of the span within that range.
+Patch patchDelete(FileSpan span, {int start = 0, int end}) {
+  end ??= span.length;
+  return Patch(
+      span.file.span(span.start.offset + start, span.start.offset + end), "");
 }
 
 /// Emits a warning with [message] and [context];

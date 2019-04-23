@@ -72,15 +72,20 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         isDivisionAllowed: false, expectsNumericResult: false);
   }
 
-  /// If this parenthesized expression contains a division operation, migrates
-  /// it using the parentheses that already exist.
+  /// Allows division within this parenthesized expression.
+  ///
+  /// If these parentheses contain a `/` operation that is migrated to a
+  /// function call, the now-unnecessary parentheses will be removed.
   @override
   void visitParenthesizedExpression(ParenthesizedExpression node) {
     _withContext(() {
       var expression = node.expression;
       if (expression is BinaryOperationExpression &&
           expression.operator == BinaryOperator.dividedBy) {
-        _visitSlashOperation(expression, surroundingParens: node);
+        if (_visitSlashOperation(expression)) {
+          addPatch(patchDelete(node.span, end: 1));
+          addPatch(patchDelete(node.span, start: node.span.length - 1));
+        }
       } else {
         super.visitParenthesizedExpression(node);
       }
@@ -103,36 +108,33 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Visits a `/` operation [node] and migrates it to either the `division`
   /// function or the `slash-list` function.
   ///
-  /// If [surroundingParens] is provided, this will reuse the existing parens
-  /// instead of creating new ones.
-  void _visitSlashOperation(BinaryOperationExpression node,
-      {ParenthesizedExpression surroundingParens}) {
+  /// Returns true the `/` was migrated to either function call, and false if
+  /// the `/` is ambiguous and a warning was emitted instead (pessimistic mode
+  /// only).
+  bool _visitSlashOperation(BinaryOperationExpression node) {
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
       // Definitely not division
-      if (surroundingParens != null) {
-        addPatch(patchBefore(surroundingParens, "slash-list"));
-      } else {
-        addPatch(patchBefore(node, "slash-list("));
-        addPatch(patchAfter(node, ")"));
-      }
+      addPatch(patchBefore(node, "slash-list("));
+      addPatch(patchAfter(node, ")"));
       _visitSlashListArguments(node);
-    } else if (_expectsNumericResult || _isDefinitelyNumber(node)) {
+      return true;
+    } else if (_expectsNumericResult ||
+        _isDefinitelyNumber(node) ||
+        !isPessimistic) {
       // Definitely division
-      if (surroundingParens != null) {
-        addPatch(patchBefore(surroundingParens, "divide"));
-      } else {
-        addPatch(patchBefore(node, "divide("));
-        addPatch(patchAfter(node, ")"));
-      }
+      addPatch(patchBefore(node, "divide("));
+      addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
       _patchSlashToComma(node);
       _patchParensIfAny(node.right);
       _withContext(() => super.visitBinaryOperationExpression(node),
           expectsNumericResult: true);
+      return true;
     } else {
       warn("Could not determine whether this is division", node.span);
       super.visitBinaryOperationExpression(node);
+      return false;
     }
   }
 
@@ -148,11 +150,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     } else if (node is StringExpression &&
         node.text.contents.length == 1 &&
         node.text.contents.first is Expression) {
-      var start = node.text.span.start.offset;
-      var end = node.text.span.end.offset;
       // Remove `#{` and `}`
-      addPatch(Patch(node.span.file.span(start, start + 2), ""));
-      addPatch(Patch(node.span.file.span(end - 1, end), ""));
+      addPatch(patchDelete(node.span, end: 2));
+      addPatch(patchDelete(node.span, start: node.span.length - 1));
       node.text.contents.first.accept(this);
     } else {
       node.accept(this);
@@ -161,27 +161,19 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Returns true if we assume that [operator] always returns a number.
   ///
-  /// This is always true for `*` and `%`, and it's true for `+` and `-` as long
-  /// as the aggressive option is enabled.
+  /// This is true for `*` and `%`.
   bool _returnsNumbers(BinaryOperator operator) =>
-      operator == BinaryOperator.times ||
-      operator == BinaryOperator.modulo ||
-      !isPessimistic &&
-          (operator == BinaryOperator.plus || operator == BinaryOperator.minus);
+      operator == BinaryOperator.times || operator == BinaryOperator.modulo;
 
   /// Returns true if we assume that [operator] always operators on numbers.
   ///
-  /// This is always true for `*`, `%`, `<`, `<=`, `>`, and `>=`, and it's true
-  /// for `+`, `-`, `==`, and `!=` as long as the aggressive option is enabled.
+  /// This is true for `*`, `%`, `<`, `<=`, `>`, and `>=`.
   bool _operatesOnNumbers(BinaryOperator operator) =>
       _returnsNumbers(operator) ||
       operator == BinaryOperator.lessThan ||
       operator == BinaryOperator.lessThanOrEquals ||
       operator == BinaryOperator.greaterThan ||
-      operator == BinaryOperator.greaterThanOrEquals ||
-      !isPessimistic &&
-          (operator == BinaryOperator.equals ||
-              operator == BinaryOperator.notEquals);
+      operator == BinaryOperator.greaterThanOrEquals;
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
@@ -195,15 +187,13 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     return false;
   }
 
-  /// Returns true if [node] is believed to always evaluate to a number.
+  /// Returns true if [node] is known to always evaluate to a number.
   bool _isDefinitelyNumber(Expression node) {
     if (node is NumberExpression) return true;
     if (node is ParenthesizedExpression) {
       return _isDefinitelyNumber(node.expression);
     } else if (node is UnaryOperationExpression) {
       return _isDefinitelyNumber(node.operand);
-    } else if (node is FunctionExpression || node is VariableExpression) {
-      return !isPessimistic;
     } else if (node is BinaryOperationExpression) {
       return _returnsNumbers(node.operator) ||
           (_isDefinitelyNumber(node.left) && _isDefinitelyNumber(node.right));
@@ -244,10 +234,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         expression.operator == BinaryOperator.dividedBy) {
       return;
     }
-    var start = node.span.start;
-    var end = node.span.end;
-    addPatch(Patch(start.file.span(start.offset, start.offset + 1), ""));
-    addPatch(Patch(start.file.span(end.offset - 1, end.offset), ""));
+    addPatch(patchDelete(node.span, end: 1));
+    addPatch(patchDelete(node.span, start: node.span.length - 1));
   }
 
   /// Runs [operation] with the given context.
