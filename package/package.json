@@ -1,0 +1,21 @@
+{
+  "name": "sass-migrator",
+  "description": "A tool for migrating to new Sass versions.",
+  "license": "MIT",
+  "bugs": "https://github.com/sass/migrator/issues",
+  "homepage": "https://github.com/sass/migrator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sass/migrator"
+  },
+  "author": {
+    "name": "Jennifer Thakar",
+    "email": "jathak@google.com",
+    "url": "https://github.com/jathak"
+  },
+  "engines": {
+    "node": ">=0.11.8"
+  },
+  "bin": {"sass-migrator": "sass_migrator.dart.js"},
+  "keywords": ["style", "scss", "sass", "preprocessor", "css"]
+}

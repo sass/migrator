@@ -14,6 +14,7 @@ import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/importer/filesystem.dart';
 export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
 
+import 'io.dart';
 import 'patch.dart';
 
 /// A filesystem importer that loads Sass files relative to the current working
