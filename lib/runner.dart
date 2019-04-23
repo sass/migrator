@@ -10,6 +10,7 @@ import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
+import 'src/migrators/division.dart';
 import 'src/migrators/module.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
@@ -30,6 +31,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       ..addFlag('verbose',
           abbr: 'v',
           help: 'Print text of migrated files when running with --dry-run.');
+    addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
   }
 
