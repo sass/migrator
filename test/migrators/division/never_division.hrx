@@ -1,0 +1,23 @@
+<==> input/entrypoint.scss
+:foo(#{6/3}) {
+  b: 6px / 3px;
+  c: 6px / 3px / 2;
+  d: #{4px + 2px} / 3px;
+  e: bold 6px/3px sans-serif;
+  f: (bold 6px/3px sans-serif);
+  g: (six / three);
+  h: 6 / three;
+  i: #{$x} / #{6px / 3px} / #{2};
+}
+
+<==> output/entrypoint.scss
+:foo(#{slash-list(6, 3)}) {
+  b: slash-list(6px, 3px);
+  c: slash-list(6px, 3px, 2);
+  d: slash-list(4px + 2px, 3px);
+  e: bold slash-list(6px, 3px) sans-serif;
+  f: (bold slash-list(6px, 3px) sans-serif);
+  g: slash-list(six, three);
+  h: slash-list(6, three);
+  i: slash-list($x, slash-list(6px, 3px), 2);
+}

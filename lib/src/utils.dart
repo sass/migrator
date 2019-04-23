@@ -4,8 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:io';
-
 import 'package:source_span/source_span.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -18,18 +16,18 @@ export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
 
 import 'patch.dart';
 
+/// A filesystem importer that loads Sass files relative to the current working
+/// directory.
+final _filesystemImporter = FilesystemImporter('.');
+
 /// Returns the canonical version of [url].
-Uri canonicalize(Uri url) {
-  var importer = FilesystemImporter(Directory.current.path);
-  return importer.canonicalize(url);
-}
+Uri canonicalize(Uri url) => _filesystemImporter.canonicalize(url);
 
 /// Parses the file at [url] into a stylesheet.
 Stylesheet parseStylesheet(Uri url) {
-  var importer = FilesystemImporter(Directory.current.path);
-  url = importer.canonicalize(url);
-  var result = importer.load(url);
-  return Stylesheet.parse(result.contents, result.syntax, url: url);
+  var canonicalUrl = _filesystemImporter.canonicalize(url);
+  var result = _filesystemImporter.load(canonicalUrl);
+  return Stylesheet.parse(result.contents, result.syntax, url: canonicalUrl);
 }
 
 /// Returns the default namespace for a use rule with [path].
@@ -48,6 +46,16 @@ Patch patchBefore(AstNode node, String text) {
 Patch patchAfter(AstNode node, String text) {
   var end = node.span.end;
   return Patch(end.file.span(end.offset, end.offset), text);
+}
+
+/// Creates a patch deleting all of or part of [span].
+///
+/// By default, this deletes the entire span. If [start] and/or [end] are
+/// provided, this deletes only the portion of the span within that range.
+Patch patchDelete(FileSpan span, {int start = 0, int end}) {
+  end ??= span.length;
+  return Patch(
+      span.file.span(span.start.offset + start, span.start.offset + end), "");
 }
 
 /// Emits a warning with [message] and [context];
