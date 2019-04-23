@@ -14,33 +14,82 @@ import 'package:test_process/test_process.dart';
 /// Runs all tests for [migrator].
 ///
 /// HRX files should be stored in `test/migrators/<migrator name>/`.
-void testMigrator(String migrator) {
+///
+/// If [node] is `true`, runs the Node.js version of the executable. Otherwise,
+/// runs the Dart VM version.
+void testMigrator(String migrator, {bool node: false}) {
+  if (node) {
+    _ensureUpToDate("build/sass_migrator.dart.js", "pub run grinder js");
+  }
+
   var migrationTests = Directory("test/migrators/$migrator");
   group(migrator, () {
     for (var file in migrationTests.listSync().whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
         test(p.basenameWithoutExtension(file.path),
-            () => _testHrx(file, migrator));
+            () => _testHrx(file, migrator, node: node));
       }
     }
   });
 }
 
+/// Ensures that [path] (usually a compilation artifact) has been modified more
+/// recently than all this package's source files.
+///
+/// If [path] isn't up-to-date, this throws an error encouraging the user to run
+/// [commandToRun].
+void _ensureUpToDate(String path, String commandToRun) {
+  // Ensure path is relative so the error messages are more readable.
+  path = p.relative(path);
+  if (!File(path).existsSync()) {
+    throw "$path does not exist. Run $commandToRun.";
+  }
+
+  var lastModified = File(path).lastModifiedSync();
+  var entriesToCheck = Directory("lib").listSync(recursive: true).toList();
+
+  // If we have a dependency override, "pub run" will touch the lockfile to mark
+  // it as newer than the pubspec, which makes it unsuitable to use for
+  // freshness checking.
+  if (File("pubspec.yaml")
+      .readAsStringSync()
+      .contains("dependency_overrides")) {
+    entriesToCheck.add(File("pubspec.yaml"));
+  } else {
+    entriesToCheck.add(File("pubspec.lock"));
+  }
+
+  for (var entry in entriesToCheck) {
+    if (entry is File) {
+      var entryLastModified = entry.lastModifiedSync();
+      if (lastModified.isBefore(entryLastModified)) {
+        throw "${entry.path} was modified after ${p.prettyUri(p.toUri(path))} "
+            "was generated.\n"
+            "Run $commandToRun.";
+      }
+    }
+  }
+}
+
 /// Run the migration test in [hrxFile].
 ///
 /// See migrations/README.md for details.
-Future<void> _testHrx(File hrxFile, String migrator) async {
+///
+/// If [node] is `true`, runs the Node.js version of the executable. Otherwise,
+/// runs the Dart VM version.
+Future<void> _testHrx(File hrxFile, String migrator, {bool node: false}) async {
   var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
 
+  var executable = node ? "node" : Platform.executable;
+  var executableArgs = node
+      ? [p.absolute("build/sass_migrator.dart.js")]
+      : ["--enable-asserts", p.absolute("bin/sass_migrator.dart")];
+
   var process = await TestProcess.start(
-      Platform.executable,
-      [
-        "--enable-asserts",
-        p.absolute("bin/sass_migrator.dart"),
-        migrator,
-        '--no-unicode'
-      ]
+      executable,
+      executableArgs
+        ..addAll([migrator, '--no-unicode'])
         ..addAll(files.arguments)
         ..addAll(
             files.input.keys.where((path) => path.startsWith("entrypoint"))),

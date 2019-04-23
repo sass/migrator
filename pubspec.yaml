@@ -3,7 +3,7 @@ version: 0.0.1-dev
 description: A tool for running migrations on Sass files
 
 environment:
-  sdk: '>=2.1.0 <3.0.0'
+  sdk: '>=2.2.0 <3.0.0'
 
 dependencies:
   args: "^1.5.1"
@@ -12,6 +12,12 @@ dependencies:
   path: "^1.6.0"
 
 dev_dependencies:
+  grinder: "^0.8.0"
+  meta: ">=0.9.0 <2.0.0"
+  node_interop: "^1.0.0"
+  node_io: "1.0.0-dev.10.0"
+  node_preamble: "^1.3.0"
+  pub_semver: "^1.0.0"
   term_glyph: "^1.1.0"
   test: ">=0.12.29 <2.0.0"
   test_descriptor: "^1.1.1"

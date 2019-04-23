@@ -1,7 +1,4 @@
 language: dart
-dart:
-  - stable
-  - dev
 branches:
   only:
     - master
@@ -9,7 +6,32 @@ cache:
   directories:
     - $HOME/.pub-cache
 
-dart_task:
-  - dartanalyzer: --fatal-warnings ./
-  - dartfmt
-  - test
+matrix:
+  include:
+
+  # Testing on the Dart VM
+  - dart: stable
+    dart_task: {test: -x node}
+  - dart: dev
+    dart_task: {test: -x node}
+
+  # Testing on Node.js
+  - env: NODE_VERSION=stable
+    dart_task: {test: -t node}
+  # Keep these up-to-date with the latest LTS Node releases. They next need to
+  # be rotated December 2019. See https://github.com/nodejs/Release.
+  - env: NODE_VERSION=lts/carbon
+    dart_task: {test: -t node}
+  - env: NODE_VERSION=lts/dubnium
+    dart_task: {test: -t node}
+
+  # Static checks
+  - dart_task: {dartanalyzer: --fatal-warnings ./}
+  - dart_task: dartfmt
+
+before_script:
+- if-node() { if [ ! -z "$NODE_VERSION" ]; then "$@"; fi }
+- if-node . "$HOME/.nvm/nvm.sh"
+- if-node nvm install "$NODE_VERSION"
+- if-node nvm use "$NODE_VERSION"
+- if-node pub run grinder js
