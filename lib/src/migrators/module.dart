@@ -209,7 +209,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var configured = _findConfiguredVariables(node, import);
     var config = "";
-    if (configured.isNotEmpty) {
+    if (configured.length == 1) {
+      config = " with (" + configured.first + ")";
+    } else if (configured.isNotEmpty) {
       config = " with (\n  " + configured.join(',\n  ') + "\n)";
     }
     addPatch(Patch(node.span, '@use ${import.span.text}$config'));
@@ -226,15 +228,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var configured = <String>[];
     for (var name in _globalVariables.keys) {
       var declarations = _globalVariables[name];
-      VariableDeclaration lastNonDefault = declarations[0];
+      var lastAssignment = declarations[0];
       for (var i = 1; i < declarations.length; i++) {
         var declaration = declarations[i];
         if (!declaration.isGuarded) {
-          lastNonDefault = declaration;
+          lastAssignment = declaration;
         } else if (declaration.span.sourceUrl == _lastUrl) {
-          if (lastNonDefault.span.sourceUrl == _currentUrl) {
-            configured.add("\$$name: ${lastNonDefault.expression}");
-          } else if (lastNonDefault.span.sourceUrl != _lastUrl) {
+          if (lastAssignment.span.sourceUrl == _currentUrl) {
+            configured.add("\$$name: ${lastAssignment.expression}");
+          } else if (lastAssignment.span.sourceUrl != _lastUrl) {
             // A downstream stylesheet configures this variable, so forward it.
             var semicolon = _currentUrl.path.endsWith('.sass') ? '' : ';';
             addPatch(patchBefore(

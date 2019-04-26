@@ -13,6 +13,4 @@ $no-config: yellow;
 <==> output/entrypoint.scss
 $config: red;
 $no-config: blue;
-@use "library" with (
-  $config: red
-);
+@use "library" with ($config: red);
