@@ -43,7 +43,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// We store all declarations instead of just the most recent one for use in
   /// detecting configurable variables.
-  final _globalVariables = normalizedMap<List<VariableDeclaration>>();
+  final _globalVariables = normalizedMap<VariableDeclaration>();
 
   /// Global mixins defined at any time during the migrator run.
   final _globalMixins = normalizedMap<MixinRule>();
@@ -60,6 +60,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This set contains the path provided in the use rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
   Set<String> _additionalUseRules;
+
+  /// Set of variables declared outside the current stylesheet that overrode
+  /// `!default` variables within the current stylesheet.
+  Set<VariableDeclaration> _configuredVariables;
 
   /// The URL of the current stylesheet.
   Uri _currentUrl;
@@ -204,52 +208,46 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     // TODO(jathak): Confirm that this import appears before other rules
 
+    var oldConfiguredVariables = _configuredVariables;
+    _configuredVariables = Set();
     visitDependency(Uri.parse(import.url), _currentUrl);
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
-    var configured = _findConfiguredVariables(node, import);
-    var config = "";
-    if (configured.length == 1) {
-      config = " with (" + configured.first + ")";
-    } else if (configured.isNotEmpty) {
-      config = " with (\n  " + configured.join(',\n  ') + "\n)";
-    }
-    addPatch(Patch(node.span, '@use ${import.span.text}$config'));
-  }
-
-  /// Finds all configured variables from the given import.
-  ///
-  /// This returns a list of "$var: <expression>" strings that can be used to
-  /// construct the configuration for a use rule.
-  ///
-  /// If a variable was configured in a downstream stylesheet, this will instead
-  /// add a forward rule to make it accessible.
-  List<String> _findConfiguredVariables(ImportRule node, Import import) {
-    var configured = <String>[];
-    for (var name in _globalVariables.keys) {
-      var declarations = _globalVariables[name];
-      var lastAssignment = declarations[0];
-      for (var i = 1; i < declarations.length; i++) {
-        var declaration = declarations[i];
-        if (!declaration.isGuarded) {
-          lastAssignment = declaration;
-        } else if (declaration.span.sourceUrl == _lastUrl) {
-          if (lastAssignment.span.sourceUrl == _currentUrl) {
-            configured.add("\$$name: ${lastAssignment.expression}");
-          } else if (lastAssignment.span.sourceUrl != _lastUrl) {
-            // A downstream stylesheet configures this variable, so forward it.
-            var semicolon = _currentUrl.path.endsWith('.sass') ? '' : ';';
-            addPatch(patchBefore(
-                node, '@forward ${import.span.text} show \$$name$semicolon\n'));
-            // Add a fake variable declaration so that downstream stylesheets
-            // configure this module instead of the one we forwarded.
-            declarations.insert(i + 1,
-                VariableDeclaration(name, null, node.span, guarded: true));
-          }
-        }
+    // Pass the variables that were configured by the importing file to `with`,
+    // and forward the rest and add them to `oldConfiguredVariables` because
+    // they were configured by a further-out import.
+    var locallyConfiguredVariables = normalizedMap<VariableDeclaration>();
+    var externallyConfiguredVariables = normalizedMap<VariableDeclaration>();
+    for (var variable in _configuredVariables) {
+      if (variable.span.sourceUrl == _currentUrl) {
+        locallyConfiguredVariables[variable.name] = variable;
+      } else {
+        externallyConfiguredVariables[variable.name] = variable;
+        oldConfiguredVariables.add(variable);
       }
     }
-    return configured;
+    _configuredVariables = oldConfiguredVariables;
+
+    if (externallyConfiguredVariables.isNotEmpty) {
+      var semicolon = _currentUrl.path.endsWith('.sass') ? "" : ";";
+      addPatch(patchBefore(
+          node,
+          "@forward ${import.span.text} show " +
+              externallyConfiguredVariables.keys
+                  .map((variable) => "\$$variable")
+                  .join(", ") +
+              "$semicolon\n"));
+    }
+
+    var configuration = "";
+    var configured = locallyConfiguredVariables.entries
+        .map((entry) => "\$${entry.key}: ${entry.value.expression}");
+    if (configured.length == 1) {
+      configuration = " with (" + configured.first + ")";
+    } else if (configured.isNotEmpty) {
+      configuration = " with (\n  " + configured.join(',\n  ') + "\n)";
+    }
+    addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
   }
 
   /// Adds a namespace to any mixin include that requires it.
@@ -287,13 +285,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
     if (!_globalVariables.containsKey(node.name)) return;
-
-    /// Declarations where the expression is null are fake ones used to track
-    /// configured variables within indirect dependencies.
-    /// See [_findConfiguredVariables].
-    var lastRealDeclaration = _globalVariables[node.name]
-        .lastWhere((node) => node.expression != null);
-    var namespace = _namespaceForNode(lastRealDeclaration);
+    var namespace = _namespaceForNode(_globalVariables[node.name]);
     if (namespace == null) return;
     addPatch(Patch(node.span, "\$$namespace.${node.name}"));
   }
@@ -309,8 +301,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
     if (_localScope == null || node.isGlobal) {
-      _globalVariables.putIfAbsent(node.name, () => []);
-      _globalVariables[node.name].add(node);
+      if (node.isGuarded &&
+          _globalVariables.containsKey(node.name) &&
+          _globalVariables[node.name].span.sourceUrl != _currentUrl) {
+        _configuredVariables.add(_globalVariables[node.name]);
+      }
+      _globalVariables[node.name] = node;
     } else {
       _localScope.variables.add(node.name);
     }
