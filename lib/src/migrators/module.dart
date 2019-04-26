@@ -51,6 +51,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Global functions defined at any time during the migrator run.
   final _globalFunctions = normalizedMap<FunctionRule>();
 
+  /// Stores whether a given VariableDeclaration has been referenced.
+  final _variableReferenced = <VariableDeclaration, bool>{};
+
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
@@ -83,14 +86,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   _ModuleMigrationVisitor() : super(migrateDependencies: true);
 
+  String get semicolonIfNotIndented =>
+      _currentUrl.path.endsWith('.sass') ? "" : ";";
+
   /// Returns the migrated contents of this stylesheet, based on [patches] and
   /// [_additionalUseRules], or null if the stylesheet does not change.
   @override
   String getMigratedContents() {
     var results = super.getMigratedContents();
     if (results == null) return null;
-    var semicolon = _currentUrl.path.endsWith('.sass') ? "" : ";";
-    var uses = _additionalUseRules.map((use) => '@use "$use"$semicolon\n');
+    var uses = _additionalUseRules
+        .map((use) => '@use "$use"$semicolonIfNotIndented\n');
     return uses.join() + results;
   }
 
@@ -229,19 +235,28 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _configuredVariables = oldConfiguredVariables;
 
     if (externallyConfiguredVariables.isNotEmpty) {
-      var semicolon = _currentUrl.path.endsWith('.sass') ? "" : ";";
       addPatch(patchBefore(
           node,
           "@forward ${import.span.text} show " +
               externallyConfiguredVariables.keys
                   .map((variable) => "\$$variable")
                   .join(", ") +
-              "$semicolon\n"));
+              "$semicolonIfNotIndented\n"));
     }
 
     var configuration = "";
-    var configured = locallyConfiguredVariables.entries
-        .map((entry) => "\$${entry.key}: ${entry.value.expression}");
+    var configured = <String>[];
+    for (var name in locallyConfiguredVariables.keys) {
+      var variable = locallyConfiguredVariables[name];
+      if (_variableReferenced[variable] || variable.isGuarded) {
+        configured.add("\$$name: \$$name");
+      } else {
+        // TODO(jathak): Confirm that a line break follows this declaration.
+        var extra = semicolonIfNotIndented.length + 1;
+        addPatch(patchDelete(variable.span, end: variable.span.length + extra));
+        configured.add("\$$name: ${variable.expression}");
+      }
+    }
     if (configured.length == 1) {
       configuration = " with (" + configured.first + ")";
     } else if (configured.isNotEmpty) {
@@ -285,6 +300,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
     if (!_globalVariables.containsKey(node.name)) return;
+    _variableReferenced[_globalVariables[node.name]] = true;
     var namespace = _namespaceForNode(_globalVariables[node.name]);
     if (namespace == null) return;
     addPatch(Patch(node.span, "\$$namespace.${node.name}"));
@@ -307,6 +323,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _configuredVariables.add(_globalVariables[node.name]);
       }
       _globalVariables[node.name] = node;
+      _variableReferenced[node] = false;
     } else {
       _localScope.variables.add(node.name);
     }

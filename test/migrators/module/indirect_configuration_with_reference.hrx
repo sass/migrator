@@ -16,7 +16,6 @@ a {
 $config: green !default;
 
 <==> output/entrypoint.scss
-$config: red;
 @use "direct" with ($config: red);
 
 <==> output/_direct.scss
