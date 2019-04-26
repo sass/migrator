@@ -86,7 +86,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   _ModuleMigrationVisitor() : super(migrateDependencies: true);
 
-  String get semicolonIfNotIndented =>
+  String get _semicolonIfNotIndented =>
       _currentUrl.path.endsWith('.sass') ? "" : ";";
 
   /// Returns the migrated contents of this stylesheet, based on [patches] and
@@ -96,7 +96,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var results = super.getMigratedContents();
     if (results == null) return null;
     var uses = _additionalUseRules
-        .map((use) => '@use "$use"$semicolonIfNotIndented\n');
+        .map((use) => '@use "$use"$_semicolonIfNotIndented\n');
     return uses.join() + results;
   }
 
@@ -241,7 +241,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               externallyConfiguredVariables.keys
                   .map((variable) => "\$$variable")
                   .join(", ") +
-              "$semicolonIfNotIndented\n"));
+              "$_semicolonIfNotIndented\n"));
     }
 
     var configuration = "";
@@ -251,9 +251,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (_variableReferenced[variable] || variable.isGuarded) {
         configured.add("\$$name: \$$name");
       } else {
-        // TODO(jathak): Confirm that a line break follows this declaration.
-        var extra = semicolonIfNotIndented.length + 1;
-        addPatch(patchDelete(variable.span, end: variable.span.length + extra));
+        // TODO(jathak): Handle the case where the expression of this
+        // declaration has already been patched.
+        addPatch(patchDelete(variable.span));
+        var start = variable.span.end.offset;
+        var end = start + _semicolonIfNotIndented.length;
+        if (variable.span.file.span(end, end + 1).text == '\n') end++;
+        addPatch(patchDelete(variable.span.file.span(start, end)));
         configured.add("\$$name: ${variable.expression}");
       }
     }
