@@ -51,8 +51,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Global functions defined at any time during the migrator run.
   final _globalFunctions = normalizedMap<FunctionRule>();
 
-  /// Stores whether a given VariableDeclaration has been referenced.
-  final _variableReferenced = <VariableDeclaration, bool>{};
+  /// Stores whether a given VariableDeclaration has been referenced in an
+  /// expression after being declared.
+  final _referencedVariables = <VariableDeclaration>{};
 
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
@@ -86,6 +87,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   _ModuleMigrationVisitor() : super(migrateDependencies: true);
 
+  /// Returns a semicolon unless the current stylesheet uses the indented
+  /// syntax, in which case this returns an empty string.
   String get _semicolonIfNotIndented =>
       _currentUrl.path.endsWith('.sass') ? "" : ";";
 
@@ -248,7 +251,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var configured = <String>[];
     for (var name in locallyConfiguredVariables.keys) {
       var variable = locallyConfiguredVariables[name];
-      if (_variableReferenced[variable] || variable.isGuarded) {
+      if (variable.isGuarded || _referencedVariables.contains(variable)) {
         configured.add("\$$name: \$$name");
       } else {
         // TODO(jathak): Handle the case where the expression of this
@@ -304,7 +307,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
     if (!_globalVariables.containsKey(node.name)) return;
-    _variableReferenced[_globalVariables[node.name]] = true;
+    _referencedVariables.add(_globalVariables[node.name]);
     var namespace = _namespaceForNode(_globalVariables[node.name]);
     if (namespace == null) return;
     addPatch(Patch(node.span, "\$$namespace.${node.name}"));
@@ -327,7 +330,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _configuredVariables.add(_globalVariables[node.name]);
       }
       _globalVariables[node.name] = node;
-      _variableReferenced[node] = false;
     } else {
       _localScope.variables.add(node.name);
     }
