@@ -40,6 +40,9 @@ class ModuleMigrator extends Migrator {
 
 class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Global variables defined at any time during the migrator run.
+  ///
+  /// We store all declarations instead of just the most recent one for use in
+  /// detecting configurable variables.
   final _globalVariables = normalizedMap<VariableDeclaration>();
 
   /// Global mixins defined at any time during the migrator run.
@@ -47,6 +50,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Global functions defined at any time during the migrator run.
   final _globalFunctions = normalizedMap<FunctionRule>();
+
+  /// Stores whether a given VariableDeclaration has been referenced in an
+  /// expression after being declared.
+  final _referencedVariables = <VariableDeclaration>{};
 
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
@@ -57,6 +64,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This set contains the path provided in the use rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
   Set<String> _additionalUseRules;
+
+  /// Set of variables declared outside the current stylesheet that overrode
+  /// `!default` variables within the current stylesheet.
+  Set<VariableDeclaration> _configuredVariables;
 
   /// The URL of the current stylesheet.
   Uri _currentUrl;
@@ -76,14 +87,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   _ModuleMigrationVisitor() : super(migrateDependencies: true);
 
+  /// Returns a semicolon unless the current stylesheet uses the indented
+  /// syntax, in which case this returns an empty string.
+  String get _semicolonIfNotIndented =>
+      _currentUrl.path.endsWith('.sass') ? "" : ";";
+
   /// Returns the migrated contents of this stylesheet, based on [patches] and
   /// [_additionalUseRules], or null if the stylesheet does not change.
   @override
   String getMigratedContents() {
     var results = super.getMigratedContents();
     if (results == null) return null;
-    var semicolon = _currentUrl.path.endsWith('.sass') ? "" : ";";
-    var uses = _additionalUseRules.map((use) => '@use "$use"$semicolon\n');
+    var uses = _additionalUseRules
+        .map((use) => '@use "$use"$_semicolonIfNotIndented\n');
     return uses.join() + results;
   }
 
@@ -201,12 +217,59 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     // TODO(jathak): Confirm that this import appears before other rules
 
+    var oldConfiguredVariables = _configuredVariables;
+    _configuredVariables = Set();
     visitDependency(Uri.parse(import.url), _currentUrl);
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
-    // TODO(jathak): Support configurable variables
+    // Pass the variables that were configured by the importing file to `with`,
+    // and forward the rest and add them to `oldConfiguredVariables` because
+    // they were configured by a further-out import.
+    var locallyConfiguredVariables = normalizedMap<VariableDeclaration>();
+    var externallyConfiguredVariables = normalizedMap<VariableDeclaration>();
+    for (var variable in _configuredVariables) {
+      if (variable.span.sourceUrl == _currentUrl) {
+        locallyConfiguredVariables[variable.name] = variable;
+      } else {
+        externallyConfiguredVariables[variable.name] = variable;
+        oldConfiguredVariables.add(variable);
+      }
+    }
+    _configuredVariables = oldConfiguredVariables;
 
-    addPatch(Patch(node.span, '@use ${import.span.text}'));
+    if (externallyConfiguredVariables.isNotEmpty) {
+      addPatch(patchBefore(
+          node,
+          "@forward ${import.span.text} show " +
+              externallyConfiguredVariables.keys
+                  .map((variable) => "\$$variable")
+                  .join(", ") +
+              "$_semicolonIfNotIndented\n"));
+    }
+
+    var configuration = "";
+    var configured = <String>[];
+    for (var name in locallyConfiguredVariables.keys) {
+      var variable = locallyConfiguredVariables[name];
+      if (variable.isGuarded || _referencedVariables.contains(variable)) {
+        configured.add("\$$name: \$$name");
+      } else {
+        // TODO(jathak): Handle the case where the expression of this
+        // declaration has already been patched.
+        addPatch(patchDelete(variable.span));
+        var start = variable.span.end.offset;
+        var end = start + _semicolonIfNotIndented.length;
+        if (variable.span.file.span(end, end + 1).text == '\n') end++;
+        addPatch(patchDelete(variable.span.file.span(start, end)));
+        configured.add("\$$name: ${variable.expression}");
+      }
+    }
+    if (configured.length == 1) {
+      configuration = " with (" + configured.first + ")";
+    } else if (configured.isNotEmpty) {
+      configuration = " with (\n  " + configured.join(',\n  ') + "\n)";
+    }
+    addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
   }
 
   /// Adds a namespace to any mixin include that requires it.
@@ -244,6 +307,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
     if (!_globalVariables.containsKey(node.name)) return;
+    _referencedVariables.add(_globalVariables[node.name]);
     var namespace = _namespaceForNode(_globalVariables[node.name]);
     if (namespace == null) return;
     addPatch(Patch(node.span, "\$$namespace.${node.name}"));
@@ -260,7 +324,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
     if (_localScope == null || node.isGlobal) {
-      // TODO(jathak): Support configurable variables
+      if (node.isGuarded &&
+          _globalVariables.containsKey(node.name) &&
+          _globalVariables[node.name].span.sourceUrl != _currentUrl) {
+        _configuredVariables.add(_globalVariables[node.name]);
+      }
       _globalVariables[node.name] = node;
     } else {
       _localScope.variables.add(node.name);

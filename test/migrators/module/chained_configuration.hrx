@@ -1,0 +1,20 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+$config: red;
+@import "midstream";
+
+<==> input/_midstream.scss
+$config: blue !default;
+@import "upstream";
+
+<==> input/_upstream.scss
+$config: green !default;
+
+<==> output/entrypoint.scss
+@use "midstream" with ($config: red);
+
+<==> output/_midstream.scss
+$config: blue !default;
+@use "upstream" with ($config: $config);
