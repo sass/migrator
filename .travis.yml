@@ -6,8 +6,16 @@ cache:
   directories:
     - $HOME/.pub-cache
 
-matrix:
+before_script:
+- if-node() { if [ ! -z "$NODE_VERSION" ]; then "$@"; fi }
+- if-node . "$HOME/.nvm/nvm.sh"
+- if-node nvm install "$NODE_VERSION"
+- if-node nvm use "$NODE_VERSION"
+- if-node pub run grinder js
+
+jobs:
   include:
+  ## Testing
 
   # Testing on the Dart VM
   - dart: stable
@@ -29,9 +37,65 @@ matrix:
   - dart_task: {dartanalyzer: --fatal-warnings ./}
   - dart_task: dartfmt
 
-before_script:
-- if-node() { if [ ! -z "$NODE_VERSION" ]; then "$@"; fi }
-- if-node . "$HOME/.nvm/nvm.sh"
-- if-node nvm install "$NODE_VERSION"
-- if-node nvm use "$NODE_VERSION"
-- if-node pub run grinder js
+  ## Deployment
+
+  # Sanity check before releasing anywhere.
+  - stage: sanity check
+    if: &deploy-if
+      (type IN (push, api)) AND (repo = sass/migrator) AND tag =~ ^\d+\.\d+\.\d+([+-].*)?$
+    script: pub run grinder sanity-check-before-release
+
+  # Deploy to GitHub.
+  - stage: deploy
+    if: *deploy-if
+    env:
+      - GITHUB_USER=sassbot
+      # GITHUB_AUTH="..."
+      - secure: "tExT08Y/ByXpUPxH1AjsusFmKdqn3Qfjd+gIeK5s3CmxvQD9SfMG/5qzgX7vUKzeysry8bk9t62c+GWi54wiKAf0xzGfpJ3pXm0SX3CURkdN9BipUpJicisaWkwn6zQc2hbHgN7icXZg2xzS14TQntmo1gc8CmZIp+QFFF5hr3bWKe2GAd7ahegO8Gbc9MJbMj8F/0QcPIxdyCIUVM0PPFr0X5x2UladByl7/apHJyNGO10mJ593krh4p5ymA8gA8Q3eiyztIAyeOmJvCuVa5KsuWlhmMSKEmcQ+hjREtIXaUvFkgxs4xTXJtO+i4tKvI3kMivTx0nH3pJDjRZHvVRDCprFB2H2T4JDxmrQboNbsl0OgOtzOwZdzx9+Q4Ar2ePjD+tmypTVvFMrOjkJrPSlHMnSQTweRXa2qvoXyw3ls4pbQSKeh4vKgPuISroCT9E39Mivo9A/xpPV36ouTuBwDbFEEK6MgxciG0I2T/NjLqQz1a67/Or0DX6L7jhtUgjnU2l3dNRZ8z5sjXOXDNyJzxta9vNDQX8yr538Xk+eO+13vm6TjxZLDwXF8MFjm+E4DU8QVkeIHwwlTU5Q5cEemilnRdw368ae8k2DJQaiTmzfhU6864L9kHh7PNRvIN6kqAyTV4rzjlsjRYIMiBbjwbeGjC2oa9rVPcTJfPIY="
+    script: skip # Don't run tests
+    deploy:
+      provider: script
+      script: pub run grinder github-release
+      skip_cleanup: true # Don't clean up the Dart SDK.
+
+      # This causes the deploy to only be build when a tag is pushed. This
+      # is because the `tag` attribute in `if:` statements has a different
+      # understanding of the "current tag" than this, which uses the
+      # `TRAVIS_TAG` environment variable. `if:` statements check whether a
+      # tag exists that refers to the current commit, whereas `TRAVIS_TAG`
+      # checks whether the current build was caused by a tag.
+      #
+      # We check `if:` because it avoids unnecessary build steps, and
+      # `on: {tags: true}` ensures that we only deploy on the build caused
+      # by pushing a tag, not the build caused by pushing master.
+      on: {tags: true}
+
+  # Deploy to npm.
+  - if: *deploy-if
+    script: skip
+    deploy:
+      provider: script
+      script: tool/travis/deploy/npm.sh
+      skip_cleanup: true
+      on: {tags: true}
+
+  # Deploy to pub.
+  - if: *deploy-if
+    script: skip
+    deploy:
+      provider: script
+      script: tool/travis/deploy/pub.sh
+      skip_cleanup: true
+      on: {tags: true}
+
+  # Deploy to Chocolatey.
+  - if: *deploy-if
+    env:
+      # CHOCO_TOKEN="..."
+      - secure: "PoJPDMyDdLHWq5TVEeZm+mQRFpkpg2/r0DiVLP1hXiDmT5ax9JlbLnxOQs0/pzcm263LDoyD1JJWcyAJ6fJTZlrDoKK3doNyIgkCo3dk9pX0FU0N0XLWfnG88rjVS0/W61muu6syfYj6b/ZJwF8Eay8wHDryQaQmgiZ2xTtqJYmPBoQ2nMxTgnlkuqboJc1/GUsNgI1QnNlejN57frp5hZy9/jmTPVFkMsK6BJJtNQ7akxqTPIz+itRrnlxYI6vCeHIie7qsK5jwlhkkzuaOD8l5mYUNLDiBxdoPknSwwsHsRNw/CsBQxxyJ0zwCFQKojgN4TSsz2mklEt3+5j7Gq4UVMnBAi/vPwfdgxpDx8XXbYnECrtyV0e9PyTursrCxYw+Fq6mHmLTFNtQVTX4SvbY01NhaiaS4El8efctIF6by1JfcKYGrcGbn+kwwKl/2YOyctnrsVfLw6qwRE7MhpxIYmpQgajQcu5b/XSW1bLjSqj/9sVypnMQus2fiNKh5eMpZn/FXD2APiI3oQp/z7FVJTfRvF+2FPqN6TVej82zJ0SBiTedMF3EYjfeL2oScFar8QCI2z7jABqoeC3g34bOzqPOXRc7SMDac+MrBrTyF1nRwXz1aGlK4zMALbTGul7yqbxehfs3wBd6Sr5YmljnUksZZ2g25uwFJp2w5TgM="
+    script: skip
+    deploy:
+      provider: script
+      script: pub run grinder update-chocolatey
+      skip_cleanup: true
+      on: {tags: true}
