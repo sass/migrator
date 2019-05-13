@@ -29,7 +29,7 @@ appSnapshot() => _appSnapshot(release: false);
 @Task('Build a release-mode Dart application snapshot.')
 releaseAppSnapshot() => _appSnapshot(release: true);
 
-/// Compiles Sass to an application snapshot.
+/// Compiles the Sass Migrator to an application snapshot.
 ///
 /// If [release] is `false`, this compiles with asserts enabled.
 void _appSnapshot({@required bool release}) {
@@ -56,7 +56,8 @@ package() async {
   client.close();
 }
 
-/// Builds a standalone Sass package for the given [os] and architecture.
+/// Builds a standalone Sass Migrator package for the given [os] and
+/// architecture.
 ///
 /// The [client] is used to download the corresponding Dart SDK.
 Future _buildPackage(http.Client client, String os, {bool x64 = true}) async {

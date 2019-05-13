@@ -120,7 +120,7 @@ updateChocolatey() async {
     fail("${response.statusCode} error creating release:\n"
         "${await response.stream.bytesToString()}");
   } else {
-    log("Released Dart Sass ${_chocolateyVersion()} to Chocolatey.");
+    log("Released Sass Migrator ${_chocolateyVersion()} to Chocolatey.");
     response.stream.listen(null).cancel();
   }
 }
