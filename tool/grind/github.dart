@@ -77,14 +77,15 @@ String _releaseMessage() {
           version.replaceAll(".", "");
   var installUrl =
       "https:/github.com/sass/migrator/blob/master/README.md#install";
-  return "To install Sass Migrator $version, download one of the packages above "
-      "and [add it to your PATH](https://katiek2.github.io/path-doc/), or see "
-      "[the README]($installUrl) for full installation instructions.\n\n"
-      "## Changes\n\n" +
+  return "To install Sass Migrator $version, download one of the packages "
+          "above and [add it to your "
+          "PATH](https://katiek2.github.io/path-doc/), or see [the "
+          "README]($installUrl) for full installation instructions.\n\n"
+          "## Changes\n\n" +
       _lastChangelogSection() +
       "\n\n"
-      "See the [full changelog]($changelogUrl) for changes in earlier "
-      "releases.";
+          "See the [full changelog]($changelogUrl) for changes in earlier "
+          "releases.";
 }
 
 /// A regular expression that matches a Markdown code block.
