@@ -2,6 +2,8 @@ language: dart
 branches:
   only:
     - master
+    # Semantic version tags and legacy branches of the form "1.2.x".
+    - "/^\\d+\\.\\d+\\.(\\d+([+-].*)?|x)$/"
 cache:
   directories:
     - $HOME/.pub-cache
