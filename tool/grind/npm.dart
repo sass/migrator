@@ -1,4 +1,4 @@
-// Copyright 2018 Google Inc. Use of this source code is governed by an
+// Copyright 2019 Google Inc. Use of this source code is governed by an
 // MIT-style license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
@@ -52,7 +52,8 @@ void _js({@required bool release}) {
         text.replaceFirst(RegExp(r"\n*//# sourceMappingURL=[^\n]+\n*$"), "\n");
   }
 
-  destination.writeAsStringSync(preamble.getPreamble(minified: release) + text);
+  destination.writeAsStringSync(
+      "#!/usr/bin/env node\n" + preamble.getPreamble(minified: release) + text);
 }
 
 @Task('Build a pure-JS dev-mode npm package.')
