@@ -78,41 +78,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    if (node.name.asPlain == "rgb" ||
-        node.name.asPlain == "rgba" ||
-        node.name.asPlain == "hsl" ||
-        node.name.asPlain == "hsla") {
-      Expression channels;
-      if (node.arguments.positional.length == 1 &&
-          node.arguments.named.isEmpty) {
-        channels = node.arguments.positional.first;
-      } else if (node.arguments.positional.isEmpty &&
-          node.arguments.named.containsKey(r'$channels') &&
-          node.arguments.named.length == 1) {
-        channels = node.arguments.named[r'$channels'];
-      }
-      if (channels != null &&
-          channels is ListExpression &&
-          !channels.hasBrackets &&
-          channels.separator == ListSeparator.space &&
-          channels.contents.length == 3 &&
-          channels.contents[2] is BinaryOperationExpression) {
-        var red = channels.contents[0];
-        var green = channels.contents[1];
-        var last = channels.contents[2] as BinaryOperationExpression;
-        if (last.operator == BinaryOperator.dividedBy) {
-          var blue = last.left;
-          var alpha = last.right;
-          _withContext(() {
-            red.accept(this);
-            green.accept(this);
-            blue.accept(this);
-          }, isDivisionAllowed: true);
-          alpha.accept(this);
-          return;
-        }
-      }
-    }
+    if (_tryColorFunction(node)) return;
     visitArgumentInvocation(node.arguments);
   }
 
@@ -154,6 +120,40 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void visitVariableDeclaration(VariableDeclaration node) {
     _withContext(() => super.visitVariableDeclaration(node),
         isDivisionAllowed: true);
+  }
+
+  /// Migrates [node] and returns true if it is a new-syntax color function or
+  /// returns false if it is any other function.
+  bool _tryColorFunction(FunctionExpression node) {
+    if (!["rgb", "rgba", "hsl", "hsla"].contains(node.name.asPlain)) {
+      return false;
+    }
+    ListExpression channels;
+    if (node.arguments.positional.length == 1 &&
+        node.arguments.named.isEmpty &&
+        node.arguments.positional.first is ListExpression) {
+      channels = node.arguments.positional.first;
+    } else if (node.arguments.positional.isEmpty &&
+        node.arguments.named.containsKey(r'$channels') &&
+        node.arguments.named.length == 1 &&
+        node.arguments.named[r'$channels'] is ListExpression) {
+      channels = node.arguments.named[r'$channels'];
+    }
+    if (channels == null ||
+        channels.hasBrackets ||
+        channels.separator != ListSeparator.space ||
+        channels.contents.length != 3 ||
+        channels.contents.last is! BinaryOperationExpression) {
+      return false;
+    }
+    var last = channels.contents.last as BinaryOperationExpression;
+    _withContext(() {
+      channels.contents[0].accept(this);
+      channels.contents[1].accept(this);
+      last.left.accept(this);
+    }, isDivisionAllowed: true);
+    last.right.accept(this);
+    return true;
   }
 
   /// Visits a `/` operation [node] and migrates it to either the `division`
