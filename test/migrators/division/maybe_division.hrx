@@ -5,6 +5,7 @@ a {
   d: 3 / $x == 4;
   e: fn() / 3;
   f: 3 / $x;
+  g: fn(3 / $x);
 }
 
 <==> output/entrypoint.scss
@@ -14,4 +15,5 @@ a {
   d: divide(3, $x) == 4;
   e: divide(fn(), 3);
   f: divide(3, $x);
+  g: fn(divide(3, $x));
 }

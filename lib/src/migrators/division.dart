@@ -5,6 +5,7 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:args/args.dart';
+import 'package:sass/sass.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
@@ -49,6 +50,13 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// True when the current node is expected to evaluate to a number.
   var _expectsNumericResult = false;
 
+  /// Allows division within this argument invocation.
+  @override
+  void visitArgumentInvocation(ArgumentInvocation invocation) {
+    _withContext(() => super.visitArgumentInvocation(invocation),
+        isDivisionAllowed: true);
+  }
+
   /// If this is a division operation, migrates it.
   ///
   /// If this is any other operator, allows division within its left and right
@@ -63,6 +71,49 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           expectsNumericResult:
               _expectsNumericResult || _operatesOnNumbers(node.operator));
     }
+  }
+
+  /// Allows division within a function call's arguments, with special handling
+  /// for new-syntax color functions.
+  @override
+  void visitFunctionExpression(FunctionExpression node) {
+    visitInterpolation(node.name);
+    if (node.name.asPlain == "rgb" ||
+        node.name.asPlain == "rgba" ||
+        node.name.asPlain == "hsl" ||
+        node.name.asPlain == "hsla") {
+      Expression channels;
+      if (node.arguments.positional.length == 1 &&
+          node.arguments.named.isEmpty) {
+        channels = node.arguments.positional.first;
+      } else if (node.arguments.positional.isEmpty &&
+          node.arguments.named.containsKey(r'$channels') &&
+          node.arguments.named.length == 1) {
+        channels = node.arguments.named[r'$channels'];
+      }
+      if (channels != null &&
+          channels is ListExpression &&
+          !channels.hasBrackets &&
+          channels.separator == ListSeparator.space &&
+          channels.contents.length == 3 &&
+          channels.contents[2] is BinaryOperationExpression) {
+        var red = channels.contents[0];
+        var green = channels.contents[1];
+        var last = channels.contents[2] as BinaryOperationExpression;
+        if (last.operator == BinaryOperator.dividedBy) {
+          var blue = last.left;
+          var alpha = last.right;
+          _withContext(() {
+            red.accept(this);
+            green.accept(this);
+            blue.accept(this);
+          }, isDivisionAllowed: true);
+          alpha.accept(this);
+          return;
+        }
+      }
+    }
+    visitArgumentInvocation(node.arguments);
   }
 
   /// Disallows division within this list.
@@ -115,9 +166,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
       // Definitely not division
-      addPatch(patchBefore(node, "slash-list("));
-      addPatch(patchAfter(node, ")"));
-      _visitSlashListArguments(node);
+      if (_isDivisionAllowed || _containsInterpolation(node)) {
+        addPatch(patchBefore(node, "slash-list("));
+        addPatch(patchAfter(node, ")"));
+        _visitSlashListArguments(node);
+      }
       return true;
     } else if (_expectsNumericResult ||
         _isDefinitelyNumber(node) ||
@@ -216,6 +269,16 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         node is MapExpression ||
         node is NullExpression ||
         node is StringExpression;
+  }
+
+  /// Returns true if [node] contains an interpolation.
+  bool _containsInterpolation(Expression node) {
+    if (node is ParenthesizedExpression) return _containsInterpolation(node);
+    if (node is BinaryOperationExpression) {
+      return _containsInterpolation(node.left) ||
+          _containsInterpolation(node.right);
+    }
+    return node is StringExpression && node.text.asPlain == null;
   }
 
   /// Adds a patch replacing the operator of [node] with ", ".

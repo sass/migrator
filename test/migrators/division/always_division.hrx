@@ -6,7 +6,12 @@
   @return 6px / 3px;
 }
 
+@function identity($x) {
+  @return $x;
+}
+
 a {
+  // Arithmetic on number literals
   b: (4px + 2px) / 3px;
   c: 6px/3px + 1;
   d: (6px / 3px);
@@ -24,6 +29,11 @@ a {
   l: 3 / $x > 1;
   m: 3 / $x <= 1;
   n: 3 / $x >= 1;
+
+  // Function calls
+  o: identity(6px / 3px);
+  p: rgba(10, 20, 30/2, 0.5);
+  q: rgb(10 20 30/2 / 0.5);
 }
 
 <==> output/entrypoint.scss
@@ -31,7 +41,12 @@ a {
   @return divide(6px, 3px);
 }
 
+@function identity($x) {
+  @return $x;
+}
+
 a {
+  // Arithmetic on number literals
   b: divide(4px + 2px, 3px);
   c: divide(6px, 3px) + 1;
   d: divide(6px, 3px);
@@ -49,4 +64,9 @@ a {
   l: divide(3, $x) > 1;
   m: divide(3, $x) <= 1;
   n: divide(3, $x) >= 1;
+
+  // Function calls
+  o: identity(divide(6px, 3px));
+  p: rgba(10, 20, divide(30, 2), 0.5);
+  q: rgb(10 20 divide(30, 2) / 0.5);
 }
