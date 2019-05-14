@@ -68,5 +68,5 @@ a {
   // Function calls
   o: identity(divide(6px, 3px));
   p: rgba(10, 20, divide(30, 2), 0.5);
-  q: rgb(10 20 divide(30, 2) / 0.5);
+  q: rgb(10, 20, divide(30, 2), 0.5);
 }

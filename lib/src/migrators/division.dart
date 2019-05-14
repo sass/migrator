@@ -147,6 +147,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       return false;
     }
     var last = channels.contents.last as BinaryOperationExpression;
+    if (last.left is! NumberExpression || last.right is! NumberExpression) {
+      _patchSpacesToCommas(channels);
+      _patchOperatorToComma(last);
+    }
     _withContext(() {
       channels.contents[0].accept(this);
       channels.contents[1].accept(this);
@@ -167,6 +171,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         _isDefinitelyNotNumber(node)) {
       // Definitely not division
       if (_isDivisionAllowed || _containsInterpolation(node)) {
+        // We only want to convert a non-division slash operation to a
+        // slash-list call when it's in a non-plain-CSS context to avoid
+        // unnecessary function calls within plain CSS.
         addPatch(patchBefore(node, "slash-list("));
         addPatch(patchAfter(node, ")"));
         _visitSlashListArguments(node);
@@ -179,7 +186,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       addPatch(patchBefore(node, "divide("));
       addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
-      _patchSlashToComma(node);
+      _patchOperatorToComma(node);
       _patchParensIfAny(node.right);
       _withContext(() => super.visitBinaryOperationExpression(node),
           expectsNumericResult: true);
@@ -198,7 +205,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if (node is BinaryOperationExpression &&
         node.operator == BinaryOperator.dividedBy) {
       _visitSlashListArguments(node.left);
-      _patchSlashToComma(node);
+      _patchOperatorToComma(node);
       _visitSlashListArguments(node.right);
     } else if (node is StringExpression &&
         node.text.contents.length == 1 &&
@@ -281,8 +288,17 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     return node is StringExpression && node.text.asPlain == null;
   }
 
+  /// Converts a space-separated list [node] to a comma-separated list.
+  void _patchSpacesToCommas(ListExpression node) {
+    for (var i = 0; i < node.contents.length - 1; i++) {
+      var start = node.contents[i].span.end;
+      var end = node.contents[i + 1].span.start;
+      addPatch(Patch(start.file.span(start.offset, end.offset), ", "));
+    }
+  }
+
   /// Adds a patch replacing the operator of [node] with ", ".
-  void _patchSlashToComma(BinaryOperationExpression node) {
+  void _patchOperatorToComma(BinaryOperationExpression node) {
     var start = node.left.span.end;
     var end = node.right.span.start;
     addPatch(Patch(start.file.span(start.offset, end.offset), ", "));
