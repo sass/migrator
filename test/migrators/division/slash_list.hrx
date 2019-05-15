@@ -1,0 +1,17 @@
+<==> input/entrypoint.scss
+a {
+  b: #{4px + 2px} / 3px;
+  c: (six / three);
+  $d: 6 / three;
+  e: #{$x} / #{6px / 3px} / #{2};
+  $f: #{$x} / #{6px / 3px} / #{2};
+}
+
+<==> output/entrypoint.scss
+a {
+  b: slash-list(4px + 2px, 3px);
+  c: slash-list(six, three);
+  $d: slash-list(6, three);
+  e: slash-list($x, 6px / 3px, 2);
+  $f: slash-list($x, divide(6px, 3px), 2);
+}

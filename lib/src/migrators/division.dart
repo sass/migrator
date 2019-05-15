@@ -5,6 +5,7 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:args/args.dart';
+import 'package:sass/sass.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
@@ -49,6 +50,13 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// True when the current node is expected to evaluate to a number.
   var _expectsNumericResult = false;
 
+  /// Allows division within this argument invocation.
+  @override
+  void visitArgumentInvocation(ArgumentInvocation invocation) {
+    _withContext(() => super.visitArgumentInvocation(invocation),
+        isDivisionAllowed: true);
+  }
+
   /// If this is a division operation, migrates it.
   ///
   /// If this is any other operator, allows division within its left and right
@@ -63,6 +71,15 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           expectsNumericResult:
               _expectsNumericResult || _operatesOnNumbers(node.operator));
     }
+  }
+
+  /// Allows division within a function call's arguments, with special handling
+  /// for new-syntax color functions.
+  @override
+  void visitFunctionExpression(FunctionExpression node) {
+    visitInterpolation(node.name);
+    if (_tryColorFunction(node)) return;
+    visitArgumentInvocation(node.arguments);
   }
 
   /// Disallows division within this list.
@@ -105,6 +122,48 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         isDivisionAllowed: true);
   }
 
+  /// Migrates [node] and returns true if it is a new-syntax color function or
+  /// returns false if it is any other function.
+  bool _tryColorFunction(FunctionExpression node) {
+    if (!["rgb", "rgba", "hsl", "hsla"].contains(node.name.asPlain)) {
+      return false;
+    }
+
+    ListExpression channels;
+    if (node.arguments.positional.length == 1 &&
+        node.arguments.named.isEmpty &&
+        node.arguments.positional.first is ListExpression) {
+      channels = node.arguments.positional.first;
+    } else if (node.arguments.positional.isEmpty &&
+        node.arguments.named.containsKey(r'$channels') &&
+        node.arguments.named.length == 1 &&
+        node.arguments.named[r'$channels'] is ListExpression) {
+      channels = node.arguments.named[r'$channels'];
+    }
+    if (channels == null ||
+        channels.hasBrackets ||
+        channels.separator != ListSeparator.space ||
+        channels.contents.length != 3 ||
+        channels.contents.last is! BinaryOperationExpression) {
+      return false;
+    }
+
+    var last = channels.contents.last as BinaryOperationExpression;
+    if (last.left is! NumberExpression || last.right is! NumberExpression) {
+      // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2` to
+      // `divide(30, 20)` would cause `/ 0.5` to be interpreted as division.
+      _patchSpacesToCommas(channels);
+      _patchOperatorToComma(last);
+    }
+    _withContext(() {
+      channels.contents[0].accept(this);
+      channels.contents[1].accept(this);
+      last.left.accept(this);
+    }, isDivisionAllowed: true);
+    last.right.accept(this);
+    return true;
+  }
+
   /// Visits a `/` operation [node] and migrates it to either the `division`
   /// function or the `slash-list` function.
   ///
@@ -115,9 +174,14 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
       // Definitely not division
-      addPatch(patchBefore(node, "slash-list("));
-      addPatch(patchAfter(node, ")"));
-      _visitSlashListArguments(node);
+      if (_isDivisionAllowed || _containsInterpolation(node)) {
+        // We only want to convert a non-division slash operation to a
+        // slash-list call when it's in a non-plain-CSS context to avoid
+        // unnecessary function calls within plain CSS.
+        addPatch(patchBefore(node, "slash-list("));
+        addPatch(patchAfter(node, ")"));
+        _visitSlashListArguments(node);
+      }
       return true;
     } else if (_expectsNumericResult ||
         _isDefinitelyNumber(node) ||
@@ -126,7 +190,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       addPatch(patchBefore(node, "divide("));
       addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
-      _patchSlashToComma(node);
+      _patchOperatorToComma(node);
       _patchParensIfAny(node.right);
       _withContext(() => super.visitBinaryOperationExpression(node),
           expectsNumericResult: true);
@@ -145,7 +209,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if (node is BinaryOperationExpression &&
         node.operator == BinaryOperator.dividedBy) {
       _visitSlashListArguments(node.left);
-      _patchSlashToComma(node);
+      _patchOperatorToComma(node);
       _visitSlashListArguments(node.right);
     } else if (node is StringExpression &&
         node.text.contents.length == 1 &&
@@ -218,8 +282,27 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         node is StringExpression;
   }
 
+  /// Returns true if [node] contains an interpolation.
+  bool _containsInterpolation(Expression node) {
+    if (node is ParenthesizedExpression) return _containsInterpolation(node);
+    if (node is BinaryOperationExpression) {
+      return _containsInterpolation(node.left) ||
+          _containsInterpolation(node.right);
+    }
+    return node is StringExpression && node.text.asPlain == null;
+  }
+
+  /// Converts a space-separated list [node] to a comma-separated list.
+  void _patchSpacesToCommas(ListExpression node) {
+    for (var i = 0; i < node.contents.length - 1; i++) {
+      var start = node.contents[i].span.end;
+      var end = node.contents[i + 1].span.start;
+      addPatch(Patch(start.file.span(start.offset, end.offset), ", "));
+    }
+  }
+
   /// Adds a patch replacing the operator of [node] with ", ".
-  void _patchSlashToComma(BinaryOperationExpression node) {
+  void _patchOperatorToComma(BinaryOperationExpression node) {
     var start = node.left.span.end;
     var end = node.right.span.start;
     addPatch(Patch(start.file.span(start.offset, end.offset), ", "));
