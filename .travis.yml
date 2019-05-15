@@ -2,6 +2,8 @@ language: dart
 branches:
   only:
     - master
+    # Semantic version tags and legacy branches of the form "1.2.x".
+    - "/^\\d+\\.\\d+\\.(\\d+([+-].*)?|x)$/"
 cache:
   directories:
     - $HOME/.pub-cache
@@ -47,6 +49,7 @@ jobs:
 
   # Deploy to GitHub.
   - stage: deploy
+    name: GitHub
     if: *deploy-if
     env:
       - GITHUB_USER=sassbot
@@ -71,7 +74,8 @@ jobs:
       on: {tags: true}
 
   # Deploy to npm.
-  - if: *deploy-if
+  - name: npm
+    if: *deploy-if
     script: skip
     deploy:
       provider: script
@@ -80,7 +84,8 @@ jobs:
       on: {tags: true}
 
   # Deploy to pub.
-  - if: *deploy-if
+  - name: pub
+    if: *deploy-if
     script: skip
     deploy:
       provider: script
@@ -89,7 +94,8 @@ jobs:
       on: {tags: true}
 
   # Deploy to Chocolatey.
-  - if: *deploy-if
+  - name: Chocolatey
+    if: *deploy-if
     env:
       # CHOCO_TOKEN="..."
       - secure: "PoJPDMyDdLHWq5TVEeZm+mQRFpkpg2/r0DiVLP1hXiDmT5ax9JlbLnxOQs0/pzcm263LDoyD1JJWcyAJ6fJTZlrDoKK3doNyIgkCo3dk9pX0FU0N0XLWfnG88rjVS0/W61muu6syfYj6b/ZJwF8Eay8wHDryQaQmgiZ2xTtqJYmPBoQ2nMxTgnlkuqboJc1/GUsNgI1QnNlejN57frp5hZy9/jmTPVFkMsK6BJJtNQ7akxqTPIz+itRrnlxYI6vCeHIie7qsK5jwlhkkzuaOD8l5mYUNLDiBxdoPknSwwsHsRNw/CsBQxxyJ0zwCFQKojgN4TSsz2mklEt3+5j7Gq4UVMnBAi/vPwfdgxpDx8XXbYnECrtyV0e9PyTursrCxYw+Fq6mHmLTFNtQVTX4SvbY01NhaiaS4El8efctIF6by1JfcKYGrcGbn+kwwKl/2YOyctnrsVfLw6qwRE7MhpxIYmpQgajQcu5b/XSW1bLjSqj/9sVypnMQus2fiNKh5eMpZn/FXD2APiI3oQp/z7FVJTfRvF+2FPqN6TVej82zJ0SBiTedMF3EYjfeL2oScFar8QCI2z7jABqoeC3g34bOzqPOXRc7SMDac+MrBrTyF1nRwXz1aGlK4zMALbTGul7yqbxehfs3wBd6Sr5YmljnUksZZ2g25uwFJp2w5TgM="
