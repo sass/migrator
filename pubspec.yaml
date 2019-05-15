@@ -1,8 +1,8 @@
 name: sass_migrator
-version: 1.0.0-alpha.2
+version: 1.0.0-alpha.3
 description: A tool for running migrations on Sass files
 author: Jennifer Thakar <jathak@google.com>
-homepage: https://github.com/sass/sass_migrator
+homepage: https://github.com/sass/migrator
 
 environment:
   sdk: '>=2.2.0 <3.0.0'

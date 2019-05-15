@@ -128,6 +128,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if (!["rgb", "rgba", "hsl", "hsla"].contains(node.name.asPlain)) {
       return false;
     }
+
     ListExpression channels;
     if (node.arguments.positional.length == 1 &&
         node.arguments.named.isEmpty &&
@@ -146,8 +147,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         channels.contents.last is! BinaryOperationExpression) {
       return false;
     }
+
     var last = channels.contents.last as BinaryOperationExpression;
     if (last.left is! NumberExpression || last.right is! NumberExpression) {
+      // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2` to
+      // `divide(30, 20)` would cause `/ 0.5` to be interpreted as division.
       _patchSpacesToCommas(channels);
       _patchOperatorToComma(last);
     }
