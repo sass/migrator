@@ -1,3 +1,7 @@
+## 1.0.0-alpha.4
+
+* Internal changes only.
+
 ## 1.0.0-alpha.3
 
 * Division migrator: Treat most slash operations within argument lists as
