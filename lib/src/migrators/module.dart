@@ -167,8 +167,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Calls [patcher] when the function [name] requires a namespace and adds a
-  /// new use rule if necessary.
+  /// Calls [patcher] when the function [node] with name [name] requires a
+  /// namespace and adds a new use rule if necessary.
+  ///
+  /// When the function is a color function that's not present in the module
+  /// system (like `lighten`), this also migrates its `$amount` argument to the
+  /// appropriate `color.adjust` argument.
   ///
   /// [patcher] takes two arguments: the name used to refer to that function
   /// when namespaced, and the namespace itself. The name will match the name
@@ -199,8 +203,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               existingArgName: _findArgNameSpan(arg));
           name = 'adjust';
         } else {
-          print(node.arguments.named.keys);
           warn("Could not migrate malformed '$name' call", node.span);
+          return;
         }
       }
       _additionalUseRules.add("sass:$namespace");
@@ -224,14 +228,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchRemovedColorFunction(String name, Expression arg,
       {FileSpan existingArgName}) {
     var parameter = removedColorFunctions[name];
-    var leftParen =
-        parameter.endsWith('-') && arg is BinaryOperationExpression ? '(' : '';
+    var needsParens =
+        parameter.endsWith('-') && arg is BinaryOperationExpression;
+    var leftParen = needsParens ? '(' : '';
     if (existingArgName == null) {
       addPatch(patchBefore(arg, '$parameter$leftParen'));
     } else {
       addPatch(Patch(existingArgName, '$parameter$leftParen'));
     }
-    if (leftParen == '(') addPatch(patchAfter(arg, ')'));
+    if (needsParens) addPatch(patchAfter(arg, ')'));
   }
 
   /// Declares the function within the current scope before visiting it.
