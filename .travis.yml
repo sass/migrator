@@ -76,6 +76,9 @@ jobs:
   # Deploy to npm.
   - name: npm
     if: *deploy-if
+    env:
+      # NPM_RC="..."
+      - secure: "L1wC7SpeG+9s6XznmyGJBb9cD/wuXqGg4drwgYEesKhwPfWOSbxNT2b+o0MAUAidYQA0Et9J4twY/ou7vhGxZEbdi2tSDZ7D7gk2v2is+bcnt3rNKmBZmhF9VfGpT0LlKEcOay/711ZbNKWRhB0SIaBA5URvZdyUPYEOyuI3OdoewqX24LR1FYq9NmXnqDzza9duWCrGKVxo1mgYHPCZYcQQI9GgmGFsLv/FGRV+I1Yx/0RasvsYk6+JgeYDQQp3RNvVJ1p8/yr5Zeo5Q/LpzZ0Zuu0wxJ9vy6flJwOrYbYpeP65FjVfssJZITXJDWmWhWT4WfdKmCg5Cu4rFddTPaRvK7aoJmPjKxvww7KdwWgyGVUC2XlB3sruenkYeefuJ7oQM8ZU3qFzrJTrRoTPHGjqcKgka9hd3aja8R90h4t3t39xICd5FpgBwck1ALrN5KQkpH4bAV6lrX8jiAYAurNdo0rUUb+6vBmCxcWobZkfqkx5LvjiC00QF1Mxhyd8deRUYQciosIy1B8ibUhP1mTSj8cyZFCBo26fMCq6iwH43vJY9qRJJehfrAEkp0oya2XpDtxeJki33docqgSVHPBYM9n3r7mbbeypl3j8BQCQO0IT+GHiQlpdzYQYWX3IgZ4qRqBG6drCPSl4sLoHKgtjJk3lraIHgTa9jnGSnrM="
     script: skip
     deploy:
       provider: script
@@ -86,6 +89,9 @@ jobs:
   # Deploy to pub.
   - name: pub
     if: *deploy-if
+    env:
+      # PUB_CREDENTIALS="..."
+      - secure: "QCNhSiluq2TPf20ekwWlf+TkyzwnGwqS3pU+3XogRlP6ffRcG98zL9pn7cp8xmaM50x9PY6nk0t+oxkiOFw7sKhECfIRv0Z+P4cURhTUJ25+FqLPupCSqehoF93Bx8fXQR+2KCEP+cEeu2dcDU0hAZnzSWliRm/X/6Hfy+2M5eVc4x0+YC/gDjdbNbgH5P29qhRSB7klB8FtKDQdmQro0l1jSe69RGUmaeFSG7ryn+OlCJNMZqwZBd2Yb7pShiegU1ks/fIrC+pf/Yx2/VUscyLGwWqNxl6xXeZko3bNNCNPhPNIjArZJTNKMHvuIvKEvjfrUIr6TwGsw9vJmGjAbSiZzeXfeJ5zBp9ZaL1i8g5WwvVoQcbFgTn/vCisLZ97NP+0ipKr1VXxDfJ+MThaFsbOnl4wcC9XrrqQERWjH4lNGdfywvjql+d1M48veGqeYYY64UhiGDS+98t6GG+Q+ScQh5LDbn/uaQhi6DUCCqzaphdr78ylVrt7RzIdauOcu/CY3q22Kfm+wOZd+4S3Abk3L7P3eWl60sm/yUCx6yTA1rZPBylL5+R3cQS+9Lp9lll03Xcuf/L+MD7pVsN/RB5L52zn51oxtuVvjU01R0JZ8vWSgZ7CMs1BD7DXCjz9deGvBCHJR5aFelygt9ZSuIaM2xpZ2uSFscUnf6qjSh4="   
     script: skip
     deploy:
       provider: script
