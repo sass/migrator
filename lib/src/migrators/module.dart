@@ -4,6 +4,8 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:args/args.dart';
+
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
@@ -25,15 +27,29 @@ class ModuleMigrator extends Migrator {
   final name = "module";
   final description = "Migrates stylesheets to the new module system.";
 
+  @override
+  final argParser = ArgParser()
+    ..addOption('remove-prefix',
+        abbr: 'p', help: 'Removes the provided prefix from members.');
+
   /// Runs the module migrator on [entrypoint] and its dependencies and returns
   /// a map of migrated contents.
   ///
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
-    var migrated = _ModuleMigrationVisitor().run(entrypoint);
+    var prefixToRemove = argResults['remove-prefix'] as String;
+    var migrated =
+        _ModuleMigrationVisitor(prefixToRemove: prefixToRemove).run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
+    }
+    if (prefixToRemove != null) {
+      var filenameParts = entrypoint.pathSegments.last.split('.');
+      filenameParts.removeLast();
+      var basename = filenameParts.join('.');
+      var import = entrypoint.resolve('./$basename.import.scss');
+      migrated[import] = '@forward "$basename" as $prefixToRemove*;\n';
     }
     return migrated;
   }
@@ -81,12 +97,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// When at the top level of the stylesheet, this will be null.
   LocalScope _localScope;
 
+  final String prefixToRemove;
+
   /// Constructs a new module migration visitor.
   ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor() : super(migrateDependencies: true);
+  _ModuleMigrationVisitor({this.prefixToRemove})
+      : super(migrateDependencies: true);
 
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
@@ -351,14 +370,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   visitVariableExpression(VariableExpression node) {
-    if (_localScope?.isLocalVariable(node.name) ?? false) {
-      return;
+    var name = _unprefix(node.name) ?? node.name;
+    var namespace = _findNamespaceForVariable(name);
+    if (namespace == null && name == node.name) return;
+    if (namespace == null) {
+      addPatch(Patch(node.span, "\$$name"));
+    } else {
+      addPatch(Patch(node.span, "\$$namespace.$name"));
     }
-    if (!_globalVariables.containsKey(node.name)) return;
-    _referencedVariables.add(_globalVariables[node.name]);
-    var namespace = _namespaceForNode(_globalVariables[node.name]);
-    if (namespace == null) return;
-    addPatch(Patch(node.span, "\$$namespace.${node.name}"));
+  }
+
+  String _findNamespaceForVariable(String name) {
+    if (_localScope?.isLocalVariable(name) ?? false) {
+      return null;
+    }
+    if (!_globalVariables.containsKey(name)) return null;
+    _referencedVariables.add(_globalVariables[name]);
+    return _namespaceForNode(_globalVariables[name]);
   }
 
   /// Declares a variable within the current scope before visiting it.
@@ -371,15 +399,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
+    var name = _unprefix(node.name);
+    if (name != node.name) {
+      addPatch(
+          patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
+    }
     if (_localScope == null || node.isGlobal) {
       if (node.isGuarded &&
-          _globalVariables.containsKey(node.name) &&
-          _globalVariables[node.name].span.sourceUrl != _currentUrl) {
-        _configuredVariables.add(_globalVariables[node.name]);
+          _globalVariables.containsKey(name) &&
+          _globalVariables[name].span.sourceUrl != _currentUrl) {
+        _configuredVariables.add(_globalVariables[name]);
       }
-      _globalVariables[node.name] = node;
+      _globalVariables[name] = node;
     } else {
-      _localScope.variables.add(node.name);
+      _localScope.variables.add(name);
     }
   }
 
@@ -401,6 +434,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else {
       _localScope.functions.add(node.name);
     }
+  }
+
+  /// Returns [name] with [prefixToRemove] removed.
+  String _unprefix(String name) {
+    if (prefixToRemove == null || prefixToRemove.length > name.length) {
+      return name;
+    }
+    var startOfName = name.substring(0, prefixToRemove.length);
+    if (!equalsIgnoreSeparator(prefixToRemove, startOfName)) return name;
+    return name.substring(prefixToRemove.length);
   }
 
   /// Finds the namespace for the stylesheet containing [node], adding a new use
