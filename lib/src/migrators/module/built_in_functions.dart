@@ -23,7 +23,9 @@ const builtInFunctionModules = {
   "invert": "color",
   "alpha": "color",
   "opacify": "color",
+  "fade-in": "color",
   "transparentize": "color",
+  "fade-out": "color",
   "adjust-color": "color",
   "scale-color": "color",
   "change-color": "color",
@@ -105,4 +107,20 @@ const builtInFunctionNameChanges = {
   "str-insert": "insert",
   "str-index": "index",
   "str-slice": "slice"
+};
+
+/// Mapping from removed color function names to the parameter passed to
+/// `adjust-color` for the same effect.
+///
+/// If the value from the removed function must be negated when passed to
+/// `adjust-color`, the parameter ends with a `-`.
+const removedColorFunctions = {
+  "lighten": r"$lightness: ",
+  "darken": r"$lightness: -",
+  "saturate": r"$saturation: ",
+  "desaturate": r"$saturation: -",
+  "opacify": r"$alpha: ",
+  "fade-in": r"$alpha: ",
+  "transparentize": r"$alpha: -",
+  "fade-out": r"$alpha: -"
 };
