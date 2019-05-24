@@ -1,11 +1,11 @@
 <==> input/entrypoint.scss
 $a: mix(red, blue);
 $b: str-length("hello");
-$c: darken(blue, 10%);
+$c: scale-color(blue, $lightness: -10%);
 
 <==> output/entrypoint.scss
 @use "sass:color";
 @use "sass:string";
 $a: color.mix(red, blue);
 $b: string.length("hello");
-$c: color.darken(blue, 10%);
+$c: color.scale(blue, $lightness: -10%);

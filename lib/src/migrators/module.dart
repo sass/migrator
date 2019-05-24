@@ -10,6 +10,7 @@
 import 'package:sass/src/ast/sass.dart';
 
 import 'package:path/path.dart' as p;
+import 'package:source_span/source_span.dart';
 
 import 'package:sass_migrator/src/migration_visitor.dart';
 import 'package:sass_migrator/src/migrator.dart';
@@ -138,7 +139,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    _patchNamespaceForFunction(node.name.asPlain, (name, namespace) {
+    _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
       addPatch(Patch(node.name.span, "$namespace.$name"));
     });
     visitArgumentInvocation(node.arguments);
@@ -153,7 +154,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
       var fnName = nameArgument as StringExpression;
-      _patchNamespaceForFunction(fnName.text.asPlain, (name, namespace) {
+      _patchNamespaceForFunction(node, fnName.text.asPlain, (name, namespace) {
         var span = fnName.span;
         if (fnName.hasQuotes) {
           span = span.file.span(span.start.offset + 1, span.end.offset - 1);
@@ -173,8 +174,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// when namespaced, and the namespace itself. The name will match the name
   /// provided to the outer function except for built-in functions whose name
   /// within a module differs from its original name.
-  void _patchNamespaceForFunction(
-      String name, void patcher(String name, String namespace)) {
+  void _patchNamespaceForFunction(FunctionExpression node, String name,
+      void patcher(String name, String namespace)) {
     if (name == null) return;
     if (_localScope?.isLocalFunction(name) ?? false) return;
 
@@ -184,11 +185,53 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     if (namespace == null) {
       if (!builtInFunctionModules.containsKey(name)) return;
+
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
+      if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
+        if (node.arguments.positional.length == 2 &&
+            node.arguments.named.isEmpty) {
+          _patchRemovedColorFunction(name, node.arguments.positional.last);
+          name = 'adjust';
+        } else if (node.arguments.named.containsKey('amount')) {
+          var arg = node.arguments.named['amount'];
+          _patchRemovedColorFunction(name, arg,
+              existingArgName: _findArgNameSpan(arg));
+          name = 'adjust';
+        } else {
+          print(node.arguments.named.keys);
+          warn("Could not migrate malformed '$name' call", node.span);
+        }
+      }
       _additionalUseRules.add("sass:$namespace");
     }
     if (namespace != null) patcher(name, namespace);
+  }
+
+  /// Given a named argument [arg], returns a span from the start of the name
+  /// to the start of the argument itself (e.g. "$amount: ").
+  FileSpan _findArgNameSpan(Expression arg) {
+    var start = arg.span.start.offset - 1;
+    while (arg.span.file.getText(start, start + 1) != r'$') {
+      start--;
+    }
+    return arg.span.file.span(start, arg.span.start.offset);
+  }
+
+  /// Patches the amount argument [arg] for a removed color function
+  /// (e.g. `lighten`) to add the appropriate name (such as `$lightness`) and
+  /// negate the argument if necessary.
+  void _patchRemovedColorFunction(String name, Expression arg,
+      {FileSpan existingArgName}) {
+    var parameter = removedColorFunctions[name];
+    var leftParen =
+        parameter.endsWith('-') && arg is BinaryOperationExpression ? '(' : '';
+    if (existingArgName == null) {
+      addPatch(patchBefore(arg, '$parameter$leftParen'));
+    } else {
+      addPatch(Patch(existingArgName, '$parameter$leftParen'));
+    }
+    if (leftParen == '(') addPatch(patchAfter(arg, ')'));
   }
 
   /// Declares the function within the current scope before visiting it.
