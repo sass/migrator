@@ -1,0 +1,42 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "library";
+$a : red;
+a {
+  color: $a;
+  $b: red;
+  background: $b;
+}
+
+@function fn($c) {
+  @return $c;
+}
+
+@mixin mixin($d) {
+  color: $d;
+}
+
+<==> input/_library.scss
+$a: blue;
+$b: blue;
+$c: blue;
+$d: blue;
+
+<==> output/entrypoint.scss
+@use "library";
+$a : red;
+a {
+  color: $a;
+  $b: red;
+  background: $b;
+}
+
+@function fn($c) {
+  @return $c;
+}
+
+@mixin mixin($d) {
+  color: $d;
+}

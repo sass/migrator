@@ -120,6 +120,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _currentUrl = oldUrl;
   }
 
+  /// Visits each of [node]'s expressions and children.
+  ///
+  /// All of [node]'s arguments are declared as local variables in a new scope.
+  @override
+  void visitCallableDeclaration(CallableDeclaration node) {
+    _localScope = LocalScope(_localScope);
+    for (var argument in node.arguments.arguments) {
+      _localScope.variables.add(argument.name);
+      if (argument.defaultValue != null) visitExpression(argument.defaultValue);
+    }
+    super.visitChildren(node);
+    _localScope = _localScope.parent;
+  }
+
   /// Visits the children of [node] with a local scope.
   ///
   /// Note: The children of a stylesheet are at the root, so we should not add
