@@ -217,7 +217,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       // Remove `#{` and `}`
       addPatch(patchDelete(node.span, end: 2));
       addPatch(patchDelete(node.span, start: node.span.length - 1));
-      node.text.contents.first.accept(this);
+      (node.text.contents.first as Expression).accept(this);
     } else {
       node.accept(this);
     }
