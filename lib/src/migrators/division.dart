@@ -28,7 +28,8 @@ class DivisionMigrator extends Migrator {
   final argParser = ArgParser()
     ..addFlag('pessimistic',
         abbr: 'p',
-        help: "Only migrate / expressions that are unambiguously division.");
+        help: "Only migrate / expressions that are unambiguously division.",
+        negatable: false);
 
   bool get isPessimistic => argResults['pessimistic'] as bool;
 

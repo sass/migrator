@@ -20,16 +20,22 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
       ..addFlag('migrate-deps',
-          abbr: 'd', help: 'Migrate dependencies in addition to entrypoints.')
+          abbr: 'd',
+          help: 'Migrate dependencies in addition to entrypoints.',
+          negatable: false)
       ..addFlag('dry-run',
           abbr: 'n',
-          help: 'Show which files would be migrated but make no changes.')
-      ..addFlag('unicode',
-          help: 'Whether to use Unicode characters for messages.')
+          help: 'Show which files would be migrated but make no changes.',
+          negatable: false)
+      ..addFlag(
+        'unicode',
+        help: 'Whether to use Unicode characters for messages.',
+      )
       // TODO(jathak): Make this flag print a diff instead.
       ..addFlag('verbose',
           abbr: 'v',
-          help: 'Print text of migrated files when running with --dry-run.');
+          help: 'Print text of migrated files when running with --dry-run.',
+          negatable: false);
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
   }
