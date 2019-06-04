@@ -4,6 +4,8 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'dart:isolate';
+
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
@@ -33,7 +35,9 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       )
       // TODO(jathak): Make this flag print a diff instead.
       ..addFlag('verbose',
-          abbr: 'v', help: 'Print more information.', negatable: false);
+          abbr: 'v', help: 'Print more information.', negatable: false)
+      ..addFlag('version',
+          help: 'Print the version of the Sass migrator.', negatable: false);
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
   }
@@ -42,6 +46,12 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
     var argResults = parse(args);
+    if (argResults['version'] as bool) {
+      print(await _loadVersion());
+      exitCode = 0;
+      return;
+    }
+
     if (argResults.wasParsed('unicode')) {
       glyph.ascii = !(argResults['unicode'] as bool);
     }
@@ -73,4 +83,23 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       }
     }
   }
+}
+
+/// Loads and returns the current version of the Sass migrator.
+Future<String> _loadVersion() async {
+  var version = const String.fromEnvironment('version');
+  if (const bool.fromEnvironment('node')) {
+    version += " compiled with dart2js "
+        "${const String.fromEnvironment('dart-version')}";
+  }
+  if (version != null) return version;
+
+  var libDir = p.fromUri(
+      await Isolate.resolvePackageUri(Uri.parse('package:sass_migrator/')));
+  var pubspec = File(p.join(libDir, '..', 'pubspec.yaml')).readAsStringSync();
+  return pubspec
+      .split("\n")
+      .firstWhere((line) => line.startsWith('version: '))
+      .split(" ")
+      .last;
 }
