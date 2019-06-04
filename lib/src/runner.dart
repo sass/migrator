@@ -42,7 +42,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
     var argResults = parse(args);
-    if (argResults['unicode'] != null) {
+    if (argResults.wasParsed('unicode')) {
       glyph.ascii = !(argResults['unicode'] as bool);
     }
 
