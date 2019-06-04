@@ -3,6 +3,8 @@
 * **Breaking change**: Remove `lib/runner.dart`. This package is only meant to
   be used as an executable, not as a library.
 
+* Expose `sass-migrator` as a globally-installable executable.
+
 ### Division Migrator
 
 * Fix a type error.

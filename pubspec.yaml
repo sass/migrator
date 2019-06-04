@@ -31,3 +31,6 @@ dev_dependencies:
   test_process: "^1.0.0"
   xml: ">=2.4.0 <4.0.0"
   yaml: "^2.0.0"
+
+executables:
+  sass-migrator: sass_migrator
