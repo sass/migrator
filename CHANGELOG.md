@@ -1,3 +1,13 @@
+## 1.0.0-alpha.5
+
+### Division Migrator
+
+* Fix a type error.
+
+### Module Migrator
+
+* Convert removed color functions to `color.adjust()`.
+
 ## 1.0.0-alpha.4
 
 * Internal changes only.
