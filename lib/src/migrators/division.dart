@@ -21,8 +21,10 @@ import 'package:sass_migrator/src/utils.dart';
 /// `divide` function instead.
 class DivisionMigrator extends Migrator {
   final name = "division";
-  final description =
-      "Migrates from the / division operator to the divide function";
+  final description = """
+Migrates from the / division operator to the divide() function
+
+More info: https://sass-lang.com/d/slash-div""";
 
   @override
   final argParser = ArgParser()
