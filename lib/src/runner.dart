@@ -33,9 +33,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       )
       // TODO(jathak): Make this flag print a diff instead.
       ..addFlag('verbose',
-          abbr: 'v',
-          help: 'Print text of migrated files when running with --dry-run.',
-          negatable: false);
+          abbr: 'v', help: 'Print more information.', negatable: false);
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
   }
