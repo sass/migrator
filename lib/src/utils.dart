@@ -60,8 +60,8 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) {
 }
 
 /// Emits a warning with [message] and [context];
-void warn(String message, FileSpan context) {
-  print(context.message("WARNING - $message"));
+void emitWarning(String message, FileSpan context) {
+  stderr.writeln(context.message("WARNING - $message"));
 }
 
 /// An exception thrown by a migrator.

@@ -6,4 +6,4 @@
 
 // These libraries don't expose *exactly* the same API, but they overlap in all
 // the cases we care about.
-export 'dart:io' if (dart.library.js) 'package:node_io/node_io.dart';
+export 'dart:io' if (dart.library.js) 'io/node.dart';

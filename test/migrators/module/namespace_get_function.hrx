@@ -41,7 +41,7 @@ $fn4: meta.get-function("incre" + "ment");
 $x: "increment";
 $fn5: meta.get-function($x);
 
-<==> log.txt
+<==> stderr.log
 line 9, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
   ,
 9 | $fn4: get-function("incre" + "ment");

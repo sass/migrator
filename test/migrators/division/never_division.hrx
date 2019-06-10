@@ -8,5 +8,5 @@
   g: rgb(10 20 30 / 0.5);
 }
 
-<==> log.txt
+<==> stdout.log
 Nothing to migrate!

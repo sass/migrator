@@ -96,11 +96,17 @@ Future<void> _testHrx(File hrxFile, String migrator, {bool node: false}) async {
       workingDirectory: d.sandbox,
       description: "migrator");
 
-  if (files.expectedLog != null) {
+  if (files.expectedStdout != null) {
     expect(process.stdout,
-        emitsInOrder(files.expectedLog.trimRight().split("\n")));
+        emitsInOrder(files.expectedStdout.trimRight().split("\n")));
   }
   expect(process.stdout, emitsDone);
+
+  if (files.expectedStderr != null) {
+    expect(process.stderr,
+        emitsInOrder(files.expectedStderr.trimRight().split("\n")));
+  }
+  expect(process.stderr, emitsDone);
   await process.shouldExit(0);
 
   await Future.wait([
@@ -117,7 +123,8 @@ class _HrxTestFiles {
   Map<String, String> input = {};
   Map<String, String> output = {};
   List<String> arguments = [];
-  String expectedLog;
+  String expectedStdout;
+  String expectedStderr;
 
   _HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
@@ -142,8 +149,10 @@ class _HrxTestFiles {
       input[filename.substring(6)] = contents;
     } else if (filename.startsWith("output/")) {
       output[filename.substring(7)] = contents;
-    } else if (filename == "log.txt") {
-      expectedLog = contents;
+    } else if (filename == "stdout.log") {
+      expectedStdout = contents;
+    } else if (filename == "stderr.log") {
+      expectedStderr = contents;
     } else if (filename == "arguments") {
       arguments = contents.trim().split(" ");
     }
