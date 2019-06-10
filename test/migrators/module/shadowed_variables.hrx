@@ -3,7 +3,7 @@
 
 <==> input/entrypoint.scss
 @import "library";
-$a : red;
+$a: red;
 a {
   color: $a;
   $b: red;
@@ -26,7 +26,7 @@ $d: blue;
 
 <==> output/entrypoint.scss
 @use "library";
-$a : red;
+$a: red;
 a {
   color: $a;
   $b: red;
