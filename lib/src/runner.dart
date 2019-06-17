@@ -4,13 +4,15 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'dart:isolate';
+
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
-import 'src/io.dart';
-import 'src/migrators/division.dart';
-import 'src/migrators/module.dart';
+import 'io.dart';
+import 'migrators/division.dart';
+import 'migrators/module.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {
@@ -20,16 +22,22 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
       ..addFlag('migrate-deps',
-          abbr: 'd', help: 'Migrate dependencies in addition to entrypoints.')
+          abbr: 'd',
+          help: 'Migrate dependencies in addition to entrypoints.',
+          negatable: false)
       ..addFlag('dry-run',
           abbr: 'n',
-          help: 'Show which files would be migrated but make no changes.')
-      ..addFlag('unicode',
-          help: 'Whether to use Unicode characters for messages.')
+          help: 'Show which files would be migrated but make no changes.',
+          negatable: false)
+      ..addFlag(
+        'unicode',
+        help: 'Whether to use Unicode characters for messages.',
+      )
       // TODO(jathak): Make this flag print a diff instead.
       ..addFlag('verbose',
-          abbr: 'v',
-          help: 'Print text of migrated files when running with --dry-run.');
+          abbr: 'v', help: 'Print more information.', negatable: false)
+      ..addFlag('version',
+          help: 'Print the version of the Sass migrator.', negatable: false);
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
   }
@@ -38,7 +46,13 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
     var argResults = parse(args);
-    if (argResults['unicode'] != null) {
+    if (argResults['version'] as bool) {
+      print(await _loadVersion());
+      exitCode = 0;
+      return;
+    }
+
+    if (argResults.wasParsed('unicode')) {
       glyph.ascii = !(argResults['unicode'] as bool);
     }
 
@@ -64,9 +78,28 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       for (var url in migrated.keys) {
         assert(url.scheme == null || url.scheme == "file",
             "$url is not a file path.");
-        if (argResults['verbose']) print("Overwriting $url...");
+        if (argResults['verbose']) print("Mirating ${p.prettyUri(url)}");
         File(url.toFilePath()).writeAsStringSync(migrated[url]);
       }
     }
   }
+}
+
+/// Loads and returns the current version of the Sass migrator.
+Future<String> _loadVersion() async {
+  var version = const String.fromEnvironment('version');
+  if (const bool.fromEnvironment('node')) {
+    version += " compiled with dart2js "
+        "${const String.fromEnvironment('dart-version')}";
+  }
+  if (version != null) return version;
+
+  var libDir = p.fromUri(
+      await Isolate.resolvePackageUri(Uri.parse('package:sass_migrator/')));
+  var pubspec = File(p.join(libDir, '..', 'pubspec.yaml')).readAsStringSync();
+  return pubspec
+      .split("\n")
+      .firstWhere((line) => line.startsWith('version: '))
+      .split(" ")
+      .last;
 }

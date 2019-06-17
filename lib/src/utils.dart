@@ -14,7 +14,6 @@ import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/importer/filesystem.dart';
 export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
 
-import 'io.dart';
 import 'patch.dart';
 
 /// A filesystem importer that loads Sass files relative to the current working
@@ -60,7 +59,7 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) {
 }
 
 /// Emits a warning with [message] and [context];
-void warn(String message, FileSpan context) {
+void emitWarning(String message, FileSpan context) {
   print(context.message("WARNING - $message"));
 }
 

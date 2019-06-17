@@ -1,5 +1,5 @@
 name: sass_migrator
-version: 1.0.0-alpha.4
+version: 1.0.0-dev
 description: A tool for running migrations on Sass files
 author: Jennifer Thakar <jathak@google.com>
 homepage: https://github.com/sass/migrator
@@ -31,3 +31,6 @@ dev_dependencies:
   test_process: "^1.0.0"
   xml: ">=2.4.0 <4.0.0"
   yaml: "^2.0.0"
+
+executables:
+  sass-migrator: sass_migrator
