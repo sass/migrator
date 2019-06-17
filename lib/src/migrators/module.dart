@@ -152,7 +152,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           node.arguments.named['name'] ?? node.arguments.positional.first;
       if (nameArgument is! StringExpression ||
           (nameArgument as StringExpression).text.asPlain == null) {
-        warn("get-function call may require \$module parameter",
+        emitWarning("get-function call may require \$module parameter",
             nameArgument.span);
         return;
       }
@@ -206,7 +206,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               existingArgName: _findArgNameSpan(arg));
           name = 'adjust';
         } else {
-          warn("Could not migrate malformed '$name' call", node.span);
+          emitWarning("Could not migrate malformed '$name' call", node.span);
           return;
         }
       }
