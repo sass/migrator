@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -21,11 +22,19 @@ import 'patch.dart';
 final _filesystemImporter = FilesystemImporter('.');
 
 /// Returns the canonical version of [url].
-Uri canonicalize(Uri url) => _filesystemImporter.canonicalize(url);
+Uri canonicalize(Uri url, {FileSpan context}) {
+  var canonicalUrl = url == null ? null : _filesystemImporter.canonicalize(url);
+  if (canonicalUrl == null) {
+    emitWarning("Could not find Sass file at '${p.prettyUri(url)}'.",
+        context: context);
+  }
+  return canonicalUrl;
+}
 
 /// Parses the file at [url] into a stylesheet.
-Stylesheet parseStylesheet(Uri url) {
-  var canonicalUrl = _filesystemImporter.canonicalize(url);
+Stylesheet parseStylesheet(Uri url, {FileSpan context}) {
+  var canonicalUrl = canonicalize(url, context: context);
+  if (canonicalUrl == null) return null;
   var result = _filesystemImporter.load(canonicalUrl);
   return Stylesheet.parse(result.contents, result.syntax, url: canonicalUrl);
 }
@@ -58,9 +67,13 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) {
       span.file.span(span.start.offset + start, span.start.offset + end), "");
 }
 
-/// Emits a warning with [message] and [context];
-void emitWarning(String message, FileSpan context) {
-  print(context.message("WARNING - $message"));
+/// Emits a warning with [message] and optionally [context];
+void emitWarning(String message, {FileSpan context}) {
+  if (context == null) {
+    print("WARNING - $message");
+  } else {
+    print(context.message("WARNING - $message"));
+  }
 }
 
 /// An exception thrown by a migrator.

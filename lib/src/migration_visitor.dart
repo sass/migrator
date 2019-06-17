@@ -13,6 +13,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:meta/meta.dart';
+import 'package:source_span/source_span.dart';
 
 import 'patch.dart';
 import 'utils.dart';
@@ -66,10 +67,16 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   }
 
   /// Visits the stylesheet at [dependency], resolved relative to [source].
+  ///
+  /// This returns true if the dependency is successfully visited and false
+  /// otherwise.
   @protected
-  void visitDependency(Uri dependency, Uri source) {
-    var stylesheet = parseStylesheet(source.resolveUri(dependency));
+  bool visitDependency(Uri dependency, Uri source, {FileSpan context}) {
+    var stylesheet =
+        parseStylesheet(source.resolveUri(dependency), context: context);
+    if (stylesheet == null) return false;
     visitStylesheet(stylesheet);
+    return true;
   }
 
   /// Returns the migrated contents of this file, or null if the file does not
@@ -96,7 +103,8 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          visitDependency(Uri.parse(import.url), node.span.sourceUrl);
+          visitDependency(Uri.parse(import.url), node.span.sourceUrl,
+              context: import.span);
         }
       }
     }
@@ -108,7 +116,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
     if (migrateDependencies) {
-      visitDependency(node.url, node.span.sourceUrl);
+      visitDependency(node.url, node.span.sourceUrl, context: node.span);
     }
   }
 }

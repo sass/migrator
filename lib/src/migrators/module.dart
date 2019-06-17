@@ -153,7 +153,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (nameArgument is! StringExpression ||
           (nameArgument as StringExpression).text.asPlain == null) {
         emitWarning("get-function call may require \$module parameter",
-            nameArgument.span);
+            context: nameArgument.span);
         return;
       }
       var fnName = nameArgument as StringExpression;
@@ -206,7 +206,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               existingArgName: _findArgNameSpan(arg));
           name = 'adjust';
         } else {
-          emitWarning("Could not migrate malformed '$name' call", node.span);
+          emitWarning("Could not migrate malformed '$name' call",
+              context: node.span);
           return;
         }
       }
@@ -270,7 +271,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
-    visitDependency(Uri.parse(import.url), _currentUrl);
+    if (!visitDependency(Uri.parse(import.url), _currentUrl,
+        context: import.span)) {
+      return;
+    }
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
     // Pass the variables that were configured by the importing file to `with`,

@@ -78,7 +78,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       for (var url in migrated.keys) {
         assert(url.scheme == null || url.scheme == "file",
             "$url is not a file path.");
-        if (argResults['verbose']) print("Mirating ${p.prettyUri(url)}");
+        if (argResults['verbose']) print("Migrating ${p.prettyUri(url)}");
         File(url.toFilePath()).writeAsStringSync(migrated[url]);
       }
     }

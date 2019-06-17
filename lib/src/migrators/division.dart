@@ -199,7 +199,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           expectsNumericResult: true);
       return true;
     } else {
-      emitWarning("Could not determine whether this is division", node.span);
+      emitWarning("Could not determine whether this is division",
+          context: node.span);
       super.visitBinaryOperationExpression(node);
       return false;
     }

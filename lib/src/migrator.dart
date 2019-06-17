@@ -45,7 +45,9 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = Map<Uri, String>();
     for (var entrypoint in argResults.rest) {
-      var migrated = migrateFile(canonicalize(Uri.parse(entrypoint)));
+      var canonicalUrl = canonicalize(Uri.parse(entrypoint));
+      if (canonicalUrl == null) continue;
+      var migrated = migrateFile(canonicalUrl);
       for (var file in migrated.keys) {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {
