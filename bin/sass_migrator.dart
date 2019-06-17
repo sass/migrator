@@ -7,7 +7,7 @@
 import 'package:sass_migrator/src/node_interop_stub.dart'
     if (dart.library.js) 'package:node_interop/node.dart';
 
-import 'package:sass_migrator/runner.dart';
+import 'package:sass_migrator/src/runner.dart';
 
 // We can't declare args as a List<String> or Iterable<String> beacause of
 // dart-lang/sdk#36627.

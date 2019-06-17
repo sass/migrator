@@ -25,6 +25,9 @@ class ModuleMigrator extends Migrator {
   final name = "module";
   final description = "Migrates stylesheets to the new module system.";
 
+  // Hide this until it's finished and the module system is launched.
+  final hidden = true;
+
   /// Runs the module migrator on [entrypoint] and its dependencies and returns
   /// a map of migrated contents.
   ///

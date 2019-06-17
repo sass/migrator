@@ -21,14 +21,17 @@ import 'package:sass_migrator/src/utils.dart';
 /// `divide` function instead.
 class DivisionMigrator extends Migrator {
   final name = "division";
-  final description =
-      "Migrates from the / division operator to the divide function";
+  final description = """
+Migrates from the / division operator to the divide() function
+
+More info: https://sass-lang.com/d/slash-div""";
 
   @override
   final argParser = ArgParser()
     ..addFlag('pessimistic',
         abbr: 'p',
-        help: "Only migrate / expressions that are unambiguously division.");
+        help: "Only migrate / expressions that are unambiguously division.",
+        negatable: false);
 
   bool get isPessimistic => argResults['pessimistic'] as bool;
 
