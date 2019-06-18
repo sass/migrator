@@ -49,7 +49,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     var allMigrated = Map<Uri, String>();
     for (var entrypoint in argResults.rest) {
       var canonicalUrl = canonicalize(Uri.parse(entrypoint));
-      if (canonicalUrl == null) continue;
+      if (canonicalUrl == null) {
+        throw MigrationException(
+            "Error: Could not find Sass file at '$entrypoint'.");
+      }
       var migrated = migrateFile(canonicalUrl);
       for (var file in migrated.keys) {
         if (allMigrated.containsKey(file) &&
