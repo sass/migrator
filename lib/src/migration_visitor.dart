@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:path/path.dart' as p;
 import 'dart:collection';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -35,6 +36,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// True if dependencies should be migrated as well.
   final bool migrateDependencies;
 
+  /// List of warnings for dependency URLs that could not be resolved.
+  final missingDependencies = <String>[];
+
   /// The patches to be applied to the stylesheet being migrated.
   UnmodifiableListView<Patch> get patches => UnmodifiableListView(_patches);
   List<Patch> _patches;
@@ -43,8 +47,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   /// Runs a new migration on [url] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
-  Map<Uri, String> run(Uri url) {
+  ///
+  /// Any warnings encountered for missing dependencies will be added to
+  /// [missingDependencies].
+  Map<Uri, String> run(Uri url, List<String> missingDependencies) {
     visitStylesheet(parseStylesheet(url));
+    missingDependencies.addAll(this.missingDependencies);
     return _migrated;
   }
 
@@ -71,10 +79,14 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// This returns true if the dependency is successfully visited and false
   /// otherwise.
   @protected
-  bool visitDependency(Uri dependency, Uri source, {FileSpan context}) {
-    var stylesheet =
-        parseStylesheet(source.resolveUri(dependency), context: context);
-    if (stylesheet == null) return false;
+  bool visitDependency(Uri dependency, Uri source, [FileSpan context]) {
+    var url = source.resolveUri(dependency);
+    var stylesheet = parseStylesheet(url);
+    if (stylesheet == null) {
+      missingDependencies.add('${p.prettyUri(url)} '
+          '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
+      return false;
+    }
     visitStylesheet(stylesheet);
     return true;
   }
@@ -103,8 +115,8 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          visitDependency(Uri.parse(import.url), node.span.sourceUrl,
-              context: import.span);
+          visitDependency(
+              Uri.parse(import.url), node.span.sourceUrl, import.span);
         }
       }
     }
@@ -116,7 +128,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
     if (migrateDependencies) {
-      visitDependency(node.url, node.span.sourceUrl, context: node.span);
+      visitDependency(node.url, node.span.sourceUrl, node.span);
     }
   }
 }

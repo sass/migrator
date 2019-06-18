@@ -13,6 +13,7 @@ import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'io.dart';
 import 'migrators/division.dart';
 import 'migrators/module.dart';
+import 'utils.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {
@@ -55,8 +56,14 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     if (argResults.wasParsed('unicode')) {
       glyph.ascii = !(argResults['unicode'] as bool);
     }
-
-    var migrated = await runCommand(argResults);
+    Map<Uri, String> migrated;
+    try {
+      migrated = await runCommand(argResults);
+    } on MigrationException catch (e) {
+      print(e);
+      print('Migration failed!');
+      return;
+    }
     if (migrated == null) return;
 
     if (migrated.isEmpty) {

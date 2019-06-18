@@ -26,6 +26,9 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 
+  /// List of warnings for dependency URLs that could not be resolved.
+  final missingDependencies = <String>[];
+
   /// Runs this migrator on [entrypoint] (and its dependencies, if the
   /// --migrate-deps flag is passed).
   ///
@@ -55,6 +58,16 @@ abstract class Migrator extends Command<Map<Uri, String>> {
               "$file is migrated in more than one way by these entrypoints.");
         }
         allMigrated[file] = migrated[file];
+      }
+    }
+    if (missingDependencies.isNotEmpty) {
+      var count = missingDependencies.length;
+      emitWarning(
+          "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.");
+      if (globalResults['verbose'] as bool) {
+        for (var warning in missingDependencies) {
+          print('  $warning');
+        }
       }
     }
     return allMigrated;

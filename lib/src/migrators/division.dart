@@ -38,7 +38,7 @@ More info: https://sass-lang.com/d/slash-div""";
   @override
   Map<Uri, String> migrateFile(Uri entrypoint) =>
       _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies)
-          .run(entrypoint);
+          .run(entrypoint, missingDependencies);
 }
 
 class _DivisionMigrationVisitor extends MigrationVisitor {
@@ -199,8 +199,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           expectsNumericResult: true);
       return true;
     } else {
-      emitWarning("Could not determine whether this is division",
-          context: node.span);
+      emitWarning("Could not determine whether this is division", node.span);
       super.visitBinaryOperationExpression(node);
       return false;
     }

@@ -34,7 +34,8 @@ class ModuleMigrator extends Migrator {
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
-    var migrated = _ModuleMigrationVisitor().run(entrypoint);
+    var migrated =
+        _ModuleMigrationVisitor().run(entrypoint, missingDependencies);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
     }
@@ -153,7 +154,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (nameArgument is! StringExpression ||
           (nameArgument as StringExpression).text.asPlain == null) {
         emitWarning("get-function call may require \$module parameter",
-            context: nameArgument.span);
+            nameArgument.span);
         return;
       }
       var fnName = nameArgument as StringExpression;
@@ -206,8 +207,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               existingArgName: _findArgNameSpan(arg));
           name = 'adjust';
         } else {
-          emitWarning("Could not migrate malformed '$name' call",
-              context: node.span);
+          emitWarning("Could not migrate malformed '$name' call", node.span);
           return;
         }
       }
@@ -271,9 +271,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
-    if (!visitDependency(Uri.parse(import.url), _currentUrl,
-        context: import.span)) {
-      return;
+    if (!visitDependency(Uri.parse(import.url), _currentUrl, import.span)) {
+      throw MigrationException(
+          "Error: Could not find Sass file at '${import.url}'.",
+          span: import.span);
     }
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
