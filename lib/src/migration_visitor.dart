@@ -36,12 +36,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   final bool migrateDependencies;
 
   /// Map of missing dependency URLs to the spans that import/use them.
-  UnmodifiableMapView<Uri, FileSpan> get missingDependencies =>
+  Map<Uri, FileSpan> get missingDependencies =>
       UnmodifiableMapView(_missingDependencies);
   final _missingDependencies = <Uri, FileSpan>{};
 
   /// The patches to be applied to the stylesheet being migrated.
-  UnmodifiableListView<Patch> get patches => UnmodifiableListView(_patches);
+  List<Patch> get patches => UnmodifiableListView(_patches);
   List<Patch> _patches;
 
   MigrationVisitor({this.migrateDependencies = true});
@@ -79,7 +79,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (stylesheet != null) {
       visitStylesheet(stylesheet);
     } else {
-      _missingDependencies[url] = context;
+      _missingDependencies.putIfAbsent(url, () => context);
     }
   }
 

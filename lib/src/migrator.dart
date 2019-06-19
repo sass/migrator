@@ -29,6 +29,11 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 
   /// Map of missing dependency URLs to the spans that import/use them.
+  ///
+  /// Subclasses should add any missing dependencies to this when they are
+  /// encountered during migration. If using [MigrationVisitor], all items in
+  /// its `missingDependencies` property should be added to this after calling
+  /// `run`.
   final missingDependencies = <Uri, FileSpan>{};
 
   /// Runs this migrator on [entrypoint] (and its dependencies, if the
