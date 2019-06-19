@@ -13,6 +13,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:meta/meta.dart';
+import 'package:source_span/source_span.dart';
 
 import 'patch.dart';
 import 'utils.dart';
@@ -34,8 +35,13 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// True if dependencies should be migrated as well.
   final bool migrateDependencies;
 
+  /// Map of missing dependency URLs to the spans that import/use them.
+  Map<Uri, FileSpan> get missingDependencies =>
+      UnmodifiableMapView(_missingDependencies);
+  final _missingDependencies = <Uri, FileSpan>{};
+
   /// The patches to be applied to the stylesheet being migrated.
-  UnmodifiableListView<Patch> get patches => UnmodifiableListView(_patches);
+  List<Patch> get patches => UnmodifiableListView(_patches);
   List<Patch> _patches;
 
   MigrationVisitor({this.migrateDependencies = true});
@@ -67,9 +73,14 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   /// Visits the stylesheet at [dependency], resolved relative to [source].
   @protected
-  void visitDependency(Uri dependency, Uri source) {
-    var stylesheet = parseStylesheet(source.resolveUri(dependency));
-    visitStylesheet(stylesheet);
+  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
+    var url = source.resolveUri(dependency);
+    var stylesheet = parseStylesheet(url);
+    if (stylesheet != null) {
+      visitStylesheet(stylesheet);
+    } else {
+      _missingDependencies.putIfAbsent(url, () => context);
+    }
   }
 
   /// Returns the migrated contents of this file, or null if the file does not
@@ -96,7 +107,8 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          visitDependency(Uri.parse(import.url), node.span.sourceUrl);
+          visitDependency(
+              Uri.parse(import.url), node.span.sourceUrl, import.span);
         }
       }
     }
@@ -108,7 +120,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
     if (migrateDependencies) {
-      visitDependency(node.url, node.span.sourceUrl);
+      visitDependency(node.url, node.span.sourceUrl, node.span);
     }
   }
 }

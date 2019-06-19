@@ -32,6 +32,9 @@ class ModuleMigrator extends Migrator {
     ..addOption('remove-prefix',
         abbr: 'p', help: 'Removes the provided prefix from members.');
 
+  // Hide this until it's finished and the module system is launched.
+  final hidden = true;
+
   /// Runs the module migrator on [entrypoint] and its dependencies and returns
   /// a map of migrated contents.
   ///
@@ -71,6 +74,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Stores whether a given VariableDeclaration has been referenced in an
   /// expression after being declared.
   final _referencedVariables = <VariableDeclaration>{};
+
+  /// Set of stylesheets currently being migrated.
+  ///
+  /// Used to ensure that a dependency declaring a variable that an upstream
+  /// stylesheet already declared is not treated as reassignment (since that
+  /// would cause a circular dependency).
+  final _upstreamStylesheets = <Uri>{};
 
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
@@ -123,6 +133,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return uses.join() + results;
   }
 
+  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  @override
+  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
+    var url = source.resolveUri(dependency);
+    var stylesheet = parseStylesheet(url);
+    if (stylesheet == null) {
+      throw MigrationException(
+          "Error: Could not find Sass file at '${p.prettyUri(url)}'.",
+          span: context);
+    }
+
+    visitStylesheet(stylesheet);
+  }
+
   /// Stores per-file state before visiting [node] and restores it afterwards.
   @override
   void visitStylesheet(Stylesheet node) {
@@ -137,6 +161,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _additionalUseRules = oldAdditionalUseRules;
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
+  }
+
+  /// Visits each of [node]'s expressions and children.
+  ///
+  /// All of [node]'s arguments are declared as local variables in a new scope.
+  @override
+  void visitCallableDeclaration(CallableDeclaration node) {
+    _localScope = LocalScope(_localScope);
+    for (var argument in node.arguments.arguments) {
+      _localScope.variables.add(argument.name);
+      if (argument.defaultValue != null) visitExpression(argument.defaultValue);
+    }
+    super.visitChildren(node);
+    _localScope = _localScope.parent;
   }
 
   /// Visits the children of [node] with a local scope.
@@ -168,7 +206,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           node.arguments.named['name'] ?? node.arguments.positional.first;
       if (nameArgument is! StringExpression ||
           (nameArgument as StringExpression).text.asPlain == null) {
-        warn("get-function call may require \$module parameter",
+        emitWarning("get-function call may require \$module parameter",
             nameArgument.span);
         return;
       }
@@ -222,7 +260,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               existingArgName: _findArgNameSpan(arg));
           name = 'adjust';
         } else {
-          warn("Could not migrate malformed '$name' call", node.span);
+          emitWarning("Could not migrate malformed '$name' call", node.span);
           return;
         }
       }
@@ -286,7 +324,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
-    visitDependency(Uri.parse(import.url), _currentUrl);
+    _upstreamStylesheets.add(_currentUrl);
+    visitDependency(Uri.parse(import.url), _currentUrl, import.span);
+    _upstreamStylesheets.remove(_currentUrl);
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
     // Pass the variables that were configured by the importing file to `with`,
@@ -405,10 +445,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
     }
     if (_localScope == null || node.isGlobal) {
-      if (node.isGuarded &&
-          _globalVariables.containsKey(name) &&
-          _globalVariables[name].span.sourceUrl != _currentUrl) {
-        _configuredVariables.add(_globalVariables[name]);
+      var existingNode = _globalVariables[node.name];
+      var originalUrl = existingNode?.span?.sourceUrl;
+      if (existingNode != null && originalUrl != _currentUrl) {
+        if (node.isGuarded) {
+          _configuredVariables.add(existingNode);
+        } else if (!_upstreamStylesheets.contains(originalUrl)) {
+          // This declaration reassigns a variable in another module. Since we
+          // don't care about the actual value of the variable while migrating,
+          // we leave the node in _globalVariables as-is, so that future
+          // references namespace based on the original declaration, not this
+          // reassignment.
+          var namespace = _namespaceForNode(existingNode);
+          var afterDollarSign = node.span.start.offset + 1;
+          addPatch(Patch(node.span.file.span(afterDollarSign, afterDollarSign),
+              '$namespace.'));
+          return;
+        }
       }
       _globalVariables[name] = node;
     } else {

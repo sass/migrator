@@ -6,6 +6,8 @@
 
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
+import 'package:source_span/source_span.dart';
 
 import 'utils.dart';
 
@@ -26,6 +28,14 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 
+  /// Map of missing dependency URLs to the spans that import/use them.
+  ///
+  /// Subclasses should add any missing dependencies to this when they are
+  /// encountered during migration. If using [MigrationVisitor], all items in
+  /// its `missingDependencies` property should be added to this after calling
+  /// `run`.
+  final missingDependencies = <Uri, FileSpan>{};
+
   /// Runs this migrator on [entrypoint] (and its dependencies, if the
   /// --migrate-deps flag is passed).
   ///
@@ -45,7 +55,13 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = Map<Uri, String>();
     for (var entrypoint in argResults.rest) {
-      var migrated = migrateFile(canonicalize(Uri.parse(entrypoint)));
+      var canonicalUrl = canonicalize(Uri.parse(entrypoint));
+      if (canonicalUrl == null) {
+        throw MigrationException(
+            "Error: Could not find Sass file at '$entrypoint'.");
+      }
+
+      var migrated = migrateFile(canonicalUrl);
       for (var file in migrated.keys) {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {
@@ -55,6 +71,33 @@ abstract class Migrator extends Command<Map<Uri, String>> {
         allMigrated[file] = migrated[file];
       }
     }
+
+    if (missingDependencies.isNotEmpty) _warnForMissingDependencies();
     return allMigrated;
+  }
+
+  /// Prints warnings for any missing dependencies encountered during migration.
+  ///
+  /// By default, this prints a short warning with one line per missing
+  /// dependency.
+  ///
+  /// In verbose mode, this instead prints a full warning with the source span
+  /// for each missing dependency.
+  void _warnForMissingDependencies() {
+    if (globalResults['verbose'] as bool) {
+      for (var uri in missingDependencies.keys) {
+        emitWarning("Could not find Sass file at '${p.prettyUri(uri)}'.",
+            missingDependencies[uri]);
+      }
+    } else {
+      var count = missingDependencies.length;
+      emitWarning(
+          "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.");
+      for (var uri in missingDependencies.keys) {
+        var context = missingDependencies[uri];
+        print('  ${p.prettyUri(uri)} '
+            '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
+      }
+    }
   }
 }

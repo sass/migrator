@@ -21,21 +21,28 @@ import 'package:sass_migrator/src/utils.dart';
 /// `divide` function instead.
 class DivisionMigrator extends Migrator {
   final name = "division";
-  final description =
-      "Migrates from the / division operator to the divide function";
+  final description = """
+Migrates from the / division operator to the divide() function
+
+More info: https://sass-lang.com/d/slash-div""";
 
   @override
   final argParser = ArgParser()
     ..addFlag('pessimistic',
         abbr: 'p',
-        help: "Only migrate / expressions that are unambiguously division.");
+        help: "Only migrate / expressions that are unambiguously division.",
+        negatable: false);
 
   bool get isPessimistic => argResults['pessimistic'] as bool;
 
   @override
-  Map<Uri, String> migrateFile(Uri entrypoint) =>
-      _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies)
-          .run(entrypoint);
+  Map<Uri, String> migrateFile(Uri entrypoint) {
+    var visitor =
+        _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies);
+    var result = visitor.run(entrypoint);
+    missingDependencies.addAll(visitor.missingDependencies);
+    return result;
+  }
 }
 
 class _DivisionMigrationVisitor extends MigrationVisitor {
@@ -196,7 +203,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
           expectsNumericResult: true);
       return true;
     } else {
-      warn("Could not determine whether this is division", node.span);
+      emitWarning("Could not determine whether this is division", node.span);
       super.visitBinaryOperationExpression(node);
       return false;
     }
@@ -217,7 +224,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       // Remove `#{` and `}`
       addPatch(patchDelete(node.span, end: 2));
       addPatch(patchDelete(node.span, start: node.span.length - 1));
-      node.text.contents.first.accept(this);
+      (node.text.contents.first as Expression).accept(this);
     } else {
       node.accept(this);
     }
