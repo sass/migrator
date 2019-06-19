@@ -114,6 +114,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return uses.join() + results;
   }
 
+  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  @override
+  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
+    var url = source.resolveUri(dependency);
+    var stylesheet = parseStylesheet(url);
+    if (stylesheet == null) {
+      throw MigrationException(
+          "Error: Could not find Sass file at '${p.prettyUri(url)}'.",
+          span: context);
+    }
+
+    visitStylesheet(stylesheet);
+  }
+
   /// Stores per-file state before visiting [node] and restores it afterwards.
   @override
   void visitStylesheet(Stylesheet node) {
@@ -291,9 +305,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
+<<<<<<< HEAD
     _upstreamStylesheets.add(_currentUrl);
     visitDependency(Uri.parse(import.url), _currentUrl);
     _upstreamStylesheets.removeLast();
+=======
+    visitDependency(Uri.parse(import.url), _currentUrl, import.span);
+>>>>>>> origin/master
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
     // Pass the variables that were configured by the importing file to `with`,
