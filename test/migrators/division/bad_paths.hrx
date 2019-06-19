@@ -7,4 +7,6 @@
 
 <==> log.txt
 WARNING - 2 dependencies could not be found.
+  does_not_exist @entrypoint.scss:1
+  does_not_exist2 @entrypoint.scss:2
 Nothing to migrate!

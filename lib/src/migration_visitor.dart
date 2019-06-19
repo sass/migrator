@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:path/path.dart' as p;
 import 'dart:collection';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -36,8 +35,10 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// True if dependencies should be migrated as well.
   final bool migrateDependencies;
 
-  /// List of warnings for dependency URLs that could not be resolved.
-  final missingDependencies = <String>[];
+  /// Map of missing dependency URLs to the spans that import/use them.
+  UnmodifiableMapView<Uri, FileSpan> get missingDependencies =>
+      UnmodifiableMapView(_missingDependencies);
+  final _missingDependencies = <Uri, FileSpan>{};
 
   /// The patches to be applied to the stylesheet being migrated.
   UnmodifiableListView<Patch> get patches => UnmodifiableListView(_patches);
@@ -47,12 +48,8 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   /// Runs a new migration on [url] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
-  ///
-  /// Any warnings encountered for missing dependencies will be added to
-  /// [missingDependencies].
-  Map<Uri, String> run(Uri url, List<String> missingDependencies) {
+  Map<Uri, String> run(Uri url) {
     visitStylesheet(parseStylesheet(url));
-    missingDependencies.addAll(this.missingDependencies);
     return _migrated;
   }
 
@@ -75,20 +72,15 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   }
 
   /// Visits the stylesheet at [dependency], resolved relative to [source].
-  ///
-  /// This returns true if the dependency is successfully visited and false
-  /// otherwise.
   @protected
-  bool visitDependency(Uri dependency, Uri source, [FileSpan context]) {
+  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
     var url = source.resolveUri(dependency);
     var stylesheet = parseStylesheet(url);
-    if (stylesheet == null) {
-      missingDependencies.add('${p.prettyUri(url)} '
-          '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
-      return false;
+    if (stylesheet != null) {
+      visitStylesheet(stylesheet);
+    } else {
+      _missingDependencies[url] = context;
     }
-    visitStylesheet(stylesheet);
-    return true;
   }
 
   /// Returns the migrated contents of this file, or null if the file does not

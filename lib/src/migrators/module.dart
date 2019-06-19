@@ -34,8 +34,7 @@ class ModuleMigrator extends Migrator {
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
-    var migrated =
-        _ModuleMigrationVisitor().run(entrypoint, missingDependencies);
+    var migrated = _ModuleMigrationVisitor().run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
     }
@@ -106,6 +105,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var uses = _additionalUseRules
         .map((use) => '@use "$use"$_semicolonIfNotIndented\n');
     return uses.join() + results;
+  }
+
+  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  @override
+  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
+    var url = source.resolveUri(dependency);
+    var stylesheet = parseStylesheet(url);
+    if (stylesheet == null) {
+      throw MigrationException(
+          "Error: Could not find Sass file at '${p.prettyUri(url)}'.",
+          span: context);
+    }
+
+    visitStylesheet(stylesheet);
   }
 
   /// Stores per-file state before visiting [node] and restores it afterwards.
@@ -271,11 +284,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
-    if (!visitDependency(Uri.parse(import.url), _currentUrl, import.span)) {
-      throw MigrationException(
-          "Error: Could not find Sass file at '${import.url}'.",
-          span: import.span);
-    }
+    visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
     // Pass the variables that were configured by the importing file to `with`,
