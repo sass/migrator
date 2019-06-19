@@ -36,9 +36,13 @@ More info: https://sass-lang.com/d/slash-div""";
   bool get isPessimistic => argResults['pessimistic'] as bool;
 
   @override
-  Map<Uri, String> migrateFile(Uri entrypoint) =>
-      _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies)
-          .run(entrypoint);
+  Map<Uri, String> migrateFile(Uri entrypoint) {
+    var visitor =
+        _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies);
+    var result = visitor.run(entrypoint);
+    missingDependencies.addAll(visitor.missingDependencies);
+    return result;
+  }
 }
 
 class _DivisionMigrationVisitor extends MigrationVisitor {

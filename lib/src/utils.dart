@@ -25,7 +25,8 @@ Uri canonicalize(Uri url) => _filesystemImporter.canonicalize(url);
 
 /// Parses the file at [url] into a stylesheet.
 Stylesheet parseStylesheet(Uri url) {
-  var canonicalUrl = _filesystemImporter.canonicalize(url);
+  var canonicalUrl = canonicalize(url);
+  if (canonicalUrl == null) return null;
   var result = _filesystemImporter.load(canonicalUrl);
   return Stylesheet.parse(result.contents, result.syntax, url: canonicalUrl);
 }
@@ -58,9 +59,13 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) {
       span.file.span(span.start.offset + start, span.start.offset + end), "");
 }
 
-/// Emits a warning with [message] and [context];
-void emitWarning(String message, FileSpan context) {
-  print(context.message("WARNING - $message"));
+/// Emits a warning with [message] and optionally [context];
+void emitWarning(String message, [FileSpan context]) {
+  if (context == null) {
+    print("WARNING - $message");
+  } else {
+    print(context.message("WARNING - $message"));
+  }
 }
 
 /// An exception thrown by a migrator.
