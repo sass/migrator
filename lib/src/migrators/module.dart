@@ -59,6 +59,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// expression after being declared.
   final _referencedVariables = <VariableDeclaration>{};
 
+  /// Set of stylesheets currently being migrated.
+  ///
+  /// Used to ensure that a dependency declaring a variable that an upstream
+  /// stylesheet already declared is not treated as reassignment (since that
+  /// would cause a circular dependency).
+  final _upstreamStylesheets = <Uri>{};
+
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
@@ -135,6 +142,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _additionalUseRules = oldAdditionalUseRules;
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
+  }
+
+  /// Visits each of [node]'s expressions and children.
+  ///
+  /// All of [node]'s arguments are declared as local variables in a new scope.
+  @override
+  void visitCallableDeclaration(CallableDeclaration node) {
+    _localScope = LocalScope(_localScope);
+    for (var argument in node.arguments.arguments) {
+      _localScope.variables.add(argument.name);
+      if (argument.defaultValue != null) visitExpression(argument.defaultValue);
+    }
+    super.visitChildren(node);
+    _localScope = _localScope.parent;
   }
 
   /// Visits the children of [node] with a local scope.
@@ -284,7 +305,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
+    _upstreamStylesheets.add(_currentUrl);
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
+    _upstreamStylesheets.remove(_currentUrl);
     _namespaces[_lastUrl] = namespaceForPath(import.url);
 
     // Pass the variables that were configured by the importing file to `with`,
@@ -389,10 +412,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
     if (_localScope == null || node.isGlobal) {
-      if (node.isGuarded &&
-          _globalVariables.containsKey(node.name) &&
-          _globalVariables[node.name].span.sourceUrl != _currentUrl) {
-        _configuredVariables.add(_globalVariables[node.name]);
+      var existingNode = _globalVariables[node.name];
+      var originalUrl = existingNode?.span?.sourceUrl;
+      if (existingNode != null && originalUrl != _currentUrl) {
+        if (node.isGuarded) {
+          _configuredVariables.add(existingNode);
+        } else if (!_upstreamStylesheets.contains(originalUrl)) {
+          // This declaration reassigns a variable in another module. Since we
+          // don't care about the actual value of the variable while migrating,
+          // we leave the node in _globalVariables as-is, so that future
+          // references namespace based on the original declaration, not this
+          // reassignment.
+          var namespace = _namespaceForNode(existingNode);
+          var afterDollarSign = node.span.start.offset + 1;
+          addPatch(Patch(node.span.file.span(afterDollarSign, afterDollarSign),
+              '$namespace.'));
+          return;
+        }
       }
       _globalVariables[node.name] = node;
     } else {
