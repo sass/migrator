@@ -41,18 +41,11 @@ class ModuleMigrator extends Migrator {
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
-    var prefixToRemove = argResults['remove-prefix'] as String;
-    var migrated =
-        _ModuleMigrationVisitor(prefixToRemove: prefixToRemove).run(entrypoint);
+    var migrated = _ModuleMigrationVisitor(
+            prefixToRemove: argResults['remove-prefix'] as String)
+        .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
-    }
-    if (prefixToRemove != null) {
-      var filenameParts = entrypoint.pathSegments.last.split('.');
-      filenameParts.removeLast();
-      var basename = filenameParts.join('.');
-      var import = entrypoint.resolve('./$basename.import.scss');
-      migrated[import] = '@forward "$basename" as $prefixToRemove*;\n';
     }
     return migrated;
   }
