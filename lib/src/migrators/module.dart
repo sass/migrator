@@ -197,7 +197,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
     _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
-      addPatch(Patch(node.name.span, "$namespace.$name"));
+      var ns = namespace == null ? "" : "$namespace.";
+      addPatch(Patch(node.name.span, "$ns$name"));
     });
     visitArgumentInvocation(node.arguments);
 
@@ -218,14 +219,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
         addPatch(Patch(span, name));
         var beforeParen = node.span.end.offset - 1;
-        addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
-            ', \$module: "$namespace"'));
+        if (namespace != null) {
+          addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
+              ', \$module: "$namespace"'));
+        }
       });
     }
   }
 
-  /// Calls [patcher] when the function [node] with name [name] requires a
-  /// namespace and adds a new use rule if necessary.
+  /// Calls [patcher] when the function [node] with name [originalName] requires
+  /// a namespace and/or a new name and adds a new use rule if necessary.
   ///
   /// When the function is a color function that's not present in the module
   /// system (like `lighten`), this also migrates its `$amount` argument to the
@@ -235,18 +238,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// when namespaced, and the namespace itself. The name will match the name
   /// provided to the outer function except for built-in functions whose name
   /// within a module differs from its original name.
-  void _patchNamespaceForFunction(FunctionExpression node, String name,
+  void _patchNamespaceForFunction(FunctionExpression node, String originalName,
       void patcher(String name, String namespace)) {
-    if (name == null) return;
-    if (_localScope?.isLocalFunction(name) ?? false) return;
+    if (originalName == null) return;
+    if (_localScope?.isLocalFunction(originalName) ?? false) return;
+
+    var name = _unprefix(originalName) ?? originalName;
 
     var namespace = _globalFunctions.containsKey(name)
         ? _namespaceForNode(_globalFunctions[name])
         : null;
 
-    if (namespace == null) {
-      if (!builtInFunctionModules.containsKey(name)) return;
-
+    if (namespace == null && builtInFunctionModules.containsKey(name)) {
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
       if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
@@ -266,7 +269,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       _additionalUseRules.add("sass:$namespace");
     }
-    if (namespace != null) patcher(name, namespace);
+    if (namespace != null || name != originalName) patcher(name, namespace);
   }
 
   /// Given a named argument [arg], returns a span from the start of the name
@@ -384,13 +387,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
     if (_localScope?.isLocalMixin(node.name) ?? false) return;
-    if (!_globalMixins.containsKey(node.name)) return;
-    var namespace = _namespaceForNode(_globalMixins[node.name]);
-    if (namespace == null) return;
+    var name = _unprefix(node.name);
+    if (!_globalMixins.containsKey(name)) return;
+    var namespace = _namespaceForNode(_globalMixins[name]);
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
     var nameSpan = node.span.file.span(startName, endName);
-    addPatch(Patch(nameSpan, "$namespace.${node.name}"));
+    if (namespace == null) {
+      if (name != node.name) addPatch(Patch(nameSpan, name));
+    } else {
+      addPatch(Patch(nameSpan, "$namespace.$name"));
+    }
   }
 
   /// Declares the mixin within the current scope before visiting it.
@@ -409,24 +416,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Adds a namespace to any variable that requires it.
   @override
-  visitVariableExpression(VariableExpression node) {
-    var name = _unprefix(node.name) ?? node.name;
-    var namespace = _findNamespaceForVariable(name);
-    if (namespace == null && name == node.name) return;
+  void visitVariableExpression(VariableExpression node) {
+    if (_localScope?.isLocalVariable(node.name) ?? false) return;
+    var name = _unprefix(node.name);
+    if (!_globalVariables.containsKey(name)) return;
+    _referencedVariables.add(_globalVariables[name]);
+    var namespace = _namespaceForNode(_globalVariables[name]);
     if (namespace == null) {
-      addPatch(Patch(node.span, "\$$name"));
+      if (name != node.name) addPatch(Patch(node.span, "\$$name"));
     } else {
       addPatch(Patch(node.span, "\$$namespace.$name"));
     }
-  }
-
-  String _findNamespaceForVariable(String name) {
-    if (_localScope?.isLocalVariable(name) ?? false) {
-      return null;
-    }
-    if (!_globalVariables.containsKey(name)) return null;
-    _referencedVariables.add(_globalVariables[name]);
-    return _namespaceForNode(_globalVariables[name]);
   }
 
   /// Declares a variable within the current scope before visiting it.
@@ -439,13 +439,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
-    var name = _unprefix(node.name);
-    if (name != node.name) {
-      addPatch(
-          patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
-    }
     if (_localScope == null || node.isGlobal) {
-      var existingNode = _globalVariables[node.name];
+      var name = _unprefix(node.name);
+      if (name != node.name) {
+        addPatch(
+            patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
+      }
+      var existingNode = _globalVariables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
       if (existingNode != null && originalUrl != _currentUrl) {
         if (node.isGuarded) {
@@ -465,7 +465,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       _globalVariables[name] = node;
     } else {
-      _localScope.variables.add(name);
+      _localScope.variables.add(node.name);
     }
   }
 
@@ -473,7 +473,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
     if (_localScope == null) {
-      _globalMixins[node.name] = node;
+      var name = _unprefix(node.name);
+      if (name != node.name) {
+        var nameStart = node.span.text
+            .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
+        addPatch(patchDelete(node.span,
+            start: nameStart, end: nameStart + prefixToRemove.length));
+      }
+      _globalMixins[name] = node;
     } else {
       _localScope.mixins.add(node.name);
     }
@@ -483,7 +490,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
     if (_localScope == null) {
-      _globalFunctions[node.name] = node;
+      var name = _unprefix(node.name);
+      if (name != node.name) {
+        var nameStart = node.span.text.indexOf(node.name, '@function'.length);
+        addPatch(patchDelete(node.span,
+            start: nameStart, end: nameStart + prefixToRemove.length));
+      }
+      _globalFunctions[name] = node;
     } else {
       _localScope.functions.add(node.name);
     }

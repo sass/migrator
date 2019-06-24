@@ -5,9 +5,35 @@
 $lib-a: 5;
 $lib_b: $lib-a + 2;
 
+@function lib-fn($lib-local) {
+  @return $lib-local;
+}
+$result: lib-fn(0);
+
+@mixin lib-mixin {
+  lib-property: lib-value;
+}
+
+lib-selector {
+  @include lib-mixin;
+}
+
 <==> output/entrypoint.scss
 $a: 5;
 $b: $a + 2;
+
+@function fn($lib-local) {
+  @return $lib-local;
+}
+$result: fn(0);
+
+@mixin mixin {
+  lib-property: lib-value;
+}
+
+lib-selector {
+  @include mixin;
+}
 
 <==> output/entrypoint.import.scss
 @forward "entrypoint" as lib-*;
