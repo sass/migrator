@@ -100,6 +100,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// When at the top level of the stylesheet, this will be null.
   LocalScope _localScope;
 
+  /// The prefix to be removed from any members with it, or null if no prefix
+  /// should be removed.
   final String prefixToRemove;
 
   /// Constructs a new module migration visitor.
@@ -190,8 +192,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
     _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
-      var ns = namespace == null ? "" : "$namespace.";
-      addPatch(Patch(node.name.span, "$ns$name"));
+      addPatch(
+          Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
     });
     visitArgumentInvocation(node.arguments);
 
@@ -380,8 +382,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
     if (_localScope?.isLocalMixin(node.name) ?? false) return;
+
     var name = _unprefix(node.name);
     if (!_globalMixins.containsKey(name)) return;
+
     var namespace = _namespaceForNode(_globalMixins[name]);
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
@@ -411,8 +415,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitVariableExpression(VariableExpression node) {
     if (_localScope?.isLocalVariable(node.name) ?? false) return;
+
     var name = _unprefix(node.name);
     if (!_globalVariables.containsKey(name)) return;
+
     _referencedVariables.add(_globalVariables[name]);
     var namespace = _namespaceForNode(_globalVariables[name]);
     if (namespace == null) {
