@@ -12,7 +12,8 @@ import 'package:source_span/source_span.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/importer/filesystem.dart';
-export 'package:sass/src/utils.dart' show normalizedMap, normalizedSet;
+export 'package:sass/src/utils.dart'
+    show normalizedMap, normalizedSet, equalsIgnoreSeparator;
 
 import 'patch.dart';
 
@@ -53,11 +54,12 @@ Patch patchAfter(AstNode node, String text) {
 ///
 /// By default, this deletes the entire span. If [start] and/or [end] are
 /// provided, this deletes only the portion of the span within that range.
-Patch patchDelete(FileSpan span, {int start = 0, int end}) {
-  end ??= span.length;
-  return Patch(
-      span.file.span(span.start.offset + start, span.start.offset + end), "");
-}
+Patch patchDelete(FileSpan span, {int start = 0, int end}) =>
+    Patch(subspan(span, start: start, end: end), "");
+
+/// Returns a subsection of [span].
+FileSpan subspan(FileSpan span, {int start = 0, int end}) => span.file
+    .span(span.start.offset + start, span.start.offset + (end ?? span.length));
 
 /// Emits a warning with [message] and optionally [context];
 void emitWarning(String message, [FileSpan context]) {

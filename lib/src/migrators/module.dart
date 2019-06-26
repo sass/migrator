@@ -4,6 +4,8 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:args/args.dart';
+
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
@@ -25,6 +27,11 @@ class ModuleMigrator extends Migrator {
   final name = "module";
   final description = "Migrates stylesheets to the new module system.";
 
+  @override
+  final argParser = ArgParser()
+    ..addOption('remove-prefix',
+        abbr: 'p', help: 'Removes the provided prefix from members.');
+
   // Hide this until it's finished and the module system is launched.
   final hidden = true;
 
@@ -34,7 +41,9 @@ class ModuleMigrator extends Migrator {
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
-    var migrated = _ModuleMigrationVisitor().run(entrypoint);
+    var migrated = _ModuleMigrationVisitor(
+            prefixToRemove: argResults['remove-prefix'] as String)
+        .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
     }
@@ -91,12 +100,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// When at the top level of the stylesheet, this will be null.
   LocalScope _localScope;
 
+  /// The prefix to be removed from any members with it, or null if no prefix
+  /// should be removed.
+  final String prefixToRemove;
+
   /// Constructs a new module migration visitor.
   ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor() : super(migrateDependencies: true);
+  _ModuleMigrationVisitor({this.prefixToRemove})
+      : super(migrateDependencies: true);
 
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
@@ -178,7 +192,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
     _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
-      addPatch(Patch(node.name.span, "$namespace.$name"));
+      addPatch(
+          Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
     });
     visitArgumentInvocation(node.arguments);
 
@@ -199,14 +214,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
         addPatch(Patch(span, name));
         var beforeParen = node.span.end.offset - 1;
-        addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
-            ', \$module: "$namespace"'));
+        if (namespace != null) {
+          addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
+              ', \$module: "$namespace"'));
+        }
       });
     }
   }
 
-  /// Calls [patcher] when the function [node] with name [name] requires a
-  /// namespace and adds a new use rule if necessary.
+  /// Calls [patcher] when the function [node] with name [originalName] requires
+  /// a namespace and/or a new name and adds a new use rule if necessary.
   ///
   /// When the function is a color function that's not present in the module
   /// system (like `lighten`), this also migrates its `$amount` argument to the
@@ -216,18 +233,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// when namespaced, and the namespace itself. The name will match the name
   /// provided to the outer function except for built-in functions whose name
   /// within a module differs from its original name.
-  void _patchNamespaceForFunction(FunctionExpression node, String name,
+  void _patchNamespaceForFunction(FunctionExpression node, String originalName,
       void patcher(String name, String namespace)) {
-    if (name == null) return;
-    if (_localScope?.isLocalFunction(name) ?? false) return;
+    if (originalName == null) return;
+    if (_localScope?.isLocalFunction(originalName) ?? false) return;
+
+    var name = _unprefix(originalName) ?? originalName;
 
     var namespace = _globalFunctions.containsKey(name)
         ? _namespaceForNode(_globalFunctions[name])
         : null;
 
-    if (namespace == null) {
-      if (!builtInFunctionModules.containsKey(name)) return;
-
+    if (namespace == null && builtInFunctionModules.containsKey(name)) {
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
       if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
@@ -247,7 +264,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       _additionalUseRules.add("sass:$namespace");
     }
-    if (namespace != null) patcher(name, namespace);
+    if (namespace != null || name != originalName) patcher(name, namespace);
   }
 
   /// Given a named argument [arg], returns a span from the start of the name
@@ -365,13 +382,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
     if (_localScope?.isLocalMixin(node.name) ?? false) return;
-    if (!_globalMixins.containsKey(node.name)) return;
-    var namespace = _namespaceForNode(_globalMixins[node.name]);
-    if (namespace == null) return;
+
+    var name = _unprefix(node.name);
+    if (!_globalMixins.containsKey(name)) return;
+
+    var namespace = _namespaceForNode(_globalMixins[name]);
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
     var nameSpan = node.span.file.span(startName, endName);
-    addPatch(Patch(nameSpan, "$namespace.${node.name}"));
+    if (namespace == null) {
+      if (name != node.name) addPatch(Patch(nameSpan, name));
+    } else {
+      addPatch(Patch(nameSpan, "$namespace.$name"));
+    }
   }
 
   /// Declares the mixin within the current scope before visiting it.
@@ -390,15 +413,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Adds a namespace to any variable that requires it.
   @override
-  visitVariableExpression(VariableExpression node) {
-    if (_localScope?.isLocalVariable(node.name) ?? false) {
-      return;
+  void visitVariableExpression(VariableExpression node) {
+    if (_localScope?.isLocalVariable(node.name) ?? false) return;
+
+    var name = _unprefix(node.name);
+    if (!_globalVariables.containsKey(name)) return;
+
+    _referencedVariables.add(_globalVariables[name]);
+    var namespace = _namespaceForNode(_globalVariables[name]);
+    if (namespace == null) {
+      if (name != node.name) addPatch(Patch(node.span, "\$$name"));
+    } else {
+      addPatch(Patch(node.span, "\$$namespace.$name"));
     }
-    if (!_globalVariables.containsKey(node.name)) return;
-    _referencedVariables.add(_globalVariables[node.name]);
-    var namespace = _namespaceForNode(_globalVariables[node.name]);
-    if (namespace == null) return;
-    addPatch(Patch(node.span, "\$$namespace.${node.name}"));
   }
 
   /// Declares a variable within the current scope before visiting it.
@@ -412,7 +439,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
     if (_localScope == null || node.isGlobal) {
-      var existingNode = _globalVariables[node.name];
+      var name = _unprefix(node.name);
+      if (name != node.name) {
+        addPatch(
+            patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
+      }
+      var existingNode = _globalVariables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
       if (existingNode != null && originalUrl != _currentUrl) {
         if (node.isGuarded) {
@@ -430,7 +462,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           return;
         }
       }
-      _globalVariables[node.name] = node;
+      _globalVariables[name] = node;
     } else {
       _localScope.variables.add(node.name);
     }
@@ -440,7 +472,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
     if (_localScope == null) {
-      _globalMixins[node.name] = node;
+      var name = _unprefix(node.name);
+      if (name != node.name) {
+        var nameStart = node.span.text
+            .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
+        addPatch(patchDelete(node.span,
+            start: nameStart, end: nameStart + prefixToRemove.length));
+      }
+      _globalMixins[name] = node;
     } else {
       _localScope.mixins.add(node.name);
     }
@@ -450,10 +489,26 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
     if (_localScope == null) {
-      _globalFunctions[node.name] = node;
+      var name = _unprefix(node.name);
+      if (name != node.name) {
+        var nameStart = node.span.text.indexOf(node.name, '@function'.length);
+        addPatch(patchDelete(node.span,
+            start: nameStart, end: nameStart + prefixToRemove.length));
+      }
+      _globalFunctions[name] = node;
     } else {
       _localScope.functions.add(node.name);
     }
+  }
+
+  /// Returns [name] with [prefixToRemove] removed.
+  String _unprefix(String name) {
+    if (prefixToRemove == null || prefixToRemove.length > name.length) {
+      return name;
+    }
+    var startOfName = name.substring(0, prefixToRemove.length);
+    if (!equalsIgnoreSeparator(prefixToRemove, startOfName)) return name;
+    return name.substring(prefixToRemove.length);
   }
 
   /// Finds the namespace for the stylesheet containing [node], adding a new use
