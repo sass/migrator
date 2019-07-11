@@ -26,25 +26,29 @@ void _js({@required bool release}) {
   ensureBuild();
   var destination = File('build/sass_migrator.dart.js');
 
-  var args = [
-    '--server-mode',
-    '-Dnode=true',
-    '-Dversion=$version',
-    '-Ddart-version=$dartVersion',
-  ];
-  if (release) {
-    // We use O4 because:
-    //
-    // * We don't care about the string representation of types.
-    // * We expect our test coverage to ensure that nothing throws subtypes of
-    //   Error.
-    // * We thoroughly test edge cases in user input.
-    args..add("-O4")..add("--fast-startup");
-  }
-
   Dart2js.compile(File('bin/sass_migrator.dart'),
-      outFile: destination, extraArgs: args);
-  var text = destination.readAsStringSync();
+      outFile: destination,
+      extraArgs: [
+        '--categories=Server',
+        '-Dnode=true',
+        '-Dversion=$version',
+        '-Ddart-version=$dartVersion',
+        // We use O4 because:
+        //
+        // * We don't care about the string representation of types.
+        // * We expect our test coverage to ensure that nothing throws subtypes of
+        //   Error.
+        // * We thoroughly test edge cases in user input.
+        if (release) ...["-O4", "--fast-startup"]
+      ]);
+
+  var text = destination
+      .readAsStringSync()
+      // Some dependencies dynamically invoke `require()`, which makes Webpack
+      // complain. We replace those with direct references to the modules, which
+      // we load explicitly after the preamble.
+      .replaceAllMapped(RegExp(r'self\.require\("([a-zA-Z0-9_-]+)"\)'),
+          (match) => "self.${match[1]}");
 
   if (release) {
     // We don't ship the source map, so remove the source map comment.
@@ -52,8 +56,16 @@ void _js({@required bool release}) {
         text.replaceFirst(RegExp(r"\n*//# sourceMappingURL=[^\n]+\n*$"), "\n");
   }
 
-  destination.writeAsStringSync(
-      "#!/usr/bin/env node\n" + preamble.getPreamble(minified: release) + text);
+  // Reassigning require() makes Webpack complain.
+  var preambleText =
+      preamble.getPreamble().replaceFirst("self.require = require;\n", "");
+
+  destination.writeAsStringSync("""
+#!/usr/bin/env node
+$preambleText
+self.fs = require("fs");
+self.path = require("path");
+$text""");
 }
 
 @Task('Build a pure-JS dev-mode npm package.')
