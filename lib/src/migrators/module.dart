@@ -20,7 +20,7 @@ import 'package:sass_migrator/src/patch.dart';
 import 'package:sass_migrator/src/utils.dart';
 
 import 'module/built_in_functions.dart';
-import 'module/local_scope.dart';
+import 'module/scope.dart';
 
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
@@ -52,17 +52,9 @@ class ModuleMigrator extends Migrator {
 }
 
 class _ModuleMigrationVisitor extends MigrationVisitor {
-  /// Global variables defined at any time during the migrator run.
-  ///
-  /// We store all declarations instead of just the most recent one for use in
-  /// detecting configurable variables.
-  var _globalVariables = normalizedMap<VariableDeclaration>();
-
-  /// Global mixins defined at any time during the migrator run.
-  var _globalMixins = normalizedMap<MixinRule>();
-
-  /// Global functions defined at any time during the migrator run.
-  var _globalFunctions = normalizedMap<FunctionRule>();
+  /// The scope containing all variables, mixins, and functions defined in the
+  /// current context.
+  Scope _scope = Scope(null);
 
   /// Stores whether a given VariableDeclaration has been referenced in an
   /// expression after being declared.
@@ -78,7 +70,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
-  LocalScope _nestedImportMembers;
+  Scope _nestedImportMembers;
 
   /// Set of additional use rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
@@ -99,11 +91,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// The URL of the last stylesheet that was completely migrated.
   Uri _lastUrl;
-
-  /// Local variables, mixins, and functions for this migration.
-  ///
-  /// When at the top level of the stylesheet, this will be null.
-  LocalScope _localScope;
 
   /// The prefix to be removed from any members with it, or null if no prefix
   /// should be removed.
@@ -159,7 +146,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _additionalUseRules = Set();
     _currentUrl = node.span.sourceUrl;
     _useAllowed = true;
-    _nestedImportMembers = LocalScope(null);
+    _nestedImportMembers = Scope(null);
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
     _additionalUseRules = oldAdditionalUseRules;
@@ -174,13 +161,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// All of [node]'s arguments are declared as local variables in a new scope.
   @override
   void visitCallableDeclaration(CallableDeclaration node) {
-    _localScope = LocalScope(_localScope);
+    _scope = Scope(_scope);
     for (var argument in node.arguments.arguments) {
-      _localScope.variables[argument.name] = null;
+      _scope.variables[argument.name] = null;
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
     super.visitChildren(node);
-    _localScope = _localScope.parent;
+    _scope = _scope.parent;
   }
 
   /// Visits the children of [node] with a local scope.
@@ -193,9 +180,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       super.visitChildren(node);
       return;
     }
-    _localScope = LocalScope(_localScope);
+    _scope = Scope(_scope);
     super.visitChildren(node);
-    _localScope = _localScope.parent;
+    _scope = _scope.parent;
   }
 
   /// Adds a namespace to any function call that requires it.
@@ -247,12 +234,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchNamespaceForFunction(FunctionExpression node, String originalName,
       void patcher(String name, String namespace)) {
     if (originalName == null) return;
-    if (_localScope?.isLocalFunction(originalName) ?? false) return;
+    if (_scope.isLocalFunction(originalName) ?? false) return;
 
     var name = _unprefix(originalName) ?? originalName;
 
-    var namespace = _globalFunctions.containsKey(name)
-        ? _namespaceForNode(_globalFunctions[name])
+    var namespace = _scope.global.functions.containsKey(name)
+        ? _namespaceForNode(_scope.global.functions[name])
         : null;
 
     if (namespace == null && builtInFunctionModules.containsKey(name)) {
@@ -326,43 +313,22 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Migration of @import rule with multiple imports not supported.");
     }
     var import = node.imports.first as DynamicImport;
-    var migrateToLoadCss = _localScope != null || !_useAllowed;
+    var migrateToLoadCss = _scope.parent != null || !_useAllowed;
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
     _upstreamStylesheets.add(_currentUrl);
 
-    var oldLocalScope = _localScope;
-    var oldGlobalFunctions = _globalFunctions;
-    var oldGlobalMixins = _globalMixins;
-    var oldGlobalVariables = _globalVariables;
+    var oldScope = _scope;
     if (migrateToLoadCss) {
-      _globalFunctions = {..._globalFunctions, ..._localScope.functions};
-      _globalMixins = {..._globalMixins, ..._localScope.mixins};
-      _globalVariables = {..._globalVariables, ..._localScope.variables};
-      _localScope = null;
+      _scope = _scope.flatten();
     }
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _upstreamStylesheets.remove(_currentUrl);
     if (migrateToLoadCss) {
-      _nestedImportMembers.functions.addAll({
-        for (var name in _globalFunctions.keys)
-          if (!oldGlobalFunctions.containsKey(name))
-            name: _globalFunctions[name]
-      });
-      _nestedImportMembers.mixins.addAll({
-        for (var name in _globalMixins.keys)
-          if (!oldGlobalMixins.containsKey(name)) name: _globalMixins[name]
-      });
-      _nestedImportMembers.variables.addAll({
-        for (var name in _globalVariables.keys)
-          if (!oldGlobalVariables.containsKey(name))
-            name: _globalVariables[name]
-      });
-      _localScope = oldLocalScope;
-      _globalFunctions = oldGlobalFunctions;
-      _globalMixins = oldGlobalMixins;
-      _globalVariables = oldGlobalVariables;
+      _nestedImportMembers.insertFrom(_scope.global,
+          excluding: oldScope.global);
+      _scope = oldScope;
     } else {
       _namespaces[_lastUrl] = namespaceForPath(import.url);
     }
@@ -437,12 +403,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     _useAllowed = false;
     super.visitIncludeRule(node);
-    if (_localScope?.isLocalMixin(node.name) ?? false) return;
+    if (_scope.isLocalMixin(node.name) ?? false) return;
 
     var name = _unprefix(node.name);
-    if (!_globalMixins.containsKey(name)) return;
+    if (!_scope.global.mixins.containsKey(name)) return;
 
-    var namespace = _namespaceForNode(_globalMixins[name]);
+    var namespace = _namespaceForNode(_scope.global.mixins[name]);
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
     var nameSpan = node.span.file.span(startName, endName);
@@ -471,13 +437,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
-    if (_localScope?.isLocalVariable(node.name) ?? false) return;
+    if (_scope.isLocalVariable(node.name) ?? false) return;
 
     var name = _unprefix(node.name);
-    if (!_globalVariables.containsKey(name)) return;
+    if (!_scope.global.variables.containsKey(name)) return;
 
-    _referencedVariables.add(_globalVariables[name]);
-    var namespace = _namespaceForNode(_globalVariables[name]);
+    _referencedVariables.add(_scope.global.variables[name]);
+    var namespace = _namespaceForNode(_scope.global.variables[name]);
     if (namespace == null) {
       if (name != node.name) addPatch(Patch(node.span, "\$$name"));
     } else {
@@ -495,13 +461,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
-    if (_localScope == null || node.isGlobal) {
-      var name = _unprefix(node.name);
+    var name = node.name;
+    if (_scope.parent == null || node.isGlobal) {
+      name = _unprefix(node.name);
       if (name != node.name) {
         addPatch(
             patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
       }
-      var existingNode = _globalVariables[name];
+      var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
       if (existingNode != null && originalUrl != _currentUrl) {
         if (node.isGuarded) {
@@ -509,7 +476,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         } else if (!_upstreamStylesheets.contains(originalUrl)) {
           // This declaration reassigns a variable in another module. Since we
           // don't care about the actual value of the variable while migrating,
-          // we leave the node in _globalVariables as-is, so that future
+          // we leave the node in _scope.global.variables as-is, so that future
           // references namespace based on the original declaration, not this
           // reassignment.
           var namespace = _namespaceForNode(existingNode);
@@ -519,43 +486,39 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           return;
         }
       }
-      _globalVariables[name] = node;
-    } else {
-      _localScope.variables[node.name] = node;
     }
+    _scope.variables[name] = node;
   }
 
   /// Declares a mixin within this stylesheet, in the current local scope if
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
-    if (_localScope == null) {
-      var name = _unprefix(node.name);
+    var name = node.name;
+    if (_scope.parent == null) {
+      name = _unprefix(node.name);
       if (name != node.name) {
         var nameStart = node.span.text
             .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
         addPatch(patchDelete(node.span,
             start: nameStart, end: nameStart + prefixToRemove.length));
       }
-      _globalMixins[name] = node;
-    } else {
-      _localScope.mixins[node.name] = node;
     }
+    _scope.mixins[name] = node;
   }
 
   /// Declares a function within this stylesheet, in the current local scope if
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
-    if (_localScope == null) {
-      var name = _unprefix(node.name);
+    var name = node.name;
+    if (_scope.parent == null) {
+      name = _unprefix(node.name);
       if (name != node.name) {
         var nameStart = node.span.text.indexOf(node.name, '@function'.length);
         addPatch(patchDelete(node.span,
             start: nameStart, end: nameStart + prefixToRemove.length));
       }
-      _globalFunctions[name] = node;
-    } else {
-      _localScope.functions[node.name] = node;
     }
+    _scope.functions[name] = node;
   }
 
   /// Returns [name] with [prefixToRemove] removed.
