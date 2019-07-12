@@ -56,13 +56,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// We store all declarations instead of just the most recent one for use in
   /// detecting configurable variables.
-  final _globalVariables = normalizedMap<VariableDeclaration>();
+  var _globalVariables = normalizedMap<VariableDeclaration>();
 
   /// Global mixins defined at any time during the migrator run.
-  final _globalMixins = normalizedMap<MixinRule>();
+  var _globalMixins = normalizedMap<MixinRule>();
 
   /// Global functions defined at any time during the migrator run.
-  final _globalFunctions = normalizedMap<FunctionRule>();
+  var _globalFunctions = normalizedMap<FunctionRule>();
 
   /// Stores whether a given VariableDeclaration has been referenced in an
   /// expression after being declared.
@@ -176,7 +176,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitCallableDeclaration(CallableDeclaration node) {
     _localScope = LocalScope(_localScope);
     for (var argument in node.arguments.arguments) {
-      _localScope.variables.add(argument.name);
+      _localScope.variables[argument.name] = null;
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
     super.visitChildren(node);
@@ -331,16 +331,38 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
     _upstreamStylesheets.add(_currentUrl);
+
+    var oldLocalScope = _localScope;
+    var oldGlobalFunctions = _globalFunctions;
+    var oldGlobalMixins = _globalMixins;
+    var oldGlobalVariables = _globalVariables;
     if (migrateToLoadCss) {
-      _localScope = LocalScope(_localScope);
+      _globalFunctions = {..._globalFunctions, ..._localScope.functions};
+      _globalMixins = {..._globalMixins, ..._localScope.mixins};
+      _globalVariables = {..._globalVariables, ..._localScope.variables};
+      _localScope = null;
     }
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _upstreamStylesheets.remove(_currentUrl);
     if (migrateToLoadCss) {
-      _nestedImportMembers.functions.addAll(_localScope.functions);
-      _nestedImportMembers.mixins.addAll(_localScope.mixins);
-      _nestedImportMembers.variables.addAll(_localScope.variables);
-      _localScope = _localScope.parent;
+      _nestedImportMembers.functions.addAll({
+        for (var name in _globalFunctions.keys)
+          if (!oldGlobalFunctions.containsKey(name))
+            name: _globalFunctions[name]
+      });
+      _nestedImportMembers.mixins.addAll({
+        for (var name in _globalMixins.keys)
+          if (!oldGlobalMixins.containsKey(name)) name: _globalMixins[name]
+      });
+      _nestedImportMembers.variables.addAll({
+        for (var name in _globalVariables.keys)
+          if (!oldGlobalVariables.containsKey(name))
+            name: _globalVariables[name]
+      });
+      _localScope = oldLocalScope;
+      _globalFunctions = oldGlobalFunctions;
+      _globalMixins = oldGlobalMixins;
+      _globalVariables = oldGlobalVariables;
     } else {
       _namespaces[_lastUrl] = namespaceForPath(import.url);
     }
@@ -383,24 +405,26 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       } else {
         // TODO(jathak): Handle the case where the expression of this
         // declaration has already been patched.
-        addPatch(patchDelete(variable.span));
+        addPatch(
+            patchDelete(variable.span, start: -variable.span.start.column));
         var start = variable.span.end.offset;
         var end = start + _semicolonIfNotIndented.length;
         if (variable.span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(variable.span.file.span(start, end)));
-        configured.add("\$$name: ${variable.expression}");
+        var nameFormat = migrateToLoadCss ? '"$name"' : '\$$name';
+        configured.add("$nameFormat: ${variable.expression}");
       }
     }
     if (configured.length == 1) {
       configuration = " with (" + configured.first + ")";
     } else if (configured.isNotEmpty) {
-      var indent = ' ' * (node.span.start.column + 2);
+      var indent = ' ' * node.span.start.column;
       configuration =
-          " with (\n$indent" + configured.join(',\n$indent') + "\n)";
+          " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
     if (migrateToLoadCss) {
       _additionalUseRules.add('sass:meta');
-      configuration.replaceFirst(' with', r', $with:');
+      configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
           '@include meta.load-css(${import.span.text}$configuration)'));
     } else {
@@ -497,7 +521,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       _globalVariables[name] = node;
     } else {
-      _localScope.variables.add(node.name);
+      _localScope.variables[node.name] = node;
     }
   }
 
@@ -514,7 +538,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       _globalMixins[name] = node;
     } else {
-      _localScope.mixins.add(node.name);
+      _localScope.mixins[node.name] = node;
     }
   }
 
@@ -530,7 +554,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       _globalFunctions[name] = node;
     } else {
-      _localScope.functions.add(node.name);
+      _localScope.functions[node.name] = node;
     }
   }
 

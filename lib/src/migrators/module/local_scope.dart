@@ -6,6 +6,11 @@
 
 import 'package:sass_migrator/src/utils.dart';
 
+// The sass package's API is not necessarily stable. It is being imported with
+// the Sass team's explicit knowledge and approval. See
+// https://github.com/sass/dart-sass/issues/236.
+import 'package:sass/src/ast/sass.dart';
+
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.
 class LocalScope {
@@ -14,25 +19,25 @@ class LocalScope {
   final LocalScope parent;
 
   /// Variables defined in this scope.
-  final variables = normalizedSet();
+  final variables = normalizedMap<VariableDeclaration>();
 
   /// Mixins defined in this scope.
-  final mixins = normalizedSet();
+  final mixins = normalizedMap<MixinRule>();
 
   /// Functions defined in this scope.
-  final functions = normalizedSet();
+  final functions = normalizedMap<FunctionRule>();
 
   LocalScope(this.parent);
 
   /// Returns whether a variable [name] exists somewhere within this scope.
   bool isLocalVariable(String name) =>
-      variables.contains(name) || (parent?.isLocalVariable(name) ?? false);
+      variables.containsKey(name) || (parent?.isLocalVariable(name) ?? false);
 
   /// Returns whether a mixin [name] exists somewhere within this scope.
   bool isLocalMixin(String name) =>
-      variables.contains(name) || (parent?.isLocalMixin(name) ?? false);
+      variables.containsKey(name) || (parent?.isLocalMixin(name) ?? false);
 
   /// Returns whether a function [name] exists somewhere within this scope.
   bool isLocalFunction(String name) =>
-      variables.contains(name) || (parent?.isLocalFunction(name) ?? false);
+      variables.containsKey(name) || (parent?.isLocalFunction(name) ?? false);
 }
