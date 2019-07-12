@@ -78,6 +78,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
+  LocalScope _nestedImportMembers;
+
   /// Set of additional use rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
@@ -88,6 +90,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
   Set<VariableDeclaration> _configuredVariables;
+
+  /// Whether @use and @forward are allowed in the current context.
+  bool _useAllowed = true;
 
   /// The URL of the current stylesheet.
   Uri _currentUrl;
@@ -148,14 +153,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldNamespaces = _namespaces;
     var oldAdditionalUseRules = _additionalUseRules;
     var oldUrl = _currentUrl;
+    var oldUseAllowed = _useAllowed;
+    var oldNestedImportMembers = _nestedImportMembers;
     _namespaces = {};
     _additionalUseRules = Set();
     _currentUrl = node.span.sourceUrl;
+    _useAllowed = true;
+    _nestedImportMembers = LocalScope(null);
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
     _additionalUseRules = oldAdditionalUseRules;
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
+    _useAllowed = oldUseAllowed;
+    _nestedImportMembers = oldNestedImportMembers;
   }
 
   /// Visits each of [node]'s expressions and children.
@@ -297,6 +308,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares the function within the current scope before visiting it.
   @override
   void visitFunctionRule(FunctionRule node) {
+    _useAllowed = false;
     _declareFunction(node);
     super.visitFunctionRule(node);
   }
@@ -305,6 +317,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitImportRule(ImportRule node) {
     if (node.imports.first is StaticImport) {
+      _useAllowed = false;
       super.visitImportRule(node);
       return;
     }
@@ -313,19 +326,24 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Migration of @import rule with multiple imports not supported.");
     }
     var import = node.imports.first as DynamicImport;
-
-    if (_localScope != null) {
-      // TODO(jathak): Handle nested imports
-      return;
-    }
-    // TODO(jathak): Confirm that this import appears before other rules
+    var migrateToLoadCss = _localScope != null || !_useAllowed;
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
     _upstreamStylesheets.add(_currentUrl);
+    if (migrateToLoadCss) {
+      _localScope = LocalScope(_localScope);
+    }
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _upstreamStylesheets.remove(_currentUrl);
-    _namespaces[_lastUrl] = namespaceForPath(import.url);
+    if (migrateToLoadCss) {
+      _nestedImportMembers.functions.addAll(_localScope.functions);
+      _nestedImportMembers.mixins.addAll(_localScope.mixins);
+      _nestedImportMembers.variables.addAll(_localScope.variables);
+      _localScope = _localScope.parent;
+    } else {
+      _namespaces[_lastUrl] = namespaceForPath(import.url);
+    }
 
     // Pass the variables that were configured by the importing file to `with`,
     // and forward the rest and add them to `oldConfiguredVariables` because
@@ -343,6 +361,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _configuredVariables = oldConfiguredVariables;
 
     if (externallyConfiguredVariables.isNotEmpty) {
+      if (migrateToLoadCss) {
+        // TODO(jathak): Make this error message meaningful
+        throw MigrationException("Invalid nested import");
+      }
       addPatch(patchBefore(
           node,
           "@forward ${import.span.text} show " +
@@ -372,14 +394,24 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (configured.length == 1) {
       configuration = " with (" + configured.first + ")";
     } else if (configured.isNotEmpty) {
-      configuration = " with (\n  " + configured.join(',\n  ') + "\n)";
+      var indent = ' ' * (node.span.start.column + 2);
+      configuration =
+          " with (\n$indent" + configured.join(',\n$indent') + "\n)";
     }
-    addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
+    if (migrateToLoadCss) {
+      _additionalUseRules.add('sass:meta');
+      configuration.replaceFirst(' with', r', $with:');
+      addPatch(Patch(node.span,
+          '@include meta.load-css(${import.span.text}$configuration)'));
+    } else {
+      addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
+    }
   }
 
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
+    _useAllowed = false;
     super.visitIncludeRule(node);
     if (_localScope?.isLocalMixin(node.name) ?? false) return;
 
@@ -400,6 +432,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares the mixin within the current scope before visiting it.
   @override
   void visitMixinRule(MixinRule node) {
+    _useAllowed = false;
     _declareMixin(node);
     super.visitMixinRule(node);
   }
@@ -526,5 +559,89 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
     }
     return _namespaces[node.span.sourceUrl];
+  }
+
+  /// Disallows @use after @at-root rules.
+  @override
+  void visitAtRootRule(AtRootRule node) {
+    _useAllowed = false;
+    super.visitAtRootRule(node);
+  }
+
+  /// Disallows @use after at-rules other than @charset.
+  @override
+  void visitAtRule(AtRule node) {
+    if (node.name.asPlain == 'charset') _useAllowed = false;
+    super.visitAtRule(node);
+  }
+
+  /// Disallows @use after @debug rules.
+  @override
+  void visitDebugRule(DebugRule node) {
+    _useAllowed = false;
+    super.visitDebugRule(node);
+  }
+
+  /// Disallows @use after @each rules.
+  @override
+  void visitEachRule(EachRule node) {
+    _useAllowed = false;
+    super.visitEachRule(node);
+  }
+
+  /// Disallows @use after @error rules.
+  @override
+  void visitErrorRule(ErrorRule node) {
+    _useAllowed = false;
+    super.visitErrorRule(node);
+  }
+
+  /// Disallows @use after @for rules.
+  @override
+  void visitForRule(ForRule node) {
+    _useAllowed = false;
+    super.visitForRule(node);
+  }
+
+  /// Disallows @use after @if rules.
+  @override
+  void visitIfRule(IfRule node) {
+    _useAllowed = false;
+    super.visitIfRule(node);
+  }
+
+  /// Disallows @use after @media rules.
+  @override
+  void visitMediaRule(MediaRule node) {
+    _useAllowed = false;
+    super.visitMediaRule(node);
+  }
+
+  /// Disallows @use after style rules.
+  @override
+  void visitStyleRule(StyleRule node) {
+    _useAllowed = false;
+    super.visitStyleRule(node);
+  }
+
+  /// Disallows @use after @supports rules.
+  @override
+  void visitSupportsRule(SupportsRule node) {
+    _useAllowed = false;
+    super.visitSupportsRule(node);
+  }
+
+  /// Disallows @use after @warn rules.
+  @override
+  void visitWarnRule(WarnRule node) {
+    _useAllowed = false;
+    super.visitWarnRule(node);
+  }
+
+  /// Disallows @use after @while rules.
+  @override
+  void visitWhileRule(WhileRule node) {
+    _useAllowed = false;
+    super.visitWhileRule(node);
   }
 }
