@@ -70,8 +70,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
-  Scope _nestedImportMembers;
-
   /// Set of additional use rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
@@ -141,19 +139,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldAdditionalUseRules = _additionalUseRules;
     var oldUrl = _currentUrl;
     var oldUseAllowed = _useAllowed;
-    var oldNestedImportMembers = _nestedImportMembers;
     _namespaces = {};
     _additionalUseRules = Set();
     _currentUrl = node.span.sourceUrl;
     _useAllowed = true;
-    _nestedImportMembers = Scope(null);
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
     _additionalUseRules = oldAdditionalUseRules;
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
     _useAllowed = oldUseAllowed;
-    _nestedImportMembers = oldNestedImportMembers;
   }
 
   /// Visits each of [node]'s expressions and children.
@@ -189,6 +184,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
+    _scope.checkNestedImportFunction(node);
     _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
       addPatch(
           Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
@@ -326,9 +322,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _upstreamStylesheets.remove(_currentUrl);
     if (migrateToLoadCss) {
-      _nestedImportMembers.insertFrom(_scope.global,
-          excluding: oldScope.global);
+      oldScope.insertFrom(_scope.global);
       _scope = oldScope;
+      _scope.nestedImports.add(_lastUrl);
     } else {
       _namespaces[_lastUrl] = namespaceForPath(import.url);
     }
@@ -403,6 +399,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     _useAllowed = false;
     super.visitIncludeRule(node);
+    _scope.checkNestedImportMixin(node);
     if (_scope.isLocalMixin(node.name) ?? false) return;
 
     var name = _unprefix(node.name);
@@ -437,6 +434,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
+    _scope.checkNestedImportVariable(node);
     if (_scope.isLocalVariable(node.name) ?? false) return;
 
     var name = _unprefix(node.name);

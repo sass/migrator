@@ -1,0 +1,21 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+a {
+  @import "library";
+  @include test;
+}
+
+<==> input/_library.scss
+@mixin test {
+  e: blue;
+}
+
+<==> log.txt
+line 3, column 3 of entrypoint.scss: Can't reference mixin from _library.scss, as load-css() does not load mixins.
+  ,
+3 |   @include test;
+  |   ^^^^^^^^^^^^^
+  '
+Migration failed!

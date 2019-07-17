@@ -1,0 +1,19 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+a {
+  @import "library";
+  e: $x;
+}
+
+<==> input/_library.scss
+$x: blue;
+
+<==> log.txt
+line 3, column 6 of entrypoint.scss: Can't reference variable from _library.scss, as load-css() does not load variables.
+  ,
+3 |   e: $x;
+  |      ^^
+  '
+Migration failed!
