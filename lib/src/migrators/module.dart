@@ -158,7 +158,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitCallableDeclaration(CallableDeclaration node) {
     _scope = Scope(_scope);
     for (var argument in node.arguments.arguments) {
-      _scope.variables[argument.name] = null;
+      _scope.variables[argument.name] = argument;
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
     super.visitChildren(node);

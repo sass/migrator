@@ -21,7 +21,10 @@ class Scope {
   final Scope parent;
 
   /// Variables defined in this scope.
-  final variables = normalizedMap<VariableDeclaration>();
+  ///
+  /// These are usually VariableDeclarations, but can also be Arguments from
+  /// a CallableDeclaration.
+  final variables = normalizedMap<SassNode /*VariableDeclaration|Argument*/ >();
 
   /// Mixins defined in this scope.
   final mixins = normalizedMap<MixinRule>();
