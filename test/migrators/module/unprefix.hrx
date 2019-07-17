@@ -1,6 +1,9 @@
 <==> arguments
 --remove-prefix=lib-
 
+<==> README.md
+This test should be kept in sync with unprefix_indented.hrx.
+
 <==> input/entrypoint.scss
 $lib-a: 5;
 $lib_b: $lib-a + 2;

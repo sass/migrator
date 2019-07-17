@@ -1,0 +1,24 @@
+<==> arguments
+--migrate-deps
+
+<==> README.md
+This test should be kept in sync with namespace_mixin.hrx.
+
+This test is duplicated for the indented syntax since it includes the shorthand
+mixin syntax that's not present in the SCSS syntax.
+
+<==> input/entrypoint.sass
+@import "library"
+a
+  +helper
+  @include helper
+
+<==> input/_library.sass
+=helper
+  display: block
+
+<==> output/entrypoint.sass
+@use "library"
+a
+  +library.helper
+  @include library.helper

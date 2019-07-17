@@ -1,0 +1,39 @@
+<==> arguments
+--remove-prefix=lib-
+
+<==> README.md
+This test should be kept in sync with unprefix.hrx.
+
+This test is duplicated for the indented syntax since it tests that removing
+prefixes works even for the shorthand mixin syntax and it includes sufficient
+other functionality to test the basics of the syntax.
+
+<==> input/entrypoint.sass
+$lib-a: 5
+$lib_b: $lib-a + 2
+
+@function lib-fn($lib-local)
+  @return $lib-local
+
+$result: lib-fn(0)
+
+=lib-mixin
+  lib-property: lib-value
+
+lib-selector
+  +lib-mixin
+
+<==> output/entrypoint.sass
+$a: 5
+$b: $a + 2
+
+@function fn($lib-local)
+  @return $lib-local
+
+$result: fn(0)
+
+=mixin
+  lib-property: lib-value
+
+lib-selector
+  +mixin
