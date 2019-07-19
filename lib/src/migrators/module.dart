@@ -54,7 +54,7 @@ class ModuleMigrator extends Migrator {
 class _ModuleMigrationVisitor extends MigrationVisitor {
   /// The scope containing all variables, mixins, and functions defined in the
   /// current context.
-  Scope _scope = Scope(null);
+  var _scope = Scope();
 
   /// Stores whether a given VariableDeclaration has been referenced in an
   /// expression after being declared.
@@ -82,7 +82,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   Set<VariableDeclaration> _configuredVariables;
 
   /// Whether @use and @forward are allowed in the current context.
-  bool _useAllowed = true;
+  var _useAllowed = true;
 
   /// The URL of the current stylesheet.
   Uri _currentUrl;
@@ -184,7 +184,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    _scope.checkNestedImportFunction(node);
+    _scope.checkUnreferencableFunction(node);
     _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
       addPatch(
           Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
@@ -230,7 +230,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchNamespaceForFunction(FunctionExpression node, String originalName,
       void patcher(String name, String namespace)) {
     if (originalName == null) return;
-    if (_scope.isLocalFunction(originalName) ?? false) return;
+    if (_scope.isLocalFunction(originalName)) return;
 
     var name = _unprefix(originalName) ?? originalName;
 
@@ -317,14 +317,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldScope = _scope;
     if (migrateToLoadCss) {
-      _scope = _scope.flatten();
+      _scope = oldScope.copyForNestedImport();
+      var current = oldScope.parent;
+      while (current != null) {
+        _scope.variables.addAll(current.variables);
+        current = current.parent;
+      }
     }
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _upstreamStylesheets.remove(_currentUrl);
     if (migrateToLoadCss) {
-      oldScope.insertFrom(_scope.global);
+      oldScope.addAllMembers(_scope.global,
+          unreferencable: UnreferencableType.globalFromNestedImport);
       _scope = oldScope;
-      _scope.nestedImports.add(_lastUrl);
     } else {
       _namespaces[_lastUrl] = namespaceForPath(import.url);
     }
@@ -346,8 +351,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     if (externallyConfiguredVariables.isNotEmpty) {
       if (migrateToLoadCss) {
-        // TODO(jathak): Make this error message meaningful
-        throw MigrationException("Invalid nested import");
+        var firstConfig = externallyConfiguredVariables.values.first;
+        throw MigrationException(
+            "This declaration attempts to override a default value in an "
+            "indirect, nested import of ${p.prettyUri(_lastUrl)}, which is "
+            "not possible in the module system.",
+            span: firstConfig.span);
       }
       addPatch(patchBefore(
           node,
@@ -367,8 +376,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       } else {
         // TODO(jathak): Handle the case where the expression of this
         // declaration has already been patched.
-        addPatch(
-            patchDelete(variable.span, start: -variable.span.start.column));
+        var before = variable.span.start.offset;
+        var beforeDeclaration = variable.span.file
+            .span(before - variable.span.start.column, before);
+        if (beforeDeclaration.text.trim() == '') {
+          addPatch(patchDelete(beforeDeclaration));
+        }
+        addPatch(patchDelete(variable.span));
         var start = variable.span.end.offset;
         var end = start + _semicolonIfNotIndented.length;
         if (variable.span.file.span(end, end + 1).text == '\n') end++;
@@ -399,8 +413,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     _useAllowed = false;
     super.visitIncludeRule(node);
-    _scope.checkNestedImportMixin(node);
-    if (_scope.isLocalMixin(node.name) ?? false) return;
+    _scope.checkUnreferencableMixin(node);
+    if (_scope.isLocalMixin(node.name)) return;
 
     var name = _unprefix(node.name);
     if (!_scope.global.mixins.containsKey(name)) return;
@@ -434,14 +448,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
-    _scope.checkNestedImportVariable(node);
-    if (_scope.isLocalVariable(node.name) ?? false) return;
+    _scope.checkUnreferencableVariable(node);
+    if (_scope.isLocalVariable(node.name)) return;
 
     var name = _unprefix(node.name);
     if (!_scope.global.variables.containsKey(name)) return;
+    var declaration = _scope.global.variables[name];
 
-    _referencedVariables.add(_scope.global.variables[name]);
-    var namespace = _namespaceForNode(_scope.global.variables[name]);
+    _referencedVariables.add(declaration);
+    var namespace = _namespaceForNode(declaration);
     if (namespace == null) {
       if (name != node.name) addPatch(Patch(node.span, "\$$name"));
     } else {
@@ -460,7 +475,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
     var name = node.name;
-    if (_scope.parent == null || node.isGlobal) {
+    if (_scope.isGlobal || node.isGlobal) {
       name = _unprefix(node.name);
       if (name != node.name) {
         addPatch(
@@ -492,7 +507,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
     var name = node.name;
-    if (_scope.parent == null) {
+    if (_scope.isGlobal) {
       name = _unprefix(node.name);
       if (name != node.name) {
         var nameStart = node.span.text
@@ -508,7 +523,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
     var name = node.name;
-    if (_scope.parent == null) {
+    if (_scope.isGlobal) {
       name = _unprefix(node.name);
       if (name != node.name) {
         var nameStart = node.span.text.indexOf(node.name, '@function'.length);
@@ -553,10 +568,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitAtRootRule(node);
   }
 
-  /// Disallows @use after at-rules other than @charset.
+  /// Disallows @use after at-rules.
   @override
   void visitAtRule(AtRule node) {
-    if (node.name.asPlain == 'charset') _useAllowed = false;
+    _useAllowed = false;
     super.visitAtRule(node);
   }
 

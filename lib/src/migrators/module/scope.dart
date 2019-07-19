@@ -14,6 +14,8 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
+enum UnreferencableType { localFromImporter, globalFromNestedImport }
+
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.
 class Scope {
@@ -32,17 +34,22 @@ class Scope {
   /// Functions defined in this scope.
   final functions = normalizedMap<FunctionRule>();
 
-  /// Nested imports from this scope.
+  /// Members within this scope that cannot be referenced.
   ///
-  /// Note: For the purposes of migration, any imports that come after a rule
-  /// other than @import, @use, @forward, or @charset are considered nested, since
-  /// they can't be migrated to @use.
-  final nestedImports = <Uri>{};
+  /// This is used to track local variables from an upstream stylesheet in a
+  /// nested import and global variables from the nested import in the upstream
+  /// stylesheet.
+  final unreferencableMembers = <
+      SassNode /*VariableDeclaration|Argument|MixinRule|FunctionRule*/,
+      UnreferencableType>{};
 
-  Scope(this.parent);
+  Scope([this.parent]);
 
   /// The global scope this scope descends from.
   Scope get global => parent?.global ?? this;
+
+  /// Returns true if this scope is global, and false otherwise.
+  bool get isGlobal => parent == null;
 
   /// Returns whether a variable [name] exists in a non-global scope.
   bool isLocalVariable(String name) =>
@@ -58,83 +65,90 @@ class Scope {
       parent != null &&
       (functions.containsKey(name) || parent.isLocalFunction(name));
 
-  /// Constructs and throws a MigrationException for a reference to a member
-  /// from a nested import.
-  void _errorNestedImport(String type, Uri importUrl, FileSpan reference) {
-    throw MigrationException(
-        "Can't reference $type from ${p.prettyUri(importUrl)}, "
-        "as load-css() does not load ${type}s.",
-        span: reference);
-  }
-
-  /// Checks that [node] does not reference a variable from a nested import,
-  /// throwing a MigrationException if it does.
-  void checkNestedImportVariable(VariableExpression node) {
-    if (variables.containsKey(node.name)) {
-      var url = variables[node.name].span.sourceUrl;
-      if (nestedImports.contains(url)) {
-        _errorNestedImport('variable', url, node.span);
-      }
-    } else {
-      parent?.checkNestedImportVariable(node);
-    }
-  }
-
-  /// Checks that [node] does not reference a mixin from a nested import,
-  /// throwing a MigrationException if it does.
-  void checkNestedImportMixin(IncludeRule node) {
-    if (mixins.containsKey(node.name)) {
-      var url = mixins[node.name].span.sourceUrl;
-      if (nestedImports.contains(url)) {
-        _errorNestedImport('mixin', url, node.span);
-      }
-    } else {
-      parent?.checkNestedImportMixin(node);
-    }
-  }
-
-  /// Checks that [node] does not reference a function from a nested import,
-  /// throwing a MigrationException if it does.
-  void checkNestedImportFunction(FunctionExpression node) {
-    if (node.name.asPlain == null) return;
-    if (functions.containsKey(node.name.asPlain)) {
-      var url = functions[node.name.asPlain].span.sourceUrl;
-      if (nestedImports.contains(url)) {
-        _errorNestedImport('function', url, node.span);
-      }
-    } else {
-      parent?.checkNestedImportFunction(node);
-    }
-  }
-
-  /// Create a flattened version of this scope, combining all members from all
-  /// ancestors into one level.
+  /// Checks whether a reference to a variable, mixin, or function is invalid,
+  /// throwing a MigrationException if it is.
   ///
-  /// This is used for migrating nested imports, allowing the migrator to treat
-  /// local members from the upstream stylesheet as global ones while migrating
-  /// the nested import.
-  Scope flatten() {
-    var flattened = Scope(null);
+  /// [findDeclaration] should return the declaration in the current scope for
+  /// the reference if it exists, or null if it does not.
+  void _checkUnreferencable(String type, FileSpan reference,
+      SassNode Function(Scope) findDeclaration) {
+    var declaration = findDeclaration(this);
+    if (declaration != null) {
+      if (unreferencableMembers.containsKey(declaration)) {
+        var uri = p.prettyUri(declaration.span.sourceUrl);
+        var unrefType = unreferencableMembers[declaration];
+        if (unrefType == UnreferencableType.localFromImporter) {
+          throw MigrationException(
+              "This stylesheet was loaded by a nested import in $uri. The "
+              "module system only supports loading nested CSS using the "
+              "load-css() mixin, which doesn't allow access to local ${type}s "
+              "from the outer stylesheet.",
+              span: reference);
+        } else if (unrefType == UnreferencableType.globalFromNestedImport) {
+          throw MigrationException(
+              "This $type was loaded from a nested import of $uri. The module "
+              "system only supports loading nested CSS using the load-css() "
+              "mixin, which doesn't load ${type}s.",
+              span: reference);
+        }
+      }
+    } else {
+      parent?._checkUnreferencable(type, reference, findDeclaration);
+    }
+  }
+
+  /// Checks whether [node] is a valid reference, throwing a MigrationException
+  /// if it's not.
+  void checkUnreferencableVariable(VariableExpression node) {
+    _checkUnreferencable(
+        'variable', node.span, (scope) => scope.variables[node.name]);
+  }
+
+  /// Checks whether [node] is a valid reference, throwing a MigrationException
+  /// if it's not.
+  void checkUnreferencableMixin(IncludeRule node) {
+    _checkUnreferencable(
+        'mixin', node.span, (scope) => scope.mixins[node.name]);
+  }
+
+  /// Checks whether [node] is a valid reference, throwing a MigrationException
+  /// if it's not.
+  void checkUnreferencableFunction(FunctionExpression node) {
+    if (node.name.asPlain == null) return;
+    _checkUnreferencable(
+        'function', node.span, (scope) => scope.functions[node.name.asPlain]);
+  }
+
+  /// Copys all members (direct and indirect) of this scope to a new, flattened
+  /// scope with all local members marked as unreferencable.
+  Scope copyForNestedImport() {
+    var flattened = Scope();
     var current = this;
     while (current != null) {
-      flattened.insertFrom(current);
+      flattened.unreferencableMembers.addAll(current.unreferencableMembers);
+      flattened.addAllMembers(current,
+          unreferencable: current.parent == null
+              ? null
+              : UnreferencableType.localFromImporter);
       current = current.parent;
     }
     return flattened;
   }
 
-  /// Inserts all direct members of [other] into this scope, excluding any members
-  /// that also existing in [excluding].
-  void insertFrom(Scope other, {Scope excluding}) {
-    insertFromMap<T>(Map<String, T> target, Map<String, T> source,
-        Map<String, T> excluding) {
-      for (var key in source.keys) {
-        if (!excluding.containsKey(key)) target[key] = source[key];
-      }
+  /// Adds all direct members of [other] into this scope.
+  ///
+  /// If [unreferencable] is passed, this also adds these members to
+  /// [unreferencableMembers] with this type.
+  void addAllMembers(Scope other, {UnreferencableType unreferencable}) {
+    variables.addAll(other.variables);
+    mixins.addAll(other.mixins);
+    functions.addAll(other.functions);
+    if (unreferencable != null) {
+      unreferencableMembers.addAll({
+        for (var variable in other.variables.values) variable: unreferencable,
+        for (var mixinRule in other.mixins.values) mixinRule: unreferencable,
+        for (var function in other.functions.values) function: unreferencable
+      });
     }
-
-    insertFromMap(this.variables, other.variables, excluding?.variables ?? {});
-    insertFromMap(this.mixins, other.mixins, excluding?.mixins ?? {});
-    insertFromMap(this.functions, other.functions, excluding?.functions ?? {});
   }
 }

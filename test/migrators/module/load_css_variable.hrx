@@ -11,7 +11,7 @@ a {
 $x: blue;
 
 <==> log.txt
-line 3, column 6 of entrypoint.scss: Can't reference variable from _library.scss, as load-css() does not load variables.
+line 3, column 6 of entrypoint.scss: This variable was loaded from a nested import of _library.scss. The module system only supports loading nested CSS using the load-css() mixin, which doesn't load variables.
   ,
 3 |   e: $x;
   |      ^^

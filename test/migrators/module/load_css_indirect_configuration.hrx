@@ -1,0 +1,22 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+$config: red;
+@import "direct";
+
+<==> input/_direct.scss
+a {
+  @import "indirect";
+}
+
+<==> input/_indirect.scss
+$config: green !default;
+
+<==> log.txt
+line 1, column 1 of entrypoint.scss: This declaration attempts to override a default value in an indirect, nested import of _indirect.scss, which is not possible in the module system.
+  ,
+1 | $config: red;
+  | ^^^^^^^^^^^^
+  '
+Migration failed!
