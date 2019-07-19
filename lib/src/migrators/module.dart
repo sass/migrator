@@ -42,7 +42,8 @@ class ModuleMigrator extends Migrator {
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
     var migrated = _ModuleMigrationVisitor(
-            prefixToRemove: argResults['remove-prefix'] as String)
+            prefixToRemove:
+                (argResults['remove-prefix'] as String)?.replaceAll('_', '-'))
         .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
@@ -337,8 +338,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // Pass the variables that were configured by the importing file to `with`,
     // and forward the rest and add them to `oldConfiguredVariables` because
     // they were configured by a further-out import.
-    var locallyConfiguredVariables = normalizedMap<VariableDeclaration>();
-    var externallyConfiguredVariables = normalizedMap<VariableDeclaration>();
+    var locallyConfiguredVariables = <String, VariableDeclaration>{};
+    var externallyConfiguredVariables = <String, VariableDeclaration>{};
     for (var variable in _configuredVariables) {
       if (variable.span.sourceUrl == _currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
@@ -540,7 +541,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return name;
     }
     var startOfName = name.substring(0, prefixToRemove.length);
-    if (!equalsIgnoreSeparator(prefixToRemove, startOfName)) return name;
+    if (prefixToRemove != startOfName) return name;
     return name.substring(prefixToRemove.length);
   }
 

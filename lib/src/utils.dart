@@ -12,8 +12,6 @@ import 'package:source_span/source_span.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/importer/filesystem.dart';
-export 'package:sass/src/utils.dart'
-    show normalizedMap, normalizedSet, equalsIgnoreSeparator;
 
 import 'patch.dart';
 

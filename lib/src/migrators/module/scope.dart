@@ -26,13 +26,13 @@ class Scope {
   ///
   /// These are usually VariableDeclarations, but can also be Arguments from
   /// a CallableDeclaration.
-  final variables = normalizedMap<SassNode /*VariableDeclaration|Argument*/ >();
+  final variables = <String, SassNode /*VariableDeclaration|Argument*/ >{};
 
   /// Mixins defined in this scope.
-  final mixins = normalizedMap<MixinRule>();
+  final mixins = <String, MixinRule>{};
 
   /// Functions defined in this scope.
-  final functions = normalizedMap<FunctionRule>();
+  final functions = <String, FunctionRule>{};
 
   /// Members within this scope that cannot be referenced.
   ///
