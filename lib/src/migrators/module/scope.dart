@@ -4,17 +4,12 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:sass_migrator/src/utils.dart';
-
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
-import 'package:path/path.dart' as p;
-import 'package:source_span/source_span.dart';
-
-enum UnreferencableType { localFromImporter, globalFromNestedImport }
+import 'unreferencable_type.dart';
 
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.
@@ -70,53 +65,36 @@ class Scope {
   ///
   /// [findDeclaration] should return the declaration in the current scope for
   /// the reference if it exists, or null if it does not.
-  void _checkUnreferencable(String type, FileSpan reference,
-      SassNode Function(Scope) findDeclaration) {
+  void _checkUnreferencable(
+      SassNode reference, SassNode Function(Scope) findDeclaration) {
     var declaration = findDeclaration(this);
-    if (declaration != null) {
-      if (unreferencableMembers.containsKey(declaration)) {
-        var uri = p.prettyUri(declaration.span.sourceUrl);
-        var unrefType = unreferencableMembers[declaration];
-        if (unrefType == UnreferencableType.localFromImporter) {
-          throw MigrationException(
-              "This stylesheet was loaded by a nested import in $uri. The "
-              "module system only supports loading nested CSS using the "
-              "load-css() mixin, which doesn't allow access to local ${type}s "
-              "from the outer stylesheet.",
-              span: reference);
-        } else if (unrefType == UnreferencableType.globalFromNestedImport) {
-          throw MigrationException(
-              "This $type was loaded from a nested import of $uri. The module "
-              "system only supports loading nested CSS using the load-css() "
-              "mixin, which doesn't load ${type}s.",
-              span: reference);
-        }
-      }
-    } else {
-      parent?._checkUnreferencable(type, reference, findDeclaration);
+    if (declaration == null) {
+      parent?._checkUnreferencable(reference, findDeclaration);
+      return;
+    }
+    if (unreferencableMembers.containsKey(declaration)) {
+      throw unreferencableMembers[declaration]
+          .toException(reference, declaration.span.sourceUrl);
     }
   }
 
   /// Checks whether [node] is a valid reference, throwing a MigrationException
   /// if it's not.
   void checkUnreferencableVariable(VariableExpression node) {
-    _checkUnreferencable(
-        'variable', node.span, (scope) => scope.variables[node.name]);
+    _checkUnreferencable(node, (scope) => scope.variables[node.name]);
   }
 
   /// Checks whether [node] is a valid reference, throwing a MigrationException
   /// if it's not.
   void checkUnreferencableMixin(IncludeRule node) {
-    _checkUnreferencable(
-        'mixin', node.span, (scope) => scope.mixins[node.name]);
+    _checkUnreferencable(node, (scope) => scope.mixins[node.name]);
   }
 
   /// Checks whether [node] is a valid reference, throwing a MigrationException
   /// if it's not.
   void checkUnreferencableFunction(FunctionExpression node) {
     if (node.name.asPlain == null) return;
-    _checkUnreferencable(
-        'function', node.span, (scope) => scope.functions[node.name.asPlain]);
+    _checkUnreferencable(node, (scope) => scope.functions[node.name.asPlain]);
   }
 
   /// Copys all members (direct and indirect) of this scope to a new, flattened

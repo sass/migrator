@@ -21,6 +21,7 @@ import 'package:sass_migrator/src/utils.dart';
 
 import 'module/built_in_functions.dart';
 import 'module/scope.dart';
+import 'module/unreferencable_type.dart';
 
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
