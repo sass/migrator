@@ -20,7 +20,8 @@ import 'package:sass_migrator/src/patch.dart';
 import 'package:sass_migrator/src/utils.dart';
 
 import 'module/built_in_functions.dart';
-import 'module/local_scope.dart';
+import 'module/scope.dart';
+import 'module/unreferencable_type.dart';
 
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
@@ -42,7 +43,8 @@ class ModuleMigrator extends Migrator {
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
     var migrated = _ModuleMigrationVisitor(
-            prefixToRemove: argResults['remove-prefix'] as String)
+            prefixToRemove:
+                (argResults['remove-prefix'] as String)?.replaceAll('_', '-'))
         .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
@@ -52,17 +54,9 @@ class ModuleMigrator extends Migrator {
 }
 
 class _ModuleMigrationVisitor extends MigrationVisitor {
-  /// Global variables defined at any time during the migrator run.
-  ///
-  /// We store all declarations instead of just the most recent one for use in
-  /// detecting configurable variables.
-  final _globalVariables = normalizedMap<VariableDeclaration>();
-
-  /// Global mixins defined at any time during the migrator run.
-  final _globalMixins = normalizedMap<MixinRule>();
-
-  /// Global functions defined at any time during the migrator run.
-  final _globalFunctions = normalizedMap<FunctionRule>();
+  /// The scope containing all variables, mixins, and functions defined in the
+  /// current context.
+  var _scope = Scope();
 
   /// Stores whether a given VariableDeclaration has been referenced in an
   /// expression after being declared.
@@ -89,16 +83,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `!default` variables within the current stylesheet.
   Set<VariableDeclaration> _configuredVariables;
 
+  /// Whether @use and @forward are allowed in the current context.
+  var _useAllowed = true;
+
   /// The URL of the current stylesheet.
   Uri _currentUrl;
 
   /// The URL of the last stylesheet that was completely migrated.
   Uri _lastUrl;
-
-  /// Local variables, mixins, and functions for this migration.
-  ///
-  /// When at the top level of the stylesheet, this will be null.
-  LocalScope _localScope;
 
   /// The prefix to be removed from any members with it, or null if no prefix
   /// should be removed.
@@ -148,14 +140,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldNamespaces = _namespaces;
     var oldAdditionalUseRules = _additionalUseRules;
     var oldUrl = _currentUrl;
+    var oldUseAllowed = _useAllowed;
     _namespaces = {};
     _additionalUseRules = Set();
     _currentUrl = node.span.sourceUrl;
+    _useAllowed = true;
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
     _additionalUseRules = oldAdditionalUseRules;
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
+    _useAllowed = oldUseAllowed;
   }
 
   /// Visits each of [node]'s expressions and children.
@@ -163,13 +158,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// All of [node]'s arguments are declared as local variables in a new scope.
   @override
   void visitCallableDeclaration(CallableDeclaration node) {
-    _localScope = LocalScope(_localScope);
+    _scope = Scope(_scope);
     for (var argument in node.arguments.arguments) {
-      _localScope.variables.add(argument.name);
+      _scope.variables[argument.name] = argument;
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
     super.visitChildren(node);
-    _localScope = _localScope.parent;
+    _scope = _scope.parent;
   }
 
   /// Visits the children of [node] with a local scope.
@@ -182,15 +177,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       super.visitChildren(node);
       return;
     }
-    _localScope = LocalScope(_localScope);
+    _scope = Scope(_scope);
     super.visitChildren(node);
-    _localScope = _localScope.parent;
+    _scope = _scope.parent;
   }
 
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
+    _scope.checkUnreferencableFunction(node);
     _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
       addPatch(
           Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
@@ -236,12 +232,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchNamespaceForFunction(FunctionExpression node, String originalName,
       void patcher(String name, String namespace)) {
     if (originalName == null) return;
-    if (_localScope?.isLocalFunction(originalName) ?? false) return;
+    if (_scope.isLocalFunction(originalName)) return;
 
     var name = _unprefix(originalName) ?? originalName;
 
-    var namespace = _globalFunctions.containsKey(name)
-        ? _namespaceForNode(_globalFunctions[name])
+    var namespace = _scope.global.functions.containsKey(name)
+        ? _namespaceForNode(_scope.global.functions[name])
         : null;
 
     if (namespace == null && builtInFunctionModules.containsKey(name)) {
@@ -297,6 +293,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares the function within the current scope before visiting it.
   @override
   void visitFunctionRule(FunctionRule node) {
+    _useAllowed = false;
     _declareFunction(node);
     super.visitFunctionRule(node);
   }
@@ -305,6 +302,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitImportRule(ImportRule node) {
     if (node.imports.first is StaticImport) {
+      _useAllowed = false;
       super.visitImportRule(node);
       return;
     }
@@ -313,25 +311,36 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Migration of @import rule with multiple imports not supported.");
     }
     var import = node.imports.first as DynamicImport;
-
-    if (_localScope != null) {
-      // TODO(jathak): Handle nested imports
-      return;
-    }
-    // TODO(jathak): Confirm that this import appears before other rules
+    var migrateToLoadCss = _scope.parent != null || !_useAllowed;
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
     _upstreamStylesheets.add(_currentUrl);
+
+    var oldScope = _scope;
+    if (migrateToLoadCss) {
+      _scope = oldScope.copyForNestedImport();
+      var current = oldScope.parent;
+      while (current != null) {
+        _scope.variables.addAll(current.variables);
+        current = current.parent;
+      }
+    }
     visitDependency(Uri.parse(import.url), _currentUrl, import.span);
     _upstreamStylesheets.remove(_currentUrl);
-    _namespaces[_lastUrl] = namespaceForPath(import.url);
+    if (migrateToLoadCss) {
+      oldScope.addAllMembers(_scope.global,
+          unreferencable: UnreferencableType.globalFromNestedImport);
+      _scope = oldScope;
+    } else {
+      _namespaces[_lastUrl] = namespaceForPath(import.url);
+    }
 
     // Pass the variables that were configured by the importing file to `with`,
     // and forward the rest and add them to `oldConfiguredVariables` because
     // they were configured by a further-out import.
-    var locallyConfiguredVariables = normalizedMap<VariableDeclaration>();
-    var externallyConfiguredVariables = normalizedMap<VariableDeclaration>();
+    var locallyConfiguredVariables = <String, VariableDeclaration>{};
+    var externallyConfiguredVariables = <String, VariableDeclaration>{};
     for (var variable in _configuredVariables) {
       if (variable.span.sourceUrl == _currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
@@ -343,6 +352,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _configuredVariables = oldConfiguredVariables;
 
     if (externallyConfiguredVariables.isNotEmpty) {
+      if (migrateToLoadCss) {
+        var firstConfig = externallyConfiguredVariables.values.first;
+        throw MigrationException(
+            "This declaration attempts to override a default value in an "
+            "indirect, nested import of ${p.prettyUri(_lastUrl)}, which is "
+            "not possible in the module system.",
+            span: firstConfig.span);
+      }
       addPatch(patchBefore(
           node,
           "@forward ${import.span.text} show " +
@@ -361,32 +378,50 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       } else {
         // TODO(jathak): Handle the case where the expression of this
         // declaration has already been patched.
+        var before = variable.span.start.offset;
+        var beforeDeclaration = variable.span.file
+            .span(before - variable.span.start.column, before);
+        if (beforeDeclaration.text.trim() == '') {
+          addPatch(patchDelete(beforeDeclaration));
+        }
         addPatch(patchDelete(variable.span));
         var start = variable.span.end.offset;
         var end = start + _semicolonIfNotIndented.length;
         if (variable.span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(variable.span.file.span(start, end)));
-        configured.add("\$$name: ${variable.expression}");
+        var nameFormat = migrateToLoadCss ? '"$name"' : '\$$name';
+        configured.add("$nameFormat: ${variable.expression}");
       }
     }
     if (configured.length == 1) {
       configuration = " with (" + configured.first + ")";
     } else if (configured.isNotEmpty) {
-      configuration = " with (\n  " + configured.join(',\n  ') + "\n)";
+      var indent = ' ' * node.span.start.column;
+      configuration =
+          " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
-    addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
+    if (migrateToLoadCss) {
+      _additionalUseRules.add('sass:meta');
+      configuration = configuration.replaceFirst(' with', r', $with:');
+      addPatch(Patch(node.span,
+          '@include meta.load-css(${import.span.text}$configuration)'));
+    } else {
+      addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
+    }
   }
 
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
+    _useAllowed = false;
     super.visitIncludeRule(node);
-    if (_localScope?.isLocalMixin(node.name) ?? false) return;
+    _scope.checkUnreferencableMixin(node);
+    if (_scope.isLocalMixin(node.name)) return;
 
     var name = _unprefix(node.name);
-    if (!_globalMixins.containsKey(name)) return;
+    if (!_scope.global.mixins.containsKey(name)) return;
 
-    var namespace = _namespaceForNode(_globalMixins[name]);
+    var namespace = _namespaceForNode(_scope.global.mixins[name]);
     var endName = node.arguments.span.start.offset;
     var startName = endName - node.name.length;
     var nameSpan = node.span.file.span(startName, endName);
@@ -400,6 +435,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares the mixin within the current scope before visiting it.
   @override
   void visitMixinRule(MixinRule node) {
+    _useAllowed = false;
     _declareMixin(node);
     super.visitMixinRule(node);
   }
@@ -414,13 +450,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
-    if (_localScope?.isLocalVariable(node.name) ?? false) return;
+    _scope.checkUnreferencableVariable(node);
+    if (_scope.isLocalVariable(node.name)) return;
 
     var name = _unprefix(node.name);
-    if (!_globalVariables.containsKey(name)) return;
+    if (!_scope.global.variables.containsKey(name)) return;
+    var declaration = _scope.global.variables[name];
 
-    _referencedVariables.add(_globalVariables[name]);
-    var namespace = _namespaceForNode(_globalVariables[name]);
+    _referencedVariables.add(declaration);
+    var namespace = _namespaceForNode(declaration);
     if (namespace == null) {
       if (name != node.name) addPatch(Patch(node.span, "\$$name"));
     } else {
@@ -438,13 +476,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
-    if (_localScope == null || node.isGlobal) {
-      var name = _unprefix(node.name);
+    var name = node.name;
+    if (_scope.isGlobal || node.isGlobal) {
+      name = _unprefix(node.name);
       if (name != node.name) {
         addPatch(
             patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
       }
-      var existingNode = _globalVariables[name];
+      var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
       if (existingNode != null && originalUrl != _currentUrl) {
         if (node.isGuarded) {
@@ -452,7 +491,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         } else if (!_upstreamStylesheets.contains(originalUrl)) {
           // This declaration reassigns a variable in another module. Since we
           // don't care about the actual value of the variable while migrating,
-          // we leave the node in _globalVariables as-is, so that future
+          // we leave the node in _scope.global.variables as-is, so that future
           // references namespace based on the original declaration, not this
           // reassignment.
           var namespace = _namespaceForNode(existingNode);
@@ -462,43 +501,39 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           return;
         }
       }
-      _globalVariables[name] = node;
-    } else {
-      _localScope.variables.add(node.name);
     }
+    _scope.variables[name] = node;
   }
 
   /// Declares a mixin within this stylesheet, in the current local scope if
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
-    if (_localScope == null) {
-      var name = _unprefix(node.name);
+    var name = node.name;
+    if (_scope.isGlobal) {
+      name = _unprefix(node.name);
       if (name != node.name) {
         var nameStart = node.span.text
             .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
         addPatch(patchDelete(node.span,
             start: nameStart, end: nameStart + prefixToRemove.length));
       }
-      _globalMixins[name] = node;
-    } else {
-      _localScope.mixins.add(node.name);
     }
+    _scope.mixins[name] = node;
   }
 
   /// Declares a function within this stylesheet, in the current local scope if
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
-    if (_localScope == null) {
-      var name = _unprefix(node.name);
+    var name = node.name;
+    if (_scope.isGlobal) {
+      name = _unprefix(node.name);
       if (name != node.name) {
         var nameStart = node.span.text.indexOf(node.name, '@function'.length);
         addPatch(patchDelete(node.span,
             start: nameStart, end: nameStart + prefixToRemove.length));
       }
-      _globalFunctions[name] = node;
-    } else {
-      _localScope.functions.add(node.name);
     }
+    _scope.functions[name] = node;
   }
 
   /// Returns [name] with [prefixToRemove] removed.
@@ -507,7 +542,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return name;
     }
     var startOfName = name.substring(0, prefixToRemove.length);
-    if (!equalsIgnoreSeparator(prefixToRemove, startOfName)) return name;
+    if (prefixToRemove != startOfName) return name;
     return name.substring(prefixToRemove.length);
   }
 
@@ -526,5 +561,89 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
     }
     return _namespaces[node.span.sourceUrl];
+  }
+
+  /// Disallows @use after @at-root rules.
+  @override
+  void visitAtRootRule(AtRootRule node) {
+    _useAllowed = false;
+    super.visitAtRootRule(node);
+  }
+
+  /// Disallows @use after at-rules.
+  @override
+  void visitAtRule(AtRule node) {
+    _useAllowed = false;
+    super.visitAtRule(node);
+  }
+
+  /// Disallows @use after @debug rules.
+  @override
+  void visitDebugRule(DebugRule node) {
+    _useAllowed = false;
+    super.visitDebugRule(node);
+  }
+
+  /// Disallows @use after @each rules.
+  @override
+  void visitEachRule(EachRule node) {
+    _useAllowed = false;
+    super.visitEachRule(node);
+  }
+
+  /// Disallows @use after @error rules.
+  @override
+  void visitErrorRule(ErrorRule node) {
+    _useAllowed = false;
+    super.visitErrorRule(node);
+  }
+
+  /// Disallows @use after @for rules.
+  @override
+  void visitForRule(ForRule node) {
+    _useAllowed = false;
+    super.visitForRule(node);
+  }
+
+  /// Disallows @use after @if rules.
+  @override
+  void visitIfRule(IfRule node) {
+    _useAllowed = false;
+    super.visitIfRule(node);
+  }
+
+  /// Disallows @use after @media rules.
+  @override
+  void visitMediaRule(MediaRule node) {
+    _useAllowed = false;
+    super.visitMediaRule(node);
+  }
+
+  /// Disallows @use after style rules.
+  @override
+  void visitStyleRule(StyleRule node) {
+    _useAllowed = false;
+    super.visitStyleRule(node);
+  }
+
+  /// Disallows @use after @supports rules.
+  @override
+  void visitSupportsRule(SupportsRule node) {
+    _useAllowed = false;
+    super.visitSupportsRule(node);
+  }
+
+  /// Disallows @use after @warn rules.
+  @override
+  void visitWarnRule(WarnRule node) {
+    _useAllowed = false;
+    super.visitWarnRule(node);
+  }
+
+  /// Disallows @use after @while rules.
+  @override
+  void visitWhileRule(WhileRule node) {
+    _useAllowed = false;
+    super.visitWhileRule(node);
   }
 }

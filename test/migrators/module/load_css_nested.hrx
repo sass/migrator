@@ -1,0 +1,18 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+a {
+  @import "library";
+}
+
+<==> input/_library.scss
+b {
+  c: d;
+}
+
+<==> output/entrypoint.scss
+@use "sass:meta";
+a {
+  @include meta.load-css("library");
+}

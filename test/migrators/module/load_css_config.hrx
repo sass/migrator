@@ -1,0 +1,26 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+$config1: red;
+a {
+  $config2: blue;
+  @import "library";
+}
+
+<==> input/_library.scss
+$config1: yellow !default;
+$config2: green !default;
+b {
+  c: $config1;
+  d: $config2;
+}
+
+<==> output/entrypoint.scss
+@use "sass:meta";
+a {
+  @include meta.load-css("library", $with: (
+    "config1": red,
+    "config2": blue
+  ));
+}
