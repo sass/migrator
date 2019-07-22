@@ -241,6 +241,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         : null;
 
     if (namespace == null && builtInFunctionModules.containsKey(name)) {
+      // Don't migrate CSS-compatibility overloads.
+      var argument = getOnlyArgument(node.arguments);
+      if (({'grayscale', 'invert', 'opacity'}.contains(name) &&
+              argument is NumberExpression) ||
+          (name == 'saturate' && argument != null) ||
+          (name == 'alpha' &&
+              (node.arguments.positional.length + node.arguments.named.length >
+                      1 ||
+                  (argument is BinaryOperationExpression &&
+                      argument.operator == BinaryOperator.singleEquals)))) {
+        return;
+      }
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
       if (namespace == 'color' && removedColorFunctions.containsKey(name)) {

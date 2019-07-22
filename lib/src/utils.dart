@@ -68,6 +68,18 @@ void emitWarning(String message, [FileSpan context]) {
   }
 }
 
+/// Returns the only argument in [invocation], or null if [invocation] does not
+/// contain exactly one argument.
+Expression getOnlyArgument(ArgumentInvocation invocation) {
+  if (invocation.positional.length == 0 && invocation.named.length == 1) {
+    return invocation.named.values.first;
+  } else if (invocation.positional.length == 1 && invocation.named.isEmpty) {
+    return invocation.positional.first;
+  } else {
+    return null;
+  }
+}
+
 /// An exception thrown by a migrator.
 class MigrationException {
   final String message;

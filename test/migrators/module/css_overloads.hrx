@@ -1,0 +1,10 @@
+<==> input/entrypoint.scss
+$a: grayscale(100%);
+$b: invert(0.5);
+$c: opacity(25%);
+$d: saturate(0.5);
+$e: alpha(opacity=50);
+$f: alpha(g=h, i=j, k=l);
+
+<==> log.txt
+Nothing to migrate!
