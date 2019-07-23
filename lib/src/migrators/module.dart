@@ -242,17 +242,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     if (namespace == null && builtInFunctionModules.containsKey(name)) {
       // Don't migrate CSS-compatibility overloads.
-      var argument = getOnlyArgument(node.arguments);
-      if (({'grayscale', 'invert', 'opacity'}.contains(name) &&
-              argument is NumberExpression) ||
-          (name == 'saturate' && argument != null) ||
-          (name == 'alpha' &&
-              (node.arguments.positional.length + node.arguments.named.length >
-                      1 ||
-                  (argument is BinaryOperationExpression &&
-                      argument.operator == BinaryOperator.singleEquals)))) {
-        return;
-      }
+      if (_isCssCompatibilityOverload(node)) return;
+
       namespace = builtInFunctionModules[name];
       name = builtInFunctionNameChanges[name] ?? name;
       if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
@@ -273,6 +264,29 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _additionalUseRules.add("sass:$namespace");
     }
     if (namespace != null || name != originalName) patcher(name, namespace);
+  }
+
+  /// Returns true if [node] is a function overload that exists to provide
+  /// compatiblity with plain CSS function calls, and should therefore not be
+  /// migrated to the module version.
+  bool _isCssCompatibilityOverload(FunctionExpression node) {
+    var argument = getOnlyArgument(node.arguments);
+    switch (node.name.asPlain) {
+      case 'grayscale':
+      case 'invert':
+      case 'opacity':
+        return argument is NumberExpression;
+      case 'saturate':
+        return argument != null;
+      case 'alpha':
+        var totalArgs =
+            node.arguments.positional.length + node.arguments.named.length;
+        if (totalArgs > 1) return true;
+        return argument is BinaryOperationExpression &&
+            argument.operator == BinaryOperator.singleEquals;
+      default:
+        return false;
+    }
   }
 
   /// Given a named argument [arg], returns a span from the start of the name
