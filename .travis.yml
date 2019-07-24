@@ -29,9 +29,7 @@ jobs:
   - env: NODE_VERSION=stable
     dart_task: {test: -t node}
   # Keep these up-to-date with the latest LTS Node releases. They next need to
-  # be rotated December 2019. See https://github.com/nodejs/Release.
-  - env: NODE_VERSION=lts/carbon
-    dart_task: {test: -t node}
+  # be rotated April 2020. See https://github.com/nodejs/Release.
   - env: NODE_VERSION=lts/dubnium
     dart_task: {test: -t node}
 
