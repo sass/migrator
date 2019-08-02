@@ -20,6 +20,9 @@ import 'package:test_process/test_process.dart';
 void testMigrator(String migrator, {bool node: false}) {
   if (node) {
     _ensureUpToDate("build/sass_migrator.dart.js", "pub run grinder js");
+  } else {
+    _ensureUpToDate("build/sass_migrator.dart.app.snapshot",
+        'pub run grinder app-snapshot');
   }
 
   var migrationTests = Directory("test/migrators/$migrator");
@@ -84,7 +87,10 @@ Future<void> _testHrx(File hrxFile, String migrator, {bool node: false}) async {
   var executable = node ? "node" : Platform.executable;
   var executableArgs = node
       ? [p.absolute("build/sass_migrator.dart.js")]
-      : ["--enable-asserts", p.absolute("bin/sass_migrator.dart")];
+      : [
+          "--enable-asserts",
+          p.absolute("build/sass_migrator.dart.app.snapshot")
+        ];
 
   var process = await TestProcess.start(
       executable,
