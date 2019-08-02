@@ -1,0 +1,13 @@
+<==> arguments
+--migrate-deps --forward=all
+
+<==> input/entrypoint.scss
+@import "library";
+
+<==> input/_library.scss
+a {
+  b: c;
+}
+
+<==> output/entrypoint.scss
+@use "library";

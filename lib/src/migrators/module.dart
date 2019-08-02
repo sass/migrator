@@ -12,6 +12,7 @@ import 'package:args/args.dart';
 import 'package:sass/src/ast/sass.dart';
 
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/migrators/module/forward_type.dart';
 import 'package:source_span/source_span.dart';
 
 import 'package:sass_migrator/src/migration_visitor.dart';
@@ -54,15 +55,17 @@ class ModuleMigrator extends Migrator {
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
-    if (argResults['forward'] == 'prefixed' &&
+    var forward = ForwardType(argResults['forward']);
+    if (forward == ForwardType.prefixed &&
         argResults['remove-prefix'] == null) {
       throw MigrationException(
-          'Error: Must provide --remove-prefix when --forward=prefixed');
+          'You must provide --remove-prefix with --forward=prefixed so we know '
+          'which prefixed members to forward.');
     }
     var migrated = _ModuleMigrationVisitor(
             prefixToRemove:
                 (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
-            forwardOption: argResults['forward'] as String)
+            forward: forward)
         .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
@@ -114,15 +117,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// should be removed.
   final String prefixToRemove;
 
-  /// The value of the --forward flag, either 'none', 'all', or 'prefixed'.
-  final String forwardOption;
+  /// The value of the --forward flag.
+  final ForwardType forward;
 
   /// Constructs a new module migration visitor.
   ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor({this.prefixToRemove, this.forwardOption})
+  _ModuleMigrationVisitor({this.prefixToRemove, this.forward})
       : super(migrateDependencies: true);
 
   /// Returns a semicolon unless the current stylesheet uses the indented
@@ -141,17 +144,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return _getEntrypointForwards() + uses.join() + results;
   }
 
-  /// Returns whether an member of [name] should be forwarded in the entrypoint.
+  /// Returns whether the member named [name] should be forwarded in the
+  /// entrypoint.
   ///
   /// [name] should be the original name of that member, even if it started with
   /// [prefixToRemove].
   bool _shouldForward(String name) {
-    switch (forwardOption) {
-      case 'all':
+    switch (forward) {
+      case ForwardType.all:
         return true;
-      case 'none':
+      case ForwardType.none:
         return false;
-      case 'prefixed':
+      case ForwardType.prefixed:
         return name.startsWith(prefixToRemove);
       default:
         throw StateError('--forward should not allow invalid values');
@@ -197,21 +201,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // be forwarded.
     var forwards = <String>[];
     for (var url in shown.keys) {
-      var shownCount = shown[url].length;
       var hiddenCount = hidden[url]?.length ?? 0;
-      var forward = '@forward "${_absoluteUriToDependency(url)}"';
+      var forward = '@forward "${_absoluteUrlToDependency(url)}"';
 
-      // When not all members from a dependency should be forwarded, determine
-      // whether to use a `show` clause or a `hide` clause based on the number
-      // of members in each set.
+      // When not all members from a dependency should be forwarded, use a
+      // `hide` clause to hide the ones that shouldn't.
       if (hiddenCount > 0) {
-        if (shownCount <= hiddenCount) {
-          var shownMembers = shown[url].toList()..sort();
-          forward += ' show ${shownMembers.join(", ")}';
-        } else {
-          var hiddenMembers = hidden[url].toList()..sort();
-          forward += ' hide ${hiddenMembers.join(", ")}';
-        }
+        var hiddenMembers = hidden[url].toList()..sort();
+        forward += ' hide ${hiddenMembers.join(", ")}';
       }
       forward += '$_semicolonIfNotIndented\n';
       forwards.add(forward);
@@ -678,21 +675,22 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (node.span.sourceUrl == _currentUrl) return null;
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
       /// Add new use rule for indirect dependency
-      var simplePath = _absoluteUriToDependency(node.span.sourceUrl);
+      var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
       _additionalUseRules.add(simplePath);
       _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
     }
     return _namespaces[node.span.sourceUrl];
   }
 
-  /// Converts an absolute URI for a stylesheet into the simplest string that
+  /// Converts an absolute URL for a stylesheet into the simplest string that
   /// could be used to depend on that stylesheet from the current one in a use,
   /// forward, or import rule.
-  String _absoluteUriToDependency(Uri uri) {
-    var relativePath = p.relative(uri.path, from: p.dirname(_currentUrl.path));
-    var basename = p.basenameWithoutExtension(relativePath);
+  String _absoluteUrlToDependency(Uri uri) {
+    var relativePath =
+        p.url.relative(uri.path, from: p.url.dirname(_currentUrl.path));
+    var basename = p.url.basenameWithoutExtension(relativePath);
     if (basename.startsWith('_')) basename = basename.substring(1);
-    return p.relative(p.join(p.dirname(relativePath), basename));
+    return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
   }
 
   /// Disallows @use after @at-root rules.
