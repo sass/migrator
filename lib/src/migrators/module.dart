@@ -12,15 +12,15 @@ import 'package:args/args.dart';
 import 'package:sass/src/ast/sass.dart';
 
 import 'package:path/path.dart' as p;
-import 'package:sass_migrator/src/migrators/module/forward_type.dart';
 import 'package:source_span/source_span.dart';
 
-import 'package:sass_migrator/src/migration_visitor.dart';
-import 'package:sass_migrator/src/migrator.dart';
-import 'package:sass_migrator/src/patch.dart';
-import 'package:sass_migrator/src/utils.dart';
+import '../migration_visitor.dart';
+import '../migrator.dart';
+import '../patch.dart';
+import '../utils.dart';
 
 import 'module/built_in_functions.dart';
+import 'module/forward_type.dart';
 import 'module/scope.dart';
 import 'module/unreferencable_type.dart';
 
