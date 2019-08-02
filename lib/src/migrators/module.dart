@@ -14,12 +14,13 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
-import 'package:sass_migrator/src/migration_visitor.dart';
-import 'package:sass_migrator/src/migrator.dart';
-import 'package:sass_migrator/src/patch.dart';
-import 'package:sass_migrator/src/utils.dart';
+import '../migration_visitor.dart';
+import '../migrator.dart';
+import '../patch.dart';
+import '../utils.dart';
 
 import 'module/built_in_functions.dart';
+import 'module/forward_type.dart';
 import 'module/scope.dart';
 import 'module/unreferencable_type.dart';
 
@@ -31,7 +32,19 @@ class ModuleMigrator extends Migrator {
   @override
   final argParser = ArgParser()
     ..addOption('remove-prefix',
-        abbr: 'p', help: 'Removes the provided prefix from members.');
+        abbr: 'p', help: 'Removes the provided prefix from members.')
+    ..addOption('forward',
+        allowed: ['all', 'none', 'prefixed'],
+        allowedHelp: {
+          'none': "Doesn't forward any members.",
+          'prefixed':
+              'Forwards members that start with the prefix specified for '
+                  '--remove-prefix.',
+          'all': 'Forwards all members.'
+        },
+        defaultsTo: 'none',
+        help: 'Specifies which members from dependencies to forward from the '
+            'entrypoint.');
 
   // Hide this until it's finished and the module system is launched.
   final hidden = true;
@@ -42,9 +55,17 @@ class ModuleMigrator extends Migrator {
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(Uri entrypoint) {
+    var forward = ForwardType(argResults['forward']);
+    if (forward == ForwardType.prefixed &&
+        argResults['remove-prefix'] == null) {
+      throw MigrationException(
+          'You must provide --remove-prefix with --forward=prefixed so we know '
+          'which prefixed members to forward.');
+    }
     var migrated = _ModuleMigrationVisitor(
             prefixToRemove:
-                (argResults['remove-prefix'] as String)?.replaceAll('_', '-'))
+                (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
+            forward: forward)
         .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
@@ -96,12 +117,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// should be removed.
   final String prefixToRemove;
 
+  /// The value of the --forward flag.
+  final ForwardType forward;
+
   /// Constructs a new module migration visitor.
   ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor({this.prefixToRemove})
+  _ModuleMigrationVisitor({this.prefixToRemove, this.forward})
       : super(migrateDependencies: true);
 
   /// Returns a semicolon unless the current stylesheet uses the indented
@@ -117,7 +141,80 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (results == null) return null;
     var uses = _additionalUseRules
         .map((use) => '@use "$use"$_semicolonIfNotIndented\n');
-    return uses.join() + results;
+    return _getEntrypointForwards() + uses.join() + results;
+  }
+
+  /// Returns whether the member named [name] should be forwarded in the
+  /// entrypoint.
+  ///
+  /// [name] should be the original name of that member, even if it started with
+  /// [prefixToRemove].
+  bool _shouldForward(String name) {
+    switch (forward) {
+      case ForwardType.all:
+        return true;
+      case ForwardType.none:
+        return false;
+      case ForwardType.prefixed:
+        return name.startsWith(prefixToRemove);
+      default:
+        throw StateError('--forward should not allow invalid values');
+    }
+  }
+
+  /// If the current stylesheet is the entrypoint, return a string of @forward
+  /// rules to forward all members for which [_shouldForward] returns true.
+  String _getEntrypointForwards() {
+    if (!_scope.isGlobal) {
+      throw StateError('Must be called from root of stylesheet');
+    }
+    if (_upstreamStylesheets.isNotEmpty) return '';
+
+    // Divide all global members from dependencies into sets based on whether
+    // they should be forwarded or not.
+    var shown = <Uri, Set<String>>{};
+    var hidden = <Uri, Set<String>>{};
+    categorizeMember(Uri url, String originalName, String newName) {
+      if (url == _currentUrl) return;
+      if (_shouldForward(originalName)) {
+        shown[url] ??= {};
+        shown[url].add(newName);
+      } else {
+        hidden[url] ??= {};
+        hidden[url].add(newName);
+      }
+    }
+
+    for (var entry in _scope.variables.entries) {
+      if (entry.value is! VariableDeclaration) continue;
+      categorizeMember(entry.value.span.sourceUrl,
+          (entry.value as VariableDeclaration).name, '\$${entry.key}');
+    }
+    for (var entry in _scope.mixins.entries) {
+      categorizeMember(entry.value.span.sourceUrl, entry.value.name, entry.key);
+    }
+    for (var entry in _scope.functions.entries) {
+      categorizeMember(entry.value.span.sourceUrl, entry.value.name, entry.key);
+    }
+
+    // Create a @forward rule for each dependency that has members that should
+    // be forwarded.
+    var forwards = <String>[];
+    for (var url in shown.keys) {
+      var hiddenCount = hidden[url]?.length ?? 0;
+      var forward = '@forward "${_absoluteUrlToDependency(url)}"';
+
+      // When not all members from a dependency should be forwarded, use a
+      // `hide` clause to hide the ones that shouldn't.
+      if (hiddenCount > 0) {
+        var hiddenMembers = hidden[url].toList()..sort();
+        forward += ' hide ${hiddenMembers.join(", ")}';
+      }
+      forward += '$_semicolonIfNotIndented\n';
+      forwards.add(forward);
+    }
+    forwards.sort();
+    return forwards.join('');
   }
 
   /// Visits the stylesheet at [dependency], resolved relative to [source].
@@ -578,15 +675,22 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (node.span.sourceUrl == _currentUrl) return null;
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
       /// Add new use rule for indirect dependency
-      var relativePath = p.relative(node.span.sourceUrl.path,
-          from: p.dirname(_currentUrl.path));
-      var basename = p.basenameWithoutExtension(relativePath);
-      if (basename.startsWith('_')) basename = basename.substring(1);
-      var simplePath = p.relative(p.join(p.dirname(relativePath), basename));
+      var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
       _additionalUseRules.add(simplePath);
       _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
     }
     return _namespaces[node.span.sourceUrl];
+  }
+
+  /// Converts an absolute URL for a stylesheet into the simplest string that
+  /// could be used to depend on that stylesheet from the current one in a use,
+  /// forward, or import rule.
+  String _absoluteUrlToDependency(Uri uri) {
+    var relativePath =
+        p.url.relative(uri.path, from: p.url.dirname(_currentUrl.path));
+    var basename = p.url.basenameWithoutExtension(relativePath);
+    if (basename.startsWith('_')) basename = basename.substring(1);
+    return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
   }
 
   /// Disallows @use after @at-root rules.

@@ -1,0 +1,48 @@
+<==> arguments
+--migrate-deps --remove-prefix=lib- --forward=prefixed
+
+<==> input/entrypoint.scss
+@import "lib1";
+@import "lib2";
+
+<==> input/_lib1.scss
+@function lib-fn() {
+  @return 0;
+}
+
+@mixin lib-mixin {
+  a: b;
+}
+
+<==> input/_lib2.scss
+$lib-a: 1;
+$lib-b: 2;
+$c: 3;
+
+@mixin not-prefixed {
+  a: b;
+}
+
+<==> output/entrypoint.scss
+@forward "lib1";
+@forward "lib2" hide $c, not-prefixed;
+@use "lib1";
+@use "lib2";
+
+<==> output/_lib1.scss
+@function fn() {
+  @return 0;
+}
+
+@mixin mixin {
+  a: b;
+}
+
+<==> output/_lib2.scss
+$a: 1;
+$b: 2;
+$c: 3;
+
+@mixin not-prefixed {
+  a: b;
+}
