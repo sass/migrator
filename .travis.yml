@@ -10,10 +10,12 @@ cache:
 
 before_script:
 - if-node() { if [ ! -z "$NODE_VERSION" ]; then "$@"; fi }
+- if-dart() { if [ -z "$NODE_VERSION" ]; then "$@"; fi }
 - if-node . "$HOME/.nvm/nvm.sh"
 - if-node nvm install "$NODE_VERSION"
 - if-node nvm use "$NODE_VERSION"
 - if-node pub run grinder js
+- if-dart pub run grinder app-snapshot
 
 jobs:
   include:
@@ -89,7 +91,7 @@ jobs:
     if: *deploy-if
     env:
       # PUB_CREDENTIALS="..."
-      - secure: "QCNhSiluq2TPf20ekwWlf+TkyzwnGwqS3pU+3XogRlP6ffRcG98zL9pn7cp8xmaM50x9PY6nk0t+oxkiOFw7sKhECfIRv0Z+P4cURhTUJ25+FqLPupCSqehoF93Bx8fXQR+2KCEP+cEeu2dcDU0hAZnzSWliRm/X/6Hfy+2M5eVc4x0+YC/gDjdbNbgH5P29qhRSB7klB8FtKDQdmQro0l1jSe69RGUmaeFSG7ryn+OlCJNMZqwZBd2Yb7pShiegU1ks/fIrC+pf/Yx2/VUscyLGwWqNxl6xXeZko3bNNCNPhPNIjArZJTNKMHvuIvKEvjfrUIr6TwGsw9vJmGjAbSiZzeXfeJ5zBp9ZaL1i8g5WwvVoQcbFgTn/vCisLZ97NP+0ipKr1VXxDfJ+MThaFsbOnl4wcC9XrrqQERWjH4lNGdfywvjql+d1M48veGqeYYY64UhiGDS+98t6GG+Q+ScQh5LDbn/uaQhi6DUCCqzaphdr78ylVrt7RzIdauOcu/CY3q22Kfm+wOZd+4S3Abk3L7P3eWl60sm/yUCx6yTA1rZPBylL5+R3cQS+9Lp9lll03Xcuf/L+MD7pVsN/RB5L52zn51oxtuVvjU01R0JZ8vWSgZ7CMs1BD7DXCjz9deGvBCHJR5aFelygt9ZSuIaM2xpZ2uSFscUnf6qjSh4="   
+      - secure: "QCNhSiluq2TPf20ekwWlf+TkyzwnGwqS3pU+3XogRlP6ffRcG98zL9pn7cp8xmaM50x9PY6nk0t+oxkiOFw7sKhECfIRv0Z+P4cURhTUJ25+FqLPupCSqehoF93Bx8fXQR+2KCEP+cEeu2dcDU0hAZnzSWliRm/X/6Hfy+2M5eVc4x0+YC/gDjdbNbgH5P29qhRSB7klB8FtKDQdmQro0l1jSe69RGUmaeFSG7ryn+OlCJNMZqwZBd2Yb7pShiegU1ks/fIrC+pf/Yx2/VUscyLGwWqNxl6xXeZko3bNNCNPhPNIjArZJTNKMHvuIvKEvjfrUIr6TwGsw9vJmGjAbSiZzeXfeJ5zBp9ZaL1i8g5WwvVoQcbFgTn/vCisLZ97NP+0ipKr1VXxDfJ+MThaFsbOnl4wcC9XrrqQERWjH4lNGdfywvjql+d1M48veGqeYYY64UhiGDS+98t6GG+Q+ScQh5LDbn/uaQhi6DUCCqzaphdr78ylVrt7RzIdauOcu/CY3q22Kfm+wOZd+4S3Abk3L7P3eWl60sm/yUCx6yTA1rZPBylL5+R3cQS+9Lp9lll03Xcuf/L+MD7pVsN/RB5L52zn51oxtuVvjU01R0JZ8vWSgZ7CMs1BD7DXCjz9deGvBCHJR5aFelygt9ZSuIaM2xpZ2uSFscUnf6qjSh4="
     script: skip
     deploy:
       provider: script
