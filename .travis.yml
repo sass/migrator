@@ -29,11 +29,11 @@ jobs:
 
   # Testing on Node.js
   - env: NODE_VERSION=stable
-    dart_task: {test: -x snapshot}
+    dart_task: {test: -t node}
   # Keep these up-to-date with the latest LTS Node releases. They next need to
   # be rotated April 2020. See https://github.com/nodejs/Release.
   - env: NODE_VERSION=lts/dubnium
-    dart_task: {test: -x snapshot}
+    dart_task: {test: -t node}
 
   # Static checks
   - dart_task: {dartanalyzer: --fatal-warnings ./}

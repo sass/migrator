@@ -18,19 +18,26 @@ import 'package:test_process/test_process.dart';
 /// If [node] is `true`, runs the Node.js version of the executable. Otherwise,
 /// runs the Dart VM version.
 void testMigrator(String migrator, {bool node: false}) {
+  var useSnapshot = true;
   if (node) {
     _ensureUpToDate("build/sass_migrator.dart.js", "pub run grinder js");
   } else {
-    _ensureUpToDate("build/sass_migrator.dart.app.snapshot",
-        'pub run grinder app-snapshot');
+    try {
+      _ensureUpToDate("build/sass_migrator.dart.app.snapshot",
+          'pub run grinder app-snapshot');
+    } catch (_) {
+      useSnapshot = false;
+    }
   }
 
   var migrationTests = Directory("test/migrators/$migrator");
   group(migrator, () {
     for (var file in migrationTests.listSync().whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
-        test(p.basenameWithoutExtension(file.path),
-            () => _testHrx(file, migrator, node: node));
+        test(
+            p.basenameWithoutExtension(file.path),
+            () =>
+                _testHrx(file, migrator, node: node, useSnapshot: useSnapshot));
       }
     }
   });
@@ -80,7 +87,11 @@ void _ensureUpToDate(String path, String commandToRun) {
 ///
 /// If [node] is `true`, runs the Node.js version of the executable. Otherwise,
 /// runs the Dart VM version.
-Future<void> _testHrx(File hrxFile, String migrator, {bool node: false}) async {
+///
+/// If [useSnapshot] is `true` and using the Dart VM, an app snapshot will be
+/// used instead of running directly from source.
+Future<void> _testHrx(File hrxFile, String migrator,
+    {bool node: false, bool useSnapshot: false}) async {
   var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
 
@@ -89,7 +100,9 @@ Future<void> _testHrx(File hrxFile, String migrator, {bool node: false}) async {
       ? [p.absolute("build/sass_migrator.dart.js")]
       : [
           "--enable-asserts",
-          p.absolute("build/sass_migrator.dart.app.snapshot")
+          p.absolute(useSnapshot
+              ? "build/sass_migrator.dart.app.snapshot"
+              : "bin/sass_migrator.dart")
         ];
 
   var process = await TestProcess.start(
