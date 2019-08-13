@@ -44,7 +44,13 @@ class ModuleMigrator extends Migrator {
         },
         defaultsTo: 'none',
         help: 'Specifies which members from dependencies to forward from the '
-            'entrypoint.');
+            'entrypoint.')
+    ..addFlag('dash-is-library-private',
+        help: "Treats members starting with `-` and `_` as private to the "
+            "overall library, but not to the individual module. This means "
+            "that leading dashes and underscores will be removed from member "
+            "names, but these members will not be forwarded from the "
+            "entrypoint, even if --forward=all.");
 
   // Hide this until it's finished and the module system is launched.
   final hidden = true;
@@ -65,7 +71,8 @@ class ModuleMigrator extends Migrator {
     var migrated = _ModuleMigrationVisitor(
             prefixToRemove:
                 (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
-            forward: forward)
+            forward: forward,
+            dashIsLibraryPrivate: argResults['dash-is-library-private'])
         .run(entrypoint);
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
@@ -120,12 +127,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// The value of the --forward flag.
   final ForwardType forward;
 
+  /// The value of the --dash-is-library-private flag.
+  final bool dashIsLibraryPrivate;
+
   /// Constructs a new module migration visitor.
   ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor({this.prefixToRemove, this.forward})
+  _ModuleMigrationVisitor(
+      {this.prefixToRemove, this.forward, this.dashIsLibraryPrivate})
       : super(migrateDependencies: true);
 
   /// Returns a semicolon unless the current stylesheet uses the indented
@@ -176,7 +187,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var hidden = <Uri, Set<String>>{};
     categorizeMember(Uri url, String originalName, String newName) {
       if (url == _currentUrl) return;
-      if (_shouldForward(originalName)) {
+      if (!dashIsLibraryPrivate && originalName.startsWith('-')) {
+        // This remains module-private, so we don't need to manually hide it.
+        return;
+      } else if (_shouldForward(originalName) &&
+          !originalName.startsWith('-')) {
         shown[url] ??= {};
         shown[url].add(newName);
       } else {
@@ -603,8 +618,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (_scope.isGlobal || node.isGlobal) {
       name = _unprefix(node.name);
       if (name != node.name) {
-        addPatch(
-            patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
+        var removedLength = node.name.length - name.length;
+        addPatch(patchDelete(node.span, start: 1, end: removedLength + 1));
       }
       var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
@@ -659,14 +674,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _scope.functions[name] = node;
   }
 
-  /// Returns [name] with [prefixToRemove] removed.
+  /// Returns [name] with some prefix removed.
+  ///
+  /// The removed prefix can be [prefixToRemove] (if set) or a dash or
+  /// underscore if [dashIsLibraryPrivate] is true. If [name] starts with a
+  /// dash or underscore followed by [prefixToRemove], both will be removed.
   String _unprefix(String name) {
-    if (prefixToRemove == null || prefixToRemove.length > name.length) {
-      return name;
+    if (dashIsLibraryPrivate && name.startsWith('-')) name = name.substring(1);
+    if (prefixToRemove != null &&
+        prefixToRemove.length < name.length &&
+        prefixToRemove == name.substring(0, prefixToRemove.length)) {
+      name = name.substring(prefixToRemove.length);
     }
-    var startOfName = name.substring(0, prefixToRemove.length);
-    if (prefixToRemove != startOfName) return name;
-    return name.substring(prefixToRemove.length);
+    return name;
   }
 
   /// Finds the namespace for the stylesheet containing [node], adding a new use

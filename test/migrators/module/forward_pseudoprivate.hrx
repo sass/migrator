@@ -1,0 +1,25 @@
+<==> arguments
+--migrate-deps --forward=all --dash-is-library-private
+
+<==> input/entrypoint.scss
+@import "dependency";
+
+a {
+  color: $_pseudoprivate;
+}
+
+<==> input/_dependency.scss
+$public: red;
+$-pseudoprivate: blue;
+
+<==> output/entrypoint.scss
+@forward "dependency" hide $pseudoprivate;
+@use "dependency";
+
+a {
+  color: $dependency.pseudoprivate;
+}
+
+<==> output/_dependency.scss
+$public: red;
+$pseudoprivate: blue;
