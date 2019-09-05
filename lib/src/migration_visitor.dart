@@ -48,8 +48,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   /// Runs a new migration on [url] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
-  Map<Uri, String> run(Uri url) {
-    visitStylesheet(parseStylesheet(url));
+  Map<Uri, String> run(Uri url) => runWithStylesheet(parseStylesheet(url));
+
+  /// Runs a new migration of [stylesheet] (and its dependencies, if
+  /// [migrateDependencies] is true) and returns a map of migrated contents.
+  Map<Uri, String> runWithStylesheet(Stylesheet stylesheet) {
+    visitStylesheet(stylesheet);
     return _migrated;
   }
 

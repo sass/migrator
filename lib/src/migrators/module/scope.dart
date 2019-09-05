@@ -60,6 +60,20 @@ class Scope {
       parent != null &&
       (functions.containsKey(name) || parent.isLocalFunction(name));
 
+  /// Returns the declaration of a variable named [name] if it exists, or null
+  /// if it does not.
+  SassNode findVariable(String name) =>
+      variables[name] ?? parent?.findVariable(name);
+
+  /// Returns the declaration of a mixin named [name] if it exists, or null if
+  /// it does not.
+  MixinRule findMixin(String name) => mixins[name] ?? parent?.findMixin(name);
+
+  /// Returns the declaration of a function named [name] if it exists, or null
+  /// if it does not.
+  FunctionRule findFunction(String name) =>
+      functions[name] ?? parent?.findFunction(name);
+
   /// Checks whether a reference to a variable, mixin, or function is invalid,
   /// throwing a MigrationException if it is.
   ///
