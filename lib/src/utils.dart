@@ -36,13 +36,13 @@ String namespaceForPath(String path) {
   return path.split('/').last.split('.').first;
 }
 
-/// Creates a patch that adds [text] immediately before [span].
+/// Creates a patch that adds [text] immediately before [node].
 Patch patchBefore(AstNode node, String text) {
   var start = node.span.start;
   return Patch(start.file.span(start.offset, start.offset), text);
 }
 
-/// Creates a patch that adds [text] immediately after [span].
+/// Creates a patch that adds [text] immediately after [node].
 Patch patchAfter(AstNode node, String text) {
   var end = node.span.end;
   return Patch(end.file.span(end.offset, end.offset), text);
