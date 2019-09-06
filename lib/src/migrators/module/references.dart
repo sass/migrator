@@ -18,7 +18,7 @@ import '../../utils.dart';
 
 /// A mapping between member declarations and references.
 ///
-/// Generating this object is the first pass of the module migrator. It then
+/// The first pass of the module migrator generates this object. It then
 /// uses the information stored here on the second pass to determine how a
 /// member is used.
 class References {
@@ -28,6 +28,16 @@ class References {
   ///
   /// This map is frozen after it is built to prevent further modification.
   final variables = BidirectionalMap<VariableExpression,
+      SassNode /*VariableDeclaration|Argument*/ >();
+
+  /// Map between variable reassignments and the original declaration they
+  /// override.
+  ///
+  /// If a variable is reassigned multiple times, all reassignments will map
+  /// to the original declaration, not the previous reassignment.
+  ///
+  /// This map is frozen after it is built to prevent further modification.
+  final variableReassignments = BidirectionalMap<VariableDeclaration,
       SassNode /*VariableDeclaration|Argument*/ >();
 
   /// Map between mixin references and their declarations.
@@ -71,6 +81,44 @@ class References {
     }
     return references.any(
         (reference) => reference.span.sourceUrl != declaration.span.sourceUrl);
+  }
+
+  /// Finds the original declaration of the variable referenced in [reference].
+  SassNode /*VariableDeclaration|Argument*/ originalDeclaration(
+      VariableExpression reference) {
+    var declaration = variables[reference];
+    return variableReassignments[declaration] ?? declaration;
+  }
+
+  /// For a given declaration or reference, returns the set of all nodes
+  /// associated with it, including itself.
+  ///
+  /// For mixins, this is the declaring MixinRule and all referencing
+  /// IncludeRules.
+  ///
+  /// For functions, this is the declaring FunctionRule and all referencing
+  /// FunctionRules (both regular and statically-determined get-function calls).
+  ///
+  /// For variables, this is the original declaration, all reassignments, and
+  /// all referencing VariableExpressions.
+  Set<SassNode> allNodes(SassNode node) {
+    if (node is IncludeRule) return allNodes(mixins[node]);
+    if (node is FunctionExpression) return allNodes(functions[node]);
+    if (node is VariableExpression) return allNodes(originalDeclaration(node));
+    if (node is MixinRule) return {node, ...mixins.keysForValue(node)};
+    if (node is FunctionRule) {
+      return {
+        node,
+        ...functions.keysForValue(node),
+        ...getFunctionReferences.keysForValue(node)
+      };
+    }
+    return {
+      node,
+      ...variables.keysForValue(node),
+      for (var reassignment in variableReassignments.keysForValue(node))
+        ...variables.keysForValue(reassignment)
+    };
   }
 
   /// Constructs a new References object based on the stylesheet at [entrypoint]
@@ -208,7 +256,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Declares a variable in the current scope.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _scopeForNamespace(node.namespace).variables[node.name] = node;
+    var scope = _scopeForNamespace(node.namespace);
+    var previous = scope.variables[node.name];
+    scope.variables[node.name] = node;
+    var original = _references.variableReassignments[previous] ?? previous;
+    _references.variableReassignments[node] = original;
     super.visitVariableDeclaration(node);
   }
 

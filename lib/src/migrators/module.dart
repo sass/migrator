@@ -12,7 +12,6 @@ import 'package:args/args.dart';
 import 'package:sass/src/ast/sass.dart';
 
 import 'package:path/path.dart' as p;
-import 'package:sass_migrator/src/utils.dart' as prefix0;
 import 'package:source_span/source_span.dart';
 
 import '../migration_visitor.dart';
@@ -73,7 +72,6 @@ class ModuleMigrator extends Migrator {
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
     }
-    print(migrated);
     return migrated;
   }
 }
@@ -97,9 +95,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// references to it to be generated at the same time.
   final _memberRenamePatches = <Uri, List<Patch>>{};
 
-  /// Declarations of members that previously started with `-` or `_`, but are
-  /// used across modules.
-  final _pseudoprivateMembers = <SassNode>{};
+  /// Maps declarations of members that have been renamed to their new names.
+  final _renamedMembers = <SassNode, String>{};
 
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
@@ -198,26 +195,26 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         SassNode declaration, String originalName, String newName) {
       var url = declaration.span.sourceUrl;
       if (url == _currentUrl) return;
-      if (_shouldForward(originalName) &&
-          !_pseudoprivateMembers.contains(declaration)) {
+      if (_shouldForward(originalName) && !originalName.startsWith('-')) {
         shown[url] ??= {};
         shown[url].add(newName);
-      } else {
+      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
         hidden[url] ??= {};
         hidden[url].add(newName);
       }
     }
 
-    for (var entry in _scope.variables.entries) {
-      if (entry.value is! VariableDeclaration) continue;
-      categorizeMember(entry.value, (entry.value as VariableDeclaration).name,
-          '\$${entry.key}');
+    for (var node in _scope.variables.values) {
+      if (node is VariableDeclaration) {
+        categorizeMember(
+            node, node.name, '\$${_renamedMembers[node] ?? node.name}');
+      }
     }
-    for (var entry in _scope.mixins.entries) {
-      categorizeMember(entry.value, entry.value.name, entry.key);
+    for (var node in _scope.mixins.values) {
+      categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
     }
-    for (var entry in _scope.functions.entries) {
-      categorizeMember(entry.value, entry.value.name, entry.key);
+    for (var node in _scope.functions.values) {
+      categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
     }
 
     // Create a @forward rule for each dependency that has members that should
@@ -363,16 +360,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         ? getStaticNameForGetFunctionCall(node)
         : nameSpan(node);
     if (span == null) return;
+    var name = span.text.replaceAll('_', '-');
+    if (_scope.isLocalFunction(name)) return;
 
-    var namespace = _namespaceForNode((getFunctionCall
-        ? references.getFunctionReferences
-        : references.functions)[node]);
-
+    var namespace = _namespaceForNode(_scope.global.functions[name]);
     if (namespace != null) {
       namespacePatcher(namespace);
       return;
     }
-    var name = span.text;
+
     if (!builtInFunctionModules.containsKey(name)) return;
 
     namespace = builtInFunctionModules[name];
@@ -580,7 +576,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _useAllowed = false;
     super.visitIncludeRule(node);
     _scope.checkUnreferencableMixin(node);
-    var namespace = _namespaceForNode(references.mixins[node]);
+    if (_scope.isLocalMixin(node.name)) return;
+
+    var namespace = _namespaceForNode(_scope.global.mixins[node.name]);
     if (namespace != null) {
       addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
     }
@@ -605,7 +603,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitVariableExpression(VariableExpression node) {
     _scope.checkUnreferencableVariable(node);
-    var namespace = _namespaceForNode(references.variables[node]);
+    if (_scope.isLocalVariable(node.name)) return;
+
+    var namespace = _namespaceForNode(_scope.global.variables[node.name]);
     if (namespace != null) {
       addPatch(patchBefore(node, '$namespace.'));
     }
@@ -621,14 +621,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
-    var name = node.name;
     if (_scope.isGlobal || node.isGlobal) {
+      var name = node.name;
       if (name.startsWith('-') &&
           references.referencedOutsideDeclaringStylesheet(node)) {
         // Remove leading `-` since private members can't be accessed outside
         // the module they're declared in.
         name = name.substring(1);
-        _pseudoprivateMembers.add(node);
       }
       name = _unprefix(name);
       if (name != node.name) {
@@ -651,47 +650,45 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
       }
     }
-    _scope.variables[name] = node;
+    _scope.variables[node.name] = node;
   }
 
   /// Declares a mixin within this stylesheet, in the current local scope if
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
-    var name = node.name;
     if (_scope.isGlobal) {
+      var name = node.name;
       if (name.startsWith('-') &&
           references.referencedOutsideDeclaringStylesheet(node)) {
         // Remove leading `-` since private members can't be accessed outside
         // the module they're declared in.
         name = name.substring(1);
-        _pseudoprivateMembers.add(node);
       }
       name = _unprefix(name);
       if (name != node.name) {
         _renameMember(node, name);
       }
     }
-    _scope.mixins[name] = node;
+    _scope.mixins[node.name] = node;
   }
 
   /// Declares a function within this stylesheet, in the current local scope if
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
-    var name = node.name;
     if (_scope.isGlobal) {
+      var name = node.name;
       if (name.startsWith('-') &&
           references.referencedOutsideDeclaringStylesheet(node)) {
         // Remove leading `-` since private members can't be accessed outside
         // the module they're declared in.
         name = name.substring(1);
-        _pseudoprivateMembers.add(node);
       }
       name = _unprefix(name);
       if (name != node.name) {
         _renameMember(node, name);
       }
     }
-    _scope.functions[name] = node;
+    _scope.functions[node.name] = node;
   }
 
   /// Renames [declaration] and all of its references to [newName].
@@ -702,8 +699,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           .add(Patch(nameSpan(node), newName));
     }
 
-    patchName(declaration);
+    _renamedMembers[declaration] = newName;
+
     if (declaration is FunctionRule) {
+      patchName(declaration);
       references.functions.keysForValue(declaration).forEach(patchName);
       for (var reference
           in references.getFunctionReferences.keysForValue(declaration)) {
@@ -711,10 +710,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _memberRenamePatches[reference.span.sourceUrl]
             .add(Patch(getStaticNameForGetFunctionCall(reference), newName));
       }
-    } else if (declaration is MixinRule) {
-      references.mixins.keysForValue(declaration).forEach(patchName);
     } else {
-      references.variables.keysForValue(declaration).forEach(patchName);
+      references.allNodes(declaration).forEach(patchName);
     }
   }
 

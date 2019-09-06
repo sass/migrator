@@ -59,6 +59,10 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) =>
 FileSpan subspan(FileSpan span, {int start = 0, int end}) => span.file
     .span(span.start.offset + start, span.start.offset + (end ?? span.length));
 
+/// Returns a span containing the name of a member declaration or reference.
+///
+/// This does not include the namespace if present and does not include the
+/// `$` at the start of variable names.
 FileSpan nameSpan(SassNode node) {
   if (node is VariableDeclaration) {
     var start = node.namespace == null ? 1 : node.namespace.length + 2;

@@ -11,10 +11,11 @@ $fn1: get-function(increment);
 $fn2: get-function($name: "false");
 $fn3: get-function("str-length");
 $fn4: get-function("incre" + "ment");
-$fn5: get-function(lighten);
 
 $x: "increment";
-$fn6: get-function($x);
+$fn5: get-function($x);
+
+$fn6: get-function(lighten);
 
 <==> input/_library.scss
 @function increment($x) {
@@ -38,10 +39,11 @@ $fn1: meta.get-function(increment, $module: "library");
 $fn2: meta.get-function($name: "false", $module: "true");
 $fn3: meta.get-function("length", $module: "string");
 $fn4: meta.get-function("incre" + "ment");
-$fn5: meta.get-function(lighten);
 
 $x: "increment";
-$fn6: meta.get-function($x);
+$fn5: meta.get-function($x);
+
+$fn6: meta.get-function(lighten);
 
 <==> log.txt
 line 9, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
@@ -49,13 +51,13 @@ line 9, column 20 of entrypoint.scss: WARNING - get-function call may require $m
 9 | $fn4: get-function("incre" + "ment");
   |                    ^^^^^^^^^^^^^^^^
   '
-line 10, column 20 of entrypoint.scss: WARNING - lighten is not available in the module system and should be manually migrated to color.adjust
+line 12, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
    ,
-10 | $fn5: get-function(lighten);
-   |                    ^^^^^^^
-   '
-line 13, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
-   ,
-13 | $fn6: get-function($x);
+12 | $fn5: get-function($x);
    |                    ^^
+   '
+line 14, column 20 of entrypoint.scss: WARNING - lighten is not available in the module system and should be manually migrated to color.adjust
+   ,
+14 | $fn6: get-function(lighten);
+   |                    ^^^^^^^
    '
