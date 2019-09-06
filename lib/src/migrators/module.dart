@@ -12,6 +12,7 @@ import 'package:args/args.dart';
 import 'package:sass/src/ast/sass.dart';
 
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/utils.dart' as prefix0;
 import 'package:source_span/source_span.dart';
 
 import '../migration_visitor.dart';
@@ -72,6 +73,7 @@ class ModuleMigrator extends Migrator {
     if (!migrateDependencies) {
       migrated.removeWhere((url, contents) => url != entrypoint);
     }
+    print(migrated);
     return migrated;
   }
 }
@@ -87,6 +89,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// stylesheet already declared is not treated as reassignment (since that
   /// would cause a circular dependency).
   final _upstreamStylesheets = <Uri>{};
+
+  /// Patches that rename a variable, mixin, or function.
+  ///
+  /// Unlike the main patches list, these can be generated before starting
+  /// a stylesheet's migration. This allows all patches for a declaration and
+  /// references to it to be generated at the same time.
+  final _memberRenamePatches = <Uri, List<Patch>>{};
+
+  /// Declarations of members that previously started with `-` or `_`, but are
+  /// used across modules.
+  final _pseudoprivateMembers = <SassNode>{};
 
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
@@ -141,6 +154,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// [_additionalUseRules], or null if the stylesheet does not change.
   @override
   String getMigratedContents() {
+    if (_memberRenamePatches.containsKey(_currentUrl)) {
+      _memberRenamePatches.remove(_currentUrl).forEach(addPatch);
+    }
     var results = super.getMigratedContents();
     if (results == null) return null;
     var uses = _additionalUseRules
@@ -178,9 +194,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // they should be forwarded or not.
     var shown = <Uri, Set<String>>{};
     var hidden = <Uri, Set<String>>{};
-    categorizeMember(Uri url, String originalName, String newName) {
+    categorizeMember(
+        SassNode declaration, String originalName, String newName) {
+      var url = declaration.span.sourceUrl;
       if (url == _currentUrl) return;
-      if (_shouldForward(originalName)) {
+      if (_shouldForward(originalName) &&
+          !_pseudoprivateMembers.contains(declaration)) {
         shown[url] ??= {};
         shown[url].add(newName);
       } else {
@@ -191,14 +210,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     for (var entry in _scope.variables.entries) {
       if (entry.value is! VariableDeclaration) continue;
-      categorizeMember(entry.value.span.sourceUrl,
-          (entry.value as VariableDeclaration).name, '\$${entry.key}');
+      categorizeMember(entry.value, (entry.value as VariableDeclaration).name,
+          '\$${entry.key}');
     }
     for (var entry in _scope.mixins.entries) {
-      categorizeMember(entry.value.span.sourceUrl, entry.value.name, entry.key);
+      categorizeMember(entry.value, entry.value.name, entry.key);
     }
     for (var entry in _scope.functions.entries) {
-      categorizeMember(entry.value.span.sourceUrl, entry.value.name, entry.key);
+      categorizeMember(entry.value, entry.value.name, entry.key);
     }
 
     // Create a @forward rule for each dependency that has members that should
@@ -252,6 +271,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
     _useAllowed = oldUseAllowed;
+    if (_upstreamStylesheets.isEmpty && _memberRenamePatches.isNotEmpty) {
+      throw StateError(
+          'Attempted to patch stylesheet that has already been migrated.');
+    }
   }
 
   /// Visits each of [node]'s expressions and children.
@@ -288,83 +311,96 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
     _scope.checkUnreferencableFunction(node);
-    _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
-      addPatch(
-          Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
+
+    // Don't migrate CSS-compatibility overloads.
+    if (_isCssCompatibilityOverload(node)) return;
+
+    _patchNamespaceForFunction(node, (namespace) {
+      addPatch(patchBefore(node.name, '$namespace.'));
     });
     visitArgumentInvocation(node.arguments);
 
     if (node.name.asPlain == "get-function") {
-      var nameArgument =
+      // Ignore get-function calls that already have a module argument.
+      var moduleArg = node.arguments.named['module'];
+      if (moduleArg == null && node.arguments.positional.length > 2) {
+        moduleArg = node.arguments.positional[2];
+      }
+      if (moduleArg != null) return;
+
+      // Warn for get-function calls without a static name.
+      var nameArg =
           node.arguments.named['name'] ?? node.arguments.positional.first;
-      if (nameArgument is! StringExpression ||
-          (nameArgument as StringExpression).text.asPlain == null) {
-        emitWarning("get-function call may require \$module parameter",
-            nameArgument.span);
+      if (nameArg is! StringExpression ||
+          (nameArg as StringExpression).text.asPlain == null) {
+        emitWarning(
+            "get-function call may require \$module parameter", nameArg.span);
         return;
       }
-      var fnName = nameArgument as StringExpression;
-      _patchNamespaceForFunction(node, fnName.text.asPlain, (name, namespace) {
-        var span = fnName.span;
-        if (fnName.hasQuotes) {
-          span = span.file.span(span.start.offset + 1, span.end.offset - 1);
-        }
-        addPatch(Patch(span, name));
+
+      _patchNamespaceForFunction(node, (namespace) {
         var beforeParen = node.span.end.offset - 1;
-        if (namespace != null) {
-          addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
-              ', \$module: "$namespace"'));
-        }
-      });
+        addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
+            ', \$module: "$namespace"'));
+      }, getFunctionCall: true);
     }
   }
 
-  /// Calls [patcher] when the function [node] with name [originalName] requires
-  /// a namespace and/or a new name and adds a new use rule if necessary.
+  /// Calls [namespacePatcher] when the function [node] requires a namespace.
+  ///
+  /// This also patches the name for any built-in functions whose names change
+  /// in the module system.
   ///
   /// When the function is a color function that's not present in the module
   /// system (like `lighten`), this also migrates its `$amount` argument to the
   /// appropriate `color.adjust` argument.
   ///
-  /// [patcher] takes two arguments: the name used to refer to that function
-  /// when namespaced, and the namespace itself. The name will match the name
-  /// provided to the outer function except for built-in functions whose name
-  /// within a module differs from its original name.
-  void _patchNamespaceForFunction(FunctionExpression node, String originalName,
-      void patcher(String name, String namespace)) {
-    if (originalName == null) return;
-    if (_scope.isLocalFunction(originalName)) return;
+  /// If [node] is a get-function call, [getFunctionCall] should be true.
+  void _patchNamespaceForFunction(
+      FunctionExpression node, void namespacePatcher(String namespace),
+      {bool getFunctionCall = false}) {
+    var span = getFunctionCall
+        ? getStaticNameForGetFunctionCall(node)
+        : nameSpan(node);
+    if (span == null) return;
 
-    var name = _unprefix(originalName) ?? originalName;
+    var namespace = _namespaceForNode((getFunctionCall
+        ? references.getFunctionReferences
+        : references.functions)[node]);
 
-    var namespace = _scope.global.functions.containsKey(name)
-        ? _namespaceForNode(_scope.global.functions[name])
-        : null;
-
-    if (namespace == null && builtInFunctionModules.containsKey(name)) {
-      // Don't migrate CSS-compatibility overloads.
-      if (_isCssCompatibilityOverload(node)) return;
-
-      namespace = builtInFunctionModules[name];
-      name = builtInFunctionNameChanges[name] ?? name;
-      if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
-        if (node.arguments.positional.length == 2 &&
-            node.arguments.named.isEmpty) {
-          _patchRemovedColorFunction(name, node.arguments.positional.last);
-          name = 'adjust';
-        } else if (node.arguments.named.containsKey('amount')) {
-          var arg = node.arguments.named['amount'];
-          _patchRemovedColorFunction(name, arg,
-              existingArgName: _findArgNameSpan(arg));
-          name = 'adjust';
-        } else {
-          emitWarning("Could not migrate malformed '$name' call", node.span);
-          return;
-        }
-      }
-      _additionalUseRules.add("sass:$namespace");
+    if (namespace != null) {
+      namespacePatcher(namespace);
+      return;
     }
-    if (namespace != null || name != originalName) patcher(name, namespace);
+    var name = span.text;
+    if (!builtInFunctionModules.containsKey(name)) return;
+
+    namespace = builtInFunctionModules[name];
+    name = builtInFunctionNameChanges[name] ?? name;
+    if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
+      if (getFunctionCall) {
+        emitWarning(
+            "$name is not available in the module system and should be "
+            "manually migrated to color.adjust",
+            span);
+        return;
+      } else if (node.arguments.positional.length == 2 &&
+          node.arguments.named.isEmpty) {
+        _patchRemovedColorFunction(name, node.arguments.positional.last);
+        name = 'adjust';
+      } else if (node.arguments.named.containsKey('amount')) {
+        var arg = node.arguments.named['amount'];
+        _patchRemovedColorFunction(name, arg,
+            existingArgName: _findArgNameSpan(arg));
+        name = 'adjust';
+      } else {
+        emitWarning("Could not migrate malformed '$name' call", node.span);
+        return;
+      }
+    }
+    _additionalUseRules.add("sass:$namespace");
+    namespacePatcher(namespace);
+    if (name != span.text) addPatch(Patch(span, name));
   }
 
   /// Returns true if [node] is a function overload that exists to provide
@@ -544,19 +580,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _useAllowed = false;
     super.visitIncludeRule(node);
     _scope.checkUnreferencableMixin(node);
-    if (_scope.isLocalMixin(node.name)) return;
-
-    var name = _unprefix(node.name);
-    if (!_scope.global.mixins.containsKey(name)) return;
-
-    var namespace = _namespaceForNode(_scope.global.mixins[name]);
-    var endName = node.arguments.span.start.offset;
-    var startName = endName - node.name.length;
-    var nameSpan = node.span.file.span(startName, endName);
-    if (namespace == null) {
-      if (name != node.name) addPatch(Patch(nameSpan, name));
-    } else {
-      addPatch(Patch(nameSpan, "$namespace.$name"));
+    var namespace = _namespaceForNode(references.mixins[node]);
+    if (namespace != null) {
+      addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
     }
   }
 
@@ -579,16 +605,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitVariableExpression(VariableExpression node) {
     _scope.checkUnreferencableVariable(node);
-    if (_scope.isLocalVariable(node.name)) return;
-
-    var name = _unprefix(node.name);
-    if (!_scope.global.variables.containsKey(name)) return;
-    var declaration = _scope.global.variables[name];
-    var namespace = _namespaceForNode(declaration);
-    if (namespace == null) {
-      if (name != node.name) addPatch(Patch(node.span, "\$$name"));
-    } else {
-      addPatch(Patch(node.span, "\$$namespace.$name"));
+    var namespace = _namespaceForNode(references.variables[node]);
+    if (namespace != null) {
+      addPatch(patchBefore(node, '$namespace.'));
     }
   }
 
@@ -604,10 +623,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _declareVariable(VariableDeclaration node) {
     var name = node.name;
     if (_scope.isGlobal || node.isGlobal) {
-      name = _unprefix(node.name);
+      if (name.startsWith('-') &&
+          references.referencedOutsideDeclaringStylesheet(node)) {
+        // Remove leading `-` since private members can't be accessed outside
+        // the module they're declared in.
+        name = name.substring(1);
+        _pseudoprivateMembers.add(node);
+      }
+      name = _unprefix(name);
       if (name != node.name) {
-        addPatch(
-            patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
+        _renameMember(node, name);
       }
       var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
@@ -621,9 +646,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           // references namespace based on the original declaration, not this
           // reassignment.
           var namespace = _namespaceForNode(existingNode);
-          var afterDollarSign = node.span.start.offset + 1;
-          addPatch(Patch(node.span.file.span(afterDollarSign, afterDollarSign),
-              '$namespace.'));
+          addPatch(patchBefore(node, '$namespace.'));
           return;
         }
       }
@@ -636,12 +659,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _declareMixin(MixinRule node) {
     var name = node.name;
     if (_scope.isGlobal) {
-      name = _unprefix(node.name);
+      if (name.startsWith('-') &&
+          references.referencedOutsideDeclaringStylesheet(node)) {
+        // Remove leading `-` since private members can't be accessed outside
+        // the module they're declared in.
+        name = name.substring(1);
+        _pseudoprivateMembers.add(node);
+      }
+      name = _unprefix(name);
       if (name != node.name) {
-        var nameStart = node.span.text
-            .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
-        addPatch(patchDelete(node.span,
-            start: nameStart, end: nameStart + prefixToRemove.length));
+        _renameMember(node, name);
       }
     }
     _scope.mixins[name] = node;
@@ -652,14 +679,43 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _declareFunction(FunctionRule node) {
     var name = node.name;
     if (_scope.isGlobal) {
-      name = _unprefix(node.name);
+      if (name.startsWith('-') &&
+          references.referencedOutsideDeclaringStylesheet(node)) {
+        // Remove leading `-` since private members can't be accessed outside
+        // the module they're declared in.
+        name = name.substring(1);
+        _pseudoprivateMembers.add(node);
+      }
+      name = _unprefix(name);
       if (name != node.name) {
-        var nameStart = node.span.text.indexOf(node.name, '@function'.length);
-        addPatch(patchDelete(node.span,
-            start: nameStart, end: nameStart + prefixToRemove.length));
+        _renameMember(node, name);
       }
     }
     _scope.functions[name] = node;
+  }
+
+  /// Renames [declaration] and all of its references to [newName].
+  void _renameMember(SassNode declaration, String newName) {
+    patchName(SassNode node) {
+      _memberRenamePatches[node.span.sourceUrl] ??= [];
+      _memberRenamePatches[node.span.sourceUrl]
+          .add(Patch(nameSpan(node), newName));
+    }
+
+    patchName(declaration);
+    if (declaration is FunctionRule) {
+      references.functions.keysForValue(declaration).forEach(patchName);
+      for (var reference
+          in references.getFunctionReferences.keysForValue(declaration)) {
+        _memberRenamePatches[reference.span.sourceUrl] ??= [];
+        _memberRenamePatches[reference.span.sourceUrl]
+            .add(Patch(getStaticNameForGetFunctionCall(reference), newName));
+      }
+    } else if (declaration is MixinRule) {
+      references.mixins.keysForValue(declaration).forEach(patchName);
+    } else {
+      references.variables.keysForValue(declaration).forEach(patchName);
+    }
   }
 
   /// Returns [name] with [prefixToRemove] removed.
@@ -675,6 +731,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Finds the namespace for the stylesheet containing [node], adding a new use
   /// rule if necessary.
   String _namespaceForNode(SassNode node) {
+    if (node == null) return null;
     if (node.span.sourceUrl == _currentUrl) return null;
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
       /// Add new use rule for indirect dependency

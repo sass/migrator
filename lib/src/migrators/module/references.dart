@@ -35,10 +35,17 @@ class References {
   /// This map is frozen after it is built to prevent further modification.
   final mixins = BidirectionalMap<IncludeRule, MixinRule>();
 
-  /// Map between function references and their declarations.
+  /// Map between normal function references and their declarations.
   ///
   /// This map is frozen after it is built to prevent further modification.
   final functions = BidirectionalMap<FunctionExpression, FunctionRule>();
+
+  /// Map between statically-known function references within a `get-function`
+  /// call and their declarations.
+  ///
+  /// This map is frozen after it is built to prevent further modification.
+  final getFunctionReferences =
+      BidirectionalMap<FunctionExpression, FunctionRule>();
 
   final _stylesheets = <Uri, Stylesheet>{};
 
@@ -48,6 +55,23 @@ class References {
   /// Users of this object should get stylesheets from this object instead of
   /// re-parsing them.
   Map<Uri, Stylesheet> get stylesheets => UnmodifiableMapView(_stylesheets);
+
+  /// Returns true if the member declared by [declaration] is referenced within
+  /// another stylesheet.
+  bool referencedOutsideDeclaringStylesheet(SassNode declaration) {
+    Set<SassNode> references;
+    if (declaration is FunctionRule) {
+      references = functions
+          .keysForValue(declaration)
+          .union(getFunctionReferences.keysForValue(declaration));
+    } else if (declaration is MixinRule) {
+      references = mixins.keysForValue(declaration);
+    } else {
+      references = variables.keysForValue(declaration);
+    }
+    return references.any(
+        (reference) => reference.span.sourceUrl != declaration.span.sourceUrl);
+  }
 
   /// Constructs a new References object based on the stylesheet at [entrypoint]
   /// and its dependencies.
@@ -233,6 +257,18 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _scopeForNamespace(node.namespace).findFunction(node.name.asPlain);
     if (declaration != null) {
       _references.functions[node] = declaration;
+      return;
+    }
+
+    /// Check for static reference within a get-function call.
+    var nameExpression = getStaticNameForGetFunctionCall(node);
+    if (nameExpression == null) return;
+    var moduleExpression = getStaticModuleForGetFunctionCall(node);
+    var namespace = moduleExpression?.text;
+    declaration =
+        _scopeForNamespace(namespace).findFunction(nameExpression.text);
+    if (declaration != null) {
+      _references.getFunctionReferences[node] = declaration;
     }
   }
 }

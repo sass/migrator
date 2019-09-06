@@ -13,5 +13,5 @@ $variable: blue;
 <==> output/entrypoint.scss
 @use "library";
 a {
-  color: $library.variable;
+  color: library.$variable;
 }

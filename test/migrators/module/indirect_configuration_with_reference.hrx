@@ -23,5 +23,5 @@ $config: green !default;
 @use "indirect";
 
 a {
-  b: $indirect.config;
+  b: indirect.$config;
 }

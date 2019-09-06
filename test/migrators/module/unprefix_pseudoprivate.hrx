@@ -1,0 +1,27 @@
+<==> arguments
+--migrate-deps --forward=all --remove-prefix=lib-
+
+<==> input/entrypoint.scss
+@import "dependency";
+
+a {
+  color: $lib-public;
+  background: $_lib-pseudoprivate;
+}
+
+<==> input/_dependency.scss
+$lib-public: red;
+$_lib-pseudoprivate: blue;
+
+<==> output/entrypoint.scss
+@forward "dependency" hide $pseudoprivate;
+@use "dependency";
+
+a {
+  color: dependency.$public;
+  background: dependency.$pseudoprivate;
+}
+
+<==> output/_dependency.scss
+$public: red;
+$pseudoprivate: blue;

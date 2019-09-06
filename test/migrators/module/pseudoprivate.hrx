@@ -1,0 +1,25 @@
+<==> arguments
+--migrate-deps
+<==> input/entrypoint.scss
+@import "library";
+a {
+  color: $-dash;
+  background: $_underscore;
+}
+
+<==> input/_library.scss
+$-dash: red;
+$_underscore: blue;
+$_unreferenced: green;
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  color: library.$dash;
+  background: library.$underscore;
+}
+
+<==> output/_library.scss
+$dash: red;
+$underscore: blue;
+$_unreferenced: green;

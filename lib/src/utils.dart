@@ -36,13 +36,13 @@ String namespaceForPath(String path) {
   return path.split('/').last.split('.').first;
 }
 
-/// Creates a patch that adds [text] immediately before [node].
+/// Creates a patch that adds [text] immediately before [span].
 Patch patchBefore(AstNode node, String text) {
   var start = node.span.start;
   return Patch(start.file.span(start.offset, start.offset), text);
 }
 
-/// Creates a patch that adds [text] immediately after [node].
+/// Creates a patch that adds [text] immediately after [span].
 Patch patchAfter(AstNode node, String text) {
   var end = node.span.end;
   return Patch(end.file.span(end.offset, end.offset), text);
@@ -58,6 +58,34 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) =>
 /// Returns a subsection of [span].
 FileSpan subspan(FileSpan span, {int start = 0, int end}) => span.file
     .span(span.start.offset + start, span.start.offset + (end ?? span.length));
+
+FileSpan nameSpan(SassNode node) {
+  if (node is VariableDeclaration) {
+    var start = node.namespace == null ? 1 : node.namespace.length + 2;
+    return subspan(node.span, start: start, end: start + node.name.length);
+  } else if (node is VariableExpression) {
+    return subspan(node.span,
+        start: node.namespace == null ? 1 : node.namespace.length + 2);
+  } else if (node is FunctionRule) {
+    var startName = node.span.text.indexOf(node.name, '@function'.length);
+    return subspan(node.span,
+        start: startName, end: startName + node.name.length);
+  } else if (node is FunctionExpression) {
+    return node.name.span;
+  } else if (node is MixinRule) {
+    var startName = node.span.text
+        .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
+    return subspan(node.span,
+        start: startName, end: startName + node.name.length);
+  } else if (node is IncludeRule) {
+    var endName = node.arguments.span.start.offset;
+    var startName = endName - node.name.length;
+    return node.span.file.span(startName, endName);
+  } else {
+    throw UnsupportedError(
+        "$node of type ${node.runtimeType} doesn't have a name");
+  }
+}
 
 /// Emits a warning with [message] and optionally [context];
 void emitWarning(String message, [FileSpan context]) {
@@ -78,6 +106,42 @@ Expression getOnlyArgument(ArgumentInvocation invocation) {
   } else {
     return null;
   }
+}
+
+/// If [node] is a get-function call whose name argument can be statically
+/// determined, this returns the span containing it.
+///
+/// Otherwise, this returns null.
+FileSpan getStaticNameForGetFunctionCall(FunctionExpression node) {
+  if (node.name.asPlain != 'get-function') return null;
+  var nameArgument =
+      node.arguments.named['name'] ?? node.arguments.positional.first;
+  if (nameArgument is! StringExpression ||
+      (nameArgument as StringExpression).text.asPlain == null) {
+    return null;
+  }
+  return (nameArgument as StringExpression).hasQuotes
+      ? subspan(nameArgument.span, start: 1, end: nameArgument.span.length - 1)
+      : nameArgument.span;
+}
+
+/// If [node] is a get-function call whose module argument can be statically
+/// determined, this returns the span containing it.
+///
+/// Otherwise, this returns null.
+FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
+  if (node.name.asPlain != 'get-function') return null;
+  var moduleArg = node.arguments.named['module'];
+  if (moduleArg == null && node.arguments.positional.length > 2) {
+    moduleArg = node.arguments.positional[2];
+  }
+  if (moduleArg is! StringExpression ||
+      (moduleArg as StringExpression).text.asPlain == null) {
+    return null;
+  }
+  return (moduleArg as StringExpression).hasQuotes
+      ? subspan(moduleArg.span, start: 1, end: moduleArg.span.length - 2)
+      : moduleArg.span;
 }
 
 /// An exception thrown by a migrator.

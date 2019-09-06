@@ -17,7 +17,7 @@ $variable: blue;
 @use "indirect";
 @use "direct";
 a {
-  color: $indirect.variable;
+  color: indirect.$variable;
 }
 
 <==> output/_direct.scss

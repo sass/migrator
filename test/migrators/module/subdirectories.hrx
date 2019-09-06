@@ -18,9 +18,9 @@ $c: 3
 
 <==> output/entrypoint.scss
 @use "folder/inner1";
-$result: $inner1.a;
+$result: inner1.$a;
 
 <==> output/folder/_inner1.scss
 @use "inner2";
 @use "../outer";
-$a: $inner2.b + $outer.c;
+$a: inner2.$b + outer.$c;

@@ -16,4 +16,4 @@ $no-config: yellow;
 $no-config: blue;
 @use "library" with ($config: red);
 
-$reference: $library.config;
+$reference: library.$config;
