@@ -89,13 +89,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// would cause a circular dependency).
   final _upstreamStylesheets = <Uri>{};
 
-  /// Patches that rename a variable, mixin, or function.
-  ///
-  /// Unlike the main patches list, these can be generated before starting
-  /// a stylesheet's migration. This allows all patches for a declaration and
-  /// references to it to be generated at the same time.
-  final _memberRenamePatches = <Uri, List<Patch>>{};
-
   /// Maps declarations of members that have been renamed to their new names.
   final _renamedMembers = <SassNode, String>{};
 
@@ -156,9 +149,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// [_additionalUseRules], or null if the stylesheet does not change.
   @override
   String getMigratedContents() {
-    if (_memberRenamePatches.containsKey(_currentUrl)) {
-      _memberRenamePatches.remove(_currentUrl).forEach(addPatch);
-    }
     var results = super.getMigratedContents();
     if (results == null) return null;
     var uses = _additionalUseRules
@@ -280,10 +270,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _lastUrl = _currentUrl;
     _currentUrl = oldUrl;
     _useAllowed = oldUseAllowed;
-    if (_upstreamStylesheets.isEmpty && _memberRenamePatches.isNotEmpty) {
-      throw StateError(
-          'Attempted to patch stylesheet that has already been migrated.');
-    }
   }
 
   /// Visits each of [node]'s expressions and children.
@@ -324,12 +310,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // Don't migrate CSS-compatibility overloads.
     if (_isCssCompatibilityOverload(node)) return;
 
+    _renameReference(nameSpan(node), references.functions[node]);
     _patchNamespaceForFunction(node, (namespace) {
       addPatch(patchBefore(node.name, '$namespace.'));
     });
     visitArgumentInvocation(node.arguments);
 
     if (node.name.asPlain == "get-function") {
+      _renameReference(getStaticNameForGetFunctionCall(node),
+          references.getFunctionReferences[node]);
+
       // Ignore get-function calls that already have a module argument.
       var moduleArg = node.arguments.named['module'];
       if (moduleArg == null && node.arguments.positional.length > 2) {
@@ -591,6 +581,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _scope.checkUnreferencableMixin(node);
     if (_scope.isLocalMixin(node.name)) return;
 
+    _renameReference(nameSpan(node), references.mixins[node]);
     var namespace = _namespaceForNode(_scope.global.mixins[node.name]);
     if (namespace != null) {
       addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
@@ -618,6 +609,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _scope.checkUnreferencableVariable(node);
     if (_scope.isLocalVariable(node.name)) return;
 
+    _renameReference(nameSpan(node), references.originalDeclaration(node));
     var namespace = _namespaceForNode(_scope.global.variables[node.name]);
     if (namespace != null) {
       addPatch(patchBefore(node, '$namespace.'));
@@ -643,7 +635,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         name = name.substring(1);
       }
       name = _unprefix(name);
-      if (name != node.name) _renameMember(node, name);
+      if (name != node.name) _renameDeclaration(node, name);
 
       var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
@@ -677,7 +669,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         name = name.substring(1);
       }
       name = _unprefix(name);
-      if (name != node.name) _renameMember(node, name);
+      if (name != node.name) _renameDeclaration(node, name);
     }
     _scope.mixins[node.name] = node;
   }
@@ -694,33 +686,21 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         name = name.substring(1);
       }
       name = _unprefix(name);
-      if (name != node.name) _renameMember(node, name);
+      if (name != node.name) _renameDeclaration(node, name);
     }
     _scope.functions[node.name] = node;
   }
 
-  /// Renames [declaration] and all of its references to [newName].
-  void _renameMember(SassNode declaration, String newName) {
-    patchName(SassNode node) {
-      _memberRenamePatches
-          .putIfAbsent(node.span.sourceUrl, () => [])
-          .add(Patch(nameSpan(node), newName));
-    }
-
+  /// Renames [declaration] to [newName].
+  void _renameDeclaration(SassNode declaration, String newName) {
+    addPatch(Patch(nameSpan(declaration), newName));
     _renamedMembers[declaration] = newName;
+  }
 
-    if (declaration is FunctionRule) {
-      patchName(declaration);
-      references.functions.keysForValue(declaration).forEach(patchName);
-      for (var reference
-          in references.getFunctionReferences.keysForValue(declaration)) {
-        _memberRenamePatches[reference.span.sourceUrl] ??= [];
-        _memberRenamePatches[reference.span.sourceUrl]
-            .add(Patch(getStaticNameForGetFunctionCall(reference), newName));
-      }
-    } else {
-      references.allNodes(declaration).forEach(patchName);
-    }
+  /// If [declaration] was renamed, patches [span] to use the same name.
+  void _renameReference(FileSpan span, SassNode declaration) {
+    if (!_renamedMembers.containsKey(declaration)) return;
+    addPatch(Patch(span, _renamedMembers[declaration]));
   }
 
   /// Returns [name] with [prefixToRemove] removed.

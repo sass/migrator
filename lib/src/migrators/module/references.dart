@@ -85,37 +85,6 @@ class References {
     return variableReassignments[declaration] ?? declaration;
   }
 
-  /// For a given declaration or reference, returns the set of all nodes
-  /// associated with it, including itself.
-  ///
-  /// For mixins, this is the declaring [MixinRule] and all referencing
-  /// [IncludeRule]s.
-  ///
-  /// For functions, this is the declaring [FunctionRule] and all referencing
-  /// [FunctionRule]s (both regular and statically-determined get-function calls).
-  ///
-  /// For variables, this is the original declaration, all reassignments, and
-  /// all referencing [VariableExpression]s.
-  Set<SassNode> allNodes(SassNode node) {
-    if (node is IncludeRule) return allNodes(mixins[node]);
-    if (node is FunctionExpression) return allNodes(functions[node]);
-    if (node is VariableExpression) return allNodes(originalDeclaration(node));
-    if (node is MixinRule) return {node, ...mixins.keysForValue(node)};
-    if (node is FunctionRule) {
-      return {
-        node,
-        ...functions.keysForValue(node),
-        ...getFunctionReferences.keysForValue(node)
-      };
-    }
-    return {
-      node,
-      ...variables.keysForValue(node),
-      for (var reassignment in variableReassignments.keysForValue(node))
-        ...variables.keysForValue(reassignment)
-    };
-  }
-
   References._(this.variables, this.variableReassignments, this.mixins,
       this.functions, this.getFunctionReferences);
 
