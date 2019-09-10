@@ -96,7 +96,7 @@ Expression getOnlyArgument(ArgumentInvocation invocation) {
   }
 }
 
-/// If [node] is a get-function call whose name argument can be statically
+/// If [node] is a `get-function` call whose name argument can be statically
 /// determined, this returns the span containing it.
 ///
 /// Otherwise, this returns null.
@@ -113,7 +113,7 @@ FileSpan getStaticNameForGetFunctionCall(FunctionExpression node) {
       : nameArgument.span;
 }
 
-/// If [node] is a get-function call whose module argument can be statically
+/// If [node] is a `get-function` call whose module argument can be statically
 /// determined, this returns the span containing it.
 ///
 /// Otherwise, this returns null.

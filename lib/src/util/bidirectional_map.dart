@@ -11,9 +11,6 @@ import 'dart:collection';
 ///
 /// Each key can be associated with at most one value, but each value can be
 /// associated with more than one key.
-///
-/// This map also provides a mechanism for freezing its contents. Once [freeze]
-/// is called, this map may no longer be modified.
 class BidirectionalMap<K, V> extends MapBase<K, V> {
   /// Stores the value associated with each key.
   final _valueForKey = <K, V>{};
@@ -30,8 +27,7 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   void operator []=(K key, V value) {
     remove(key);
     _valueForKey[key] = value;
-    _keysForValue.putIfAbsent(value, () => {});
-    _keysForValue[value].add(key);
+    _keysForValue.putIfAbsent(value, () => {}).add(key);
   }
 
   @override
@@ -55,6 +51,8 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
     return value;
   }
 
-  /// Returns the set of all keys associated with a given value.
-  Iterable<K> keysForValue(V value) => _keysForValue[value]?.toSet() ?? {};
+  /// Finds the keys associated with a given value.
+  Iterable<K> keysForValue(V value) sync* {
+    if (_keysForValue.containsKey(value)) yield* _keysForValue[value];
+  }
 }

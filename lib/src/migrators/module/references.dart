@@ -21,11 +21,13 @@ import '../../utils.dart';
 /// A bidirectional mapping between member declarations and references to those
 /// members.
 ///
-/// The first pass of the module migrator generates this object. It then
-/// uses the information stored here on the second pass to determine how a
-/// member is used.
+/// This object is generated during an initial pass. The module migrator then
+/// uses the information here during the main migration pass to determine how
+/// members are referenced.
 class References {
   /// An unmodifiable map between variable references and their declarations.
+  ///
+  /// Each value in this map must be a [VariableDeclaration] or an [Argument].
   final UnmodifiableBidirectionalMapView<VariableExpression,
       SassNode /*VariableDeclaration|Argument*/ > variables;
 
@@ -34,6 +36,8 @@ class References {
   ///
   /// If a variable is reassigned multiple times, all reassignments will map
   /// to the original declaration, not the previous reassignment.
+  ///
+  /// Each value in this map must be a [VariableDeclaration] or an [Argument].
   final UnmodifiableBidirectionalMapView<VariableDeclaration,
       SassNode /*VariableDeclaration|Argument*/ > variableReassignments;
 
@@ -54,18 +58,6 @@ class References {
   final UnmodifiableBidirectionalMapView<FunctionExpression, FunctionRule>
       getFunctionReferences;
 
-  References._(this.variables, this.variableReassignments, this.mixins,
-      this.functions, this.getFunctionReferences);
-
-  final _stylesheets = <Uri, Stylesheet>{};
-
-  /// Maps canonical stylesheet URLs to the parsed stylesheet used when building
-  /// this object.
-  ///
-  /// Users of this object should get stylesheets from this object instead of
-  /// re-parsing them.
-  Map<Uri, Stylesheet> get stylesheets => UnmodifiableMapView(_stylesheets);
-
   /// Returns true if the member declared by [declaration] is referenced within
   /// another stylesheet.
   bool referencedOutsideDeclaringStylesheet(SassNode declaration) {
@@ -84,6 +76,9 @@ class References {
   }
 
   /// Finds the original declaration of the variable referenced in [reference].
+  ///
+  /// This always returns [VariableDeclaration] or an [Argument], or null if the
+  /// declaration cannot be found.
   SassNode /*VariableDeclaration|Argument*/ originalDeclaration(
       VariableExpression reference) {
     var declaration = variables[reference];
@@ -121,6 +116,9 @@ class References {
     };
   }
 
+  References._(this.variables, this.variableReassignments, this.mixins,
+      this.functions, this.getFunctionReferences);
+
   /// Constructs a new [References] object based on the stylesheet at
   /// [entrypoint] and its dependencies.
   factory References(ImportCache importCache, Uri entrypoint) =>
@@ -140,7 +138,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// The current global scope.
   ///
-  /// This persists across imports, but not across module uses.
+  /// This persists across imports, but not across module loads.
   Scope _scope;
 
   /// Mapping from canonical stylesheet URLs to the global scope of the module
@@ -154,8 +152,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Namespaces present within the current stylesheet.
   ///
   /// Note: Unlike the similar property in _ModuleMigrationVisitor, this only
-  /// includes namespaces for use rules that already exist within the file.
-  /// It doesn't not include namespaces for to-be-migrated imports.
+  /// includes namespaces for `@use` rules that already exist within the file.
+  /// It doesn't include namespaces for to-be-migrated imports.
   Map<String, Uri> _namespaces;
 
   ImportCache importCache;
@@ -192,7 +190,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _namespaces = _oldNamespaces;
   }
 
-  /// Visits the stylesheet this import rule points to using the existing global
+  /// Visits the stylesheet this `@import` rule points to using the existing global
   /// scope.
   @override
   void visitImportRule(ImportRule node) {
@@ -206,7 +204,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     }
   }
 
-  /// Visits the stylesheet this use rule points to using a new global scope
+  /// Visits the stylesheet this `@use` rule points to using a new global scope
   /// for this module.
   @override
   void visitUseRule(UseRule node) {
@@ -271,7 +269,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     super.visitVariableDeclaration(node);
   }
 
-  /// Visits the variable reference in [node], storing it in [_references].
+  /// Visits the variable reference in [node], storing it.
   @override
   void visitVariableExpression(VariableExpression node) {
     var declaration =
@@ -289,7 +287,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     super.visitMixinRule(node);
   }
 
-  /// Visits an include rule, storing the mixin reference within [_references].
+  /// Visits an `@include` rule, storing the mixin reference.
   @override
   void visitIncludeRule(IncludeRule node) {
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
@@ -306,8 +304,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     super.visitFunctionRule(node);
   }
 
-  /// Visits a function call, storing it within [_references] if it corresponds
-  /// to a user-defined function.
+  /// Visits a function call, storing it if it is a user-defined function.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     if (node.name.asPlain == null) return;

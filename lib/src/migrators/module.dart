@@ -102,10 +102,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
-  /// Set of additional use rules necessary for referencing members of
+  /// Set of additional `@use` rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
-  /// This set contains the path provided in the use rule, not the canonical
+  /// This set contains the path provided in the `@use` rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
   Set<String> _additionalUseRules;
 
@@ -125,7 +125,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// A mapping between member declarations and references.
   ///
   /// This performs an initial pass to determine how a declaration seen in the
-  /// second pass is used.
+  /// main migration pass is used.
   final References references;
 
   /// Cache used to load stylesheets.
@@ -184,7 +184,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// If the current stylesheet is the entrypoint, return a string of @forward
+  /// If the current stylesheet is the entrypoint, return a string of `@forward`
   /// rules to forward all members for which [_shouldForward] returns true.
   String _getEntrypointForwards() {
     if (!_scope.isGlobal) {
@@ -230,7 +230,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
     }
 
-    // Create a @forward rule for each dependency that has members that should
+    // Create a `@forward` rule for each dependency that has members that should
     // be forwarded.
     var forwards = <String>[];
     for (var url in shown.keys) {
@@ -355,7 +355,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Calls [namespacePatcher] when the function [node] requires a namespace.
+  /// Calls [patchNamespace] when the function [node] requires a namespace.
   ///
   /// This also patches the name for any built-in functions whose names change
   /// in the module system.
@@ -366,7 +366,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// If [node] is a get-function call, [getFunctionCall] should be true.
   void _patchNamespaceForFunction(
-      FunctionExpression node, void namespacePatcher(String namespace),
+      FunctionExpression node, void patchNamespace(String namespace),
       {bool getFunctionCall = false}) {
     var span = getFunctionCall
         ? getStaticNameForGetFunctionCall(node)
@@ -377,7 +377,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var namespace = _namespaceForNode(_scope.global.functions[name]);
     if (namespace != null) {
-      namespacePatcher(namespace);
+      patchNamespace(namespace);
       return;
     }
 
@@ -407,7 +407,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     }
     _additionalUseRules.add("sass:$namespace");
-    namespacePatcher(namespace);
+    patchNamespace(namespace);
     if (name != span.text) addPatch(Patch(span, name));
   }
 
@@ -469,7 +469,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitFunctionRule(node);
   }
 
-  /// Migrates @import to @use after migrating the imported file.
+  /// Migrates an `@import` rule to a `@use` rule after migrating the imported
+  /// file.
   @override
   void visitImportRule(ImportRule node) {
     if (node.imports.first is StaticImport) {
@@ -606,7 +607,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   @override
   void visitUseRule(UseRule node) {
-    // TODO(jathak): Handle existing @use rules.
+    // TODO(jathak): Handle existing `@use` rules.
     throw UnsupportedError(
         "Migrating files with existing @use rules is not yet supported");
   }
@@ -642,9 +643,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         name = name.substring(1);
       }
       name = _unprefix(name);
-      if (name != node.name) {
-        _renameMember(node, name);
-      }
+      if (name != node.name) _renameMember(node, name);
+
       var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
       if (existingNode != null && originalUrl != _currentUrl) {
@@ -677,9 +677,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         name = name.substring(1);
       }
       name = _unprefix(name);
-      if (name != node.name) {
-        _renameMember(node, name);
-      }
+      if (name != node.name) _renameMember(node, name);
     }
     _scope.mixins[node.name] = node;
   }
@@ -696,9 +694,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         name = name.substring(1);
       }
       name = _unprefix(name);
-      if (name != node.name) {
-        _renameMember(node, name);
-      }
+      if (name != node.name) _renameMember(node, name);
     }
     _scope.functions[node.name] = node;
   }
@@ -706,8 +702,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Renames [declaration] and all of its references to [newName].
   void _renameMember(SassNode declaration, String newName) {
     patchName(SassNode node) {
-      _memberRenamePatches[node.span.sourceUrl] ??= [];
-      _memberRenamePatches[node.span.sourceUrl]
+      _memberRenamePatches
+          .putIfAbsent(node.span.sourceUrl, () => [])
           .add(Patch(nameSpan(node), newName));
     }
 
@@ -737,13 +733,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return name.substring(prefixToRemove.length);
   }
 
-  /// Finds the namespace for the stylesheet containing [node], adding a new use
-  /// rule if necessary.
+  /// Finds the namespace for the stylesheet containing [node], adding a new
+  /// `@use` rule if necessary.
   String _namespaceForNode(SassNode node) {
     if (node == null) return null;
     if (node.span.sourceUrl == _currentUrl) return null;
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
-      /// Add new use rule for indirect dependency
+      // Add new `@use` rule for indirect dependency
       var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
       _additionalUseRules.add(simplePath);
       _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
@@ -752,8 +748,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   }
 
   /// Converts an absolute URL for a stylesheet into the simplest string that
-  /// could be used to depend on that stylesheet from the current one in a use,
-  /// forward, or import rule.
+  /// could be used to depend on that stylesheet from the current one in a
+  /// `@use`, `@forward`, or `@import` rule.
   String _absoluteUrlToDependency(Uri uri) {
     var relativePath =
         p.url.relative(uri.path, from: p.url.dirname(_currentUrl.path));
@@ -762,84 +758,84 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
   }
 
-  /// Disallows @use after @at-root rules.
+  /// Disallows `@use` after `@at-root` rules.
   @override
   void visitAtRootRule(AtRootRule node) {
     _useAllowed = false;
     super.visitAtRootRule(node);
   }
 
-  /// Disallows @use after at-rules.
+  /// Disallows `@use` after at-rules.
   @override
   void visitAtRule(AtRule node) {
     _useAllowed = false;
     super.visitAtRule(node);
   }
 
-  /// Disallows @use after @debug rules.
+  /// Disallows `@use` after `@debug` rules.
   @override
   void visitDebugRule(DebugRule node) {
     _useAllowed = false;
     super.visitDebugRule(node);
   }
 
-  /// Disallows @use after @each rules.
+  /// Disallows `@use` after `@each` rules.
   @override
   void visitEachRule(EachRule node) {
     _useAllowed = false;
     super.visitEachRule(node);
   }
 
-  /// Disallows @use after @error rules.
+  /// Disallows `@use` after `@error` rules.
   @override
   void visitErrorRule(ErrorRule node) {
     _useAllowed = false;
     super.visitErrorRule(node);
   }
 
-  /// Disallows @use after @for rules.
+  /// Disallows `@use` after `@for` rules.
   @override
   void visitForRule(ForRule node) {
     _useAllowed = false;
     super.visitForRule(node);
   }
 
-  /// Disallows @use after @if rules.
+  /// Disallows `@use` after `@if` rules.
   @override
   void visitIfRule(IfRule node) {
     _useAllowed = false;
     super.visitIfRule(node);
   }
 
-  /// Disallows @use after @media rules.
+  /// Disallows `@use` after `@media` rules.
   @override
   void visitMediaRule(MediaRule node) {
     _useAllowed = false;
     super.visitMediaRule(node);
   }
 
-  /// Disallows @use after style rules.
+  /// Disallows `@use` after style rules.
   @override
   void visitStyleRule(StyleRule node) {
     _useAllowed = false;
     super.visitStyleRule(node);
   }
 
-  /// Disallows @use after @supports rules.
+  /// Disallows `@use` after `@supports` rules.
   @override
   void visitSupportsRule(SupportsRule node) {
     _useAllowed = false;
     super.visitSupportsRule(node);
   }
 
-  /// Disallows @use after @warn rules.
+  /// Disallows `@use` after `@warn` rules.
   @override
   void visitWarnRule(WarnRule node) {
     _useAllowed = false;
     super.visitWarnRule(node);
   }
 
-  /// Disallows @use after @while rules.
+  /// Disallows `@use` after `@while` rules.
   @override
   void visitWhileRule(WhileRule node) {
     _useAllowed = false;
