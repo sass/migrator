@@ -6,8 +6,6 @@
 
 import 'dart:collection';
 
-import 'package:collection/collection.dart';
-
 /// A map that allows you to efficiently find all keys associated with a
 /// particular value.
 ///
@@ -25,13 +23,6 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   /// This should always stay in sync with [_valueForKey].
   final _keysForValue = <V, Set<K>>{};
 
-  var _frozen = false;
-
-  /// Whether this map's contents are frozen.
-  ///
-  /// If this is true, attempting to modify this map throws an error.
-  bool get frozen => _frozen;
-
   @override
   V operator [](Object key) => _valueForKey[key];
 
@@ -39,15 +30,12 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   void operator []=(K key, V value) {
     remove(key);
     _valueForKey[key] = value;
-    _keysForValue[value] ??= {};
+    _keysForValue.putIfAbsent(value, () => {});
     _keysForValue[value].add(key);
   }
 
   @override
   void clear() {
-    if (frozen) {
-      throw UnsupportedError('Cannot modify a map after it has been frozen');
-    }
     _valueForKey.clear();
     _keysForValue.clear();
   }
@@ -60,9 +48,6 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
 
   @override
   V remove(Object key) {
-    if (frozen) {
-      throw UnsupportedError('Cannot modify a map after it has been frozen');
-    }
     if (!_valueForKey.containsKey(key)) return null;
     var value = _valueForKey.remove(key);
     _keysForValue[value].remove(key);
@@ -71,11 +56,5 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   }
 
   /// Returns the set of all keys associated with a given value.
-  Set<K> keysForValue(V value) =>
-      UnmodifiableSetView(_keysForValue[value] ?? {});
-
-  /// Freezes this map, preventing further modifications.
-  void freeze() {
-    _frozen = true;
-  }
+  Iterable<K> keysForValue(V value) => _keysForValue[value]?.toSet() ?? {};
 }

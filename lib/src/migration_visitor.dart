@@ -10,13 +10,13 @@ import 'dart:collection';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:meta/meta.dart';
 import 'package:source_span/source_span.dart';
 
 import 'patch.dart';
-import 'utils.dart';
 
 /// A visitor that migrates a stylesheet.
 ///
@@ -35,6 +35,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// True if dependencies should be migrated as well.
   final bool migrateDependencies;
 
+  /// Cache used to load stylesheets.
+  final ImportCache importCache;
+
   /// Map of missing dependency URLs to the spans that import/use them.
   Map<Uri, FileSpan> get missingDependencies =>
       UnmodifiableMapView(_missingDependencies);
@@ -44,16 +47,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   List<Patch> get patches => UnmodifiableListView(_patches);
   List<Patch> _patches;
 
-  MigrationVisitor({this.migrateDependencies = true});
+  MigrationVisitor(this.importCache, {this.migrateDependencies = true});
 
-  /// Runs a new migration on [url] (and its dependencies, if
+  /// Runs a new migration of [url] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
-  Map<Uri, String> run(Uri url) => runWithStylesheet(parseStylesheet(url));
-
-  /// Runs a new migration of [stylesheet] (and its dependencies, if
-  /// [migrateDependencies] is true) and returns a map of migrated contents.
-  Map<Uri, String> runWithStylesheet(Stylesheet stylesheet) {
-    visitStylesheet(stylesheet);
+  Map<Uri, String> run(Uri url) {
+    visitStylesheet(importCache.import(url).item2);
     return _migrated;
   }
 
@@ -79,7 +78,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   @protected
   void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
     var url = source.resolveUri(dependency);
-    var stylesheet = parseStylesheet(url);
+    var stylesheet = importCache.import(url)?.item2;
     if (stylesheet != null) {
       visitStylesheet(stylesheet);
     } else {

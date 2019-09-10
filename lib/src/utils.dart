@@ -11,24 +11,8 @@ import 'package:source_span/source_span.dart';
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
-import 'package:sass/src/importer/filesystem.dart';
 
 import 'patch.dart';
-
-/// A filesystem importer that loads Sass files relative to the current working
-/// directory.
-final _filesystemImporter = FilesystemImporter('.');
-
-/// Returns the canonical version of [url].
-Uri canonicalize(Uri url) => _filesystemImporter.canonicalize(url);
-
-/// Parses the file at [url] into a stylesheet.
-Stylesheet parseStylesheet(Uri url) {
-  var canonicalUrl = canonicalize(url);
-  if (canonicalUrl == null) return null;
-  var result = _filesystemImporter.load(canonicalUrl);
-  return Stylesheet.parse(result.contents, result.syntax, url: canonicalUrl);
-}
 
 /// Returns the default namespace for a use rule with [path].
 String namespaceForPath(String path) {

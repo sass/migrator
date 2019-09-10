@@ -4,6 +4,11 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+// The sass package's API is not necessarily stable. It is being imported with
+// the Sass team's explicit knowledge and approval. See
+// https://github.com/sass/dart-sass/issues/236.
+import 'package:sass/src/import_cache.dart';
+
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
@@ -42,7 +47,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// Files that did not require any changes, even if touched by the migrator,
   /// should not be included map of results.
   @protected
-  Map<Uri, String> migrateFile(Uri entrypoint);
+  Map<Uri, String> migrateFile(ImportCache importCache, Uri entrypoint);
 
   /// Runs this migrator.
   ///
@@ -54,14 +59,16 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// included in the results.
   Map<Uri, String> run() {
     var allMigrated = Map<Uri, String>();
+    // TODO(jathak): Add support for passing loadPaths from command line.
+    var importCache = ImportCache([], loadPaths: ['.']);
     for (var entrypoint in argResults.rest) {
-      var canonicalUrl = canonicalize(Uri.parse(entrypoint));
+      var canonicalUrl = importCache.canonicalize(Uri.parse(entrypoint)).item2;
       if (canonicalUrl == null) {
         throw MigrationException(
             "Error: Could not find Sass file at '$entrypoint'.");
       }
 
-      var migrated = migrateFile(canonicalUrl);
+      var migrated = migrateFile(importCache, canonicalUrl);
       for (var file in migrated.keys) {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {

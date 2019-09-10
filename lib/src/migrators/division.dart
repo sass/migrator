@@ -11,6 +11,7 @@ import 'package:sass/sass.dart';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/import_cache.dart';
 
 import 'package:sass_migrator/src/migration_visitor.dart';
 import 'package:sass_migrator/src/migrator.dart';
@@ -36,9 +37,9 @@ More info: https://sass-lang.com/d/slash-div""";
   bool get isPessimistic => argResults['pessimistic'] as bool;
 
   @override
-  Map<Uri, String> migrateFile(Uri entrypoint) {
-    var visitor =
-        _DivisionMigrationVisitor(this.isPessimistic, migrateDependencies);
+  Map<Uri, String> migrateFile(ImportCache importCache, Uri entrypoint) {
+    var visitor = _DivisionMigrationVisitor(
+        importCache, this.isPessimistic, migrateDependencies);
     var result = visitor.run(entrypoint);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -48,8 +49,9 @@ More info: https://sass-lang.com/d/slash-div""";
 class _DivisionMigrationVisitor extends MigrationVisitor {
   final bool isPessimistic;
 
-  _DivisionMigrationVisitor(this.isPessimistic, bool migrateDependencies)
-      : super(migrateDependencies: migrateDependencies);
+  _DivisionMigrationVisitor(
+      ImportCache importCache, this.isPessimistic, bool migrateDependencies)
+      : super(importCache, migrateDependencies: migrateDependencies);
 
   /// True when division is allowed by the context the current node is in.
   var _isDivisionAllowed = false;

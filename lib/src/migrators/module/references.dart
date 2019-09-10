@@ -8,54 +8,54 @@
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:collection/collection.dart';
 
-import 'bidirectional_map.dart';
+import '../../util/bidirectional_map.dart';
+import '../../util/unmodifiable_bidirectional_map_view.dart';
 import 'scope.dart';
 import '../../utils.dart';
 
-/// A mapping between member declarations and references.
+/// A bidirectional mapping between member declarations and references to those
+/// members.
 ///
 /// The first pass of the module migrator generates this object. It then
 /// uses the information stored here on the second pass to determine how a
 /// member is used.
 class References {
-  References._();
+  /// An unmodifiable map between variable references and their declarations.
+  final UnmodifiableBidirectionalMapView<VariableExpression,
+      SassNode /*VariableDeclaration|Argument*/ > variables;
 
-  /// Map between variable references and their declarations.
-  ///
-  /// This map is frozen after it is built to prevent further modification.
-  final variables = BidirectionalMap<VariableExpression,
-      SassNode /*VariableDeclaration|Argument*/ >();
-
-  /// Map between variable reassignments and the original declaration they
-  /// override.
+  /// An unmodifiable map between variable reassignments and the original
+  /// declaration they override.
   ///
   /// If a variable is reassigned multiple times, all reassignments will map
   /// to the original declaration, not the previous reassignment.
-  ///
-  /// This map is frozen after it is built to prevent further modification.
-  final variableReassignments = BidirectionalMap<VariableDeclaration,
-      SassNode /*VariableDeclaration|Argument*/ >();
+  final UnmodifiableBidirectionalMapView<VariableDeclaration,
+      SassNode /*VariableDeclaration|Argument*/ > variableReassignments;
 
-  /// Map between mixin references and their declarations.
-  ///
-  /// This map is frozen after it is built to prevent further modification.
-  final mixins = BidirectionalMap<IncludeRule, MixinRule>();
+  /// An unmodifiable map between mixin references and their declarations.
+  final UnmodifiableBidirectionalMapView<IncludeRule, MixinRule> mixins;
 
-  /// Map between normal function references and their declarations.
+  /// An unmodifiable map between normal function references and their
+  /// declarations.
   ///
-  /// This map is frozen after it is built to prevent further modification.
-  final functions = BidirectionalMap<FunctionExpression, FunctionRule>();
+  /// This only includes references to user-defined functions.
+  final UnmodifiableBidirectionalMapView<FunctionExpression, FunctionRule>
+      functions;
 
-  /// Map between statically-known function references within a `get-function`
-  /// call and their declarations.
+  /// An unmodifiable map between statically-known function references within
+  /// a `get-function` call and their declarations.
   ///
-  /// This map is frozen after it is built to prevent further modification.
-  final getFunctionReferences =
-      BidirectionalMap<FunctionExpression, FunctionRule>();
+  /// This only includes references to user-defined functions.
+  final UnmodifiableBidirectionalMapView<FunctionExpression, FunctionRule>
+      getFunctionReferences;
+
+  References._(this.variables, this.variableReassignments, this.mixins,
+      this.functions, this.getFunctionReferences);
 
   final _stylesheets = <Uri, Stylesheet>{};
 
@@ -69,11 +69,11 @@ class References {
   /// Returns true if the member declared by [declaration] is referenced within
   /// another stylesheet.
   bool referencedOutsideDeclaringStylesheet(SassNode declaration) {
-    Set<SassNode> references;
+    Iterable<SassNode> references;
     if (declaration is FunctionRule) {
       references = functions
           .keysForValue(declaration)
-          .union(getFunctionReferences.keysForValue(declaration));
+          .followedBy(getFunctionReferences.keysForValue(declaration));
     } else if (declaration is MixinRule) {
       references = mixins.keysForValue(declaration);
     } else {
@@ -93,14 +93,14 @@ class References {
   /// For a given declaration or reference, returns the set of all nodes
   /// associated with it, including itself.
   ///
-  /// For mixins, this is the declaring MixinRule and all referencing
-  /// IncludeRules.
+  /// For mixins, this is the declaring [MixinRule] and all referencing
+  /// [IncludeRule]s.
   ///
-  /// For functions, this is the declaring FunctionRule and all referencing
-  /// FunctionRules (both regular and statically-determined get-function calls).
+  /// For functions, this is the declaring [FunctionRule] and all referencing
+  /// [FunctionRule]s (both regular and statically-determined get-function calls).
   ///
   /// For variables, this is the original declaration, all reassignments, and
-  /// all referencing VariableExpressions.
+  /// all referencing [VariableExpression]s.
   Set<SassNode> allNodes(SassNode node) {
     if (node is IncludeRule) return allNodes(mixins[node]);
     if (node is FunctionExpression) return allNodes(functions[node]);
@@ -121,16 +121,22 @@ class References {
     };
   }
 
-  /// Constructs a new References object based on the stylesheet at [entrypoint]
-  /// and its dependencies.
-  static References build(Uri entrypoint) =>
-      _ReferenceVisitor().build(entrypoint);
+  /// Constructs a new [References] object based on the stylesheet at
+  /// [entrypoint] and its dependencies.
+  factory References(ImportCache importCache, Uri entrypoint) =>
+      _ReferenceVisitor(importCache).build(entrypoint);
 }
 
 /// A visitor that builds a References object.
 class _ReferenceVisitor extends RecursiveAstVisitor {
-  /// The References object being built.
-  final _references = References._();
+  final _variables = BidirectionalMap<VariableExpression,
+      SassNode /*VariableDeclaration|Argument*/ >();
+  final _variableReassignments = BidirectionalMap<VariableDeclaration,
+      SassNode /*VariableDeclaration|Argument*/ >();
+  final _mixins = BidirectionalMap<IncludeRule, MixinRule>();
+  final _functions = BidirectionalMap<FunctionExpression, FunctionRule>();
+  final _getFunctionReferences =
+      BidirectionalMap<FunctionExpression, FunctionRule>();
 
   /// The current global scope.
   ///
@@ -152,14 +158,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// It doesn't not include namespaces for to-be-migrated imports.
   Map<String, Uri> _namespaces;
 
-  /// Returns the stylesheet at [url].
-  ///
-  /// This reuses the stylesheet if it's already been parsed.
-  Stylesheet getStylesheet(Uri url) {
-    url = canonicalize(url);
-    if (url == null) return null;
-    return _references.stylesheets[url] ?? parseStylesheet(url);
-  }
+  ImportCache importCache;
+
+  _ReferenceVisitor(this.importCache);
 
   /// Constructs a new References object based on the stylesheet at [entrypoint]
   /// and its dependencies.
@@ -168,17 +169,23 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _scope = Scope();
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     visitStylesheet(stylesheet);
-    _references.variables.freeze();
-    _references.mixins.freeze();
-    _references.functions.freeze();
-    return _references;
+    return References._(
+        UnmodifiableBidirectionalMapView(_variables),
+        UnmodifiableBidirectionalMapView(_variableReassignments),
+        UnmodifiableBidirectionalMapView(_mixins),
+        UnmodifiableBidirectionalMapView(_functions),
+        UnmodifiableBidirectionalMapView(_getFunctionReferences));
   }
+
+  /// Returns the stylesheet at [url].
+  ///
+  /// This reuses the stylesheet if it's already been parsed.
+  Stylesheet getStylesheet(Uri url) => importCache.import(url)?.item2;
 
   /// Visits a stylesheet with an empty [_namespaces], storing it in
   /// [_references].
   @override
   void visitStylesheet(Stylesheet node) {
-    _references._stylesheets[node.span.sourceUrl] = node;
     var _oldNamespaces = _namespaces;
     _namespaces = {};
     super.visitStylesheet(node);
@@ -259,8 +266,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var scope = _scopeForNamespace(node.namespace);
     var previous = scope.variables[node.name];
     scope.variables[node.name] = node;
-    var original = _references.variableReassignments[previous] ?? previous;
-    _references.variableReassignments[node] = original;
+    var original = _variableReassignments[previous] ?? previous;
+    _variableReassignments[node] = original;
     super.visitVariableDeclaration(node);
   }
 
@@ -270,7 +277,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var declaration =
         _scopeForNamespace(node.namespace).findVariable(node.name);
     if (declaration != null) {
-      _references.variables[node] = declaration;
+      _variables[node] = declaration;
     }
     super.visitVariableExpression(node);
   }
@@ -287,7 +294,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitIncludeRule(IncludeRule node) {
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
     if (declaration != null) {
-      _references.mixins[node] = declaration;
+      _mixins[node] = declaration;
       super.visitIncludeRule(node);
     }
   }
@@ -308,7 +315,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var declaration =
         _scopeForNamespace(node.namespace).findFunction(node.name.asPlain);
     if (declaration != null) {
-      _references.functions[node] = declaration;
+      _functions[node] = declaration;
       return;
     }
 
@@ -320,7 +327,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     declaration =
         _scopeForNamespace(namespace).findFunction(nameExpression.text);
     if (declaration != null) {
-      _references.getFunctionReferences[node] = declaration;
+      _getFunctionReferences[node] = declaration;
     }
   }
 }

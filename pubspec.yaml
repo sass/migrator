@@ -10,7 +10,6 @@ environment:
 dependencies:
   args: "^1.5.1"
   charcode: "^1.1.0"
-  collection: "^1.8.0"
   sass: "^1.22.7"
   source_span: "^1.4.0"
   meta: ">=0.9.0 <2.0.0"
@@ -19,6 +18,7 @@ dependencies:
 
 dev_dependencies:
   archive: ">=1.0.0 <3.0.0"
+  collection: "^1.8.0"
   grinder: "^0.8.0"
   http: ">=0.11.0 <0.13.0"
   node_interop: "^1.0.0"
