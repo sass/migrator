@@ -8,10 +8,9 @@
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
-
-import 'package:collection/collection.dart';
 
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
@@ -28,7 +27,7 @@ class References {
   /// An unmodifiable map between variable references and their declarations.
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
-  final UnmodifiableBidirectionalMapView<VariableExpression,
+  final BidirectionalMap<VariableExpression,
       SassNode /*VariableDeclaration|Argument*/ > variables;
 
   /// An unmodifiable map between variable reassignments and the original
@@ -38,24 +37,23 @@ class References {
   /// to the original declaration, not the previous reassignment.
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
-  final UnmodifiableBidirectionalMapView<VariableDeclaration,
+  final BidirectionalMap<VariableDeclaration,
       SassNode /*VariableDeclaration|Argument*/ > variableReassignments;
 
   /// An unmodifiable map between mixin references and their declarations.
-  final UnmodifiableBidirectionalMapView<IncludeRule, MixinRule> mixins;
+  final BidirectionalMap<IncludeRule, MixinRule> mixins;
 
   /// An unmodifiable map between normal function references and their
   /// declarations.
   ///
   /// This only includes references to user-defined functions.
-  final UnmodifiableBidirectionalMapView<FunctionExpression, FunctionRule>
-      functions;
+  final BidirectionalMap<FunctionExpression, FunctionRule> functions;
 
   /// An unmodifiable map between statically-known function references within
   /// a `get-function` call and their declarations.
   ///
   /// This only includes references to user-defined functions.
-  final UnmodifiableBidirectionalMapView<FunctionExpression, FunctionRule>
+  final BidirectionalMap<FunctionExpression, FunctionRule>
       getFunctionReferences;
 
   /// Returns true if the member declared by [declaration] is referenced within
@@ -85,8 +83,23 @@ class References {
     return variableReassignments[declaration] ?? declaration;
   }
 
-  References._(this.variables, this.variableReassignments, this.mixins,
-      this.functions, this.getFunctionReferences);
+  References._(
+      BidirectionalMap<VariableExpression,
+              SassNode /*VariableDeclaration|Argument*/ >
+          variables,
+      BidirectionalMap<VariableDeclaration,
+              SassNode /*VariableDeclaration|Argument*/ >
+          variableReassignments,
+      BidirectionalMap<IncludeRule, MixinRule> mixins,
+      BidirectionalMap<FunctionExpression, FunctionRule> functions,
+      BidirectionalMap<FunctionExpression, FunctionRule> getFunctionReferences)
+      : variables = UnmodifiableBidirectionalMapView(variables),
+        variableReassignments =
+            UnmodifiableBidirectionalMapView(variableReassignments),
+        mixins = UnmodifiableBidirectionalMapView(mixins),
+        functions = UnmodifiableBidirectionalMapView(functions),
+        getFunctionReferences =
+            UnmodifiableBidirectionalMapView(getFunctionReferences);
 
   /// Constructs a new [References] object based on the stylesheet at
   /// [entrypoint] and its dependencies.
@@ -125,6 +138,16 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// It doesn't include namespaces for to-be-migrated imports.
   Map<String, Uri> _namespaces;
 
+  /// URL of the stylesheet currently being migrated.
+  Uri _currentUrl;
+
+  /// The importer that's currently being used to resolve relative imports.
+  ///
+  /// If this is `null`, relative imports aren't supported in the current
+  /// stylesheet.
+  Importer _importer;
+
+  /// Cache used to load stylesheets.
   ImportCache importCache;
 
   _ReferenceVisitor(this.importCache);
@@ -132,31 +155,27 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Constructs a new References object based on the stylesheet at [entrypoint]
   /// and its dependencies.
   References build(Uri entrypoint) {
-    var stylesheet = getStylesheet(entrypoint);
+    var result = importCache.import(entrypoint);
+    _importer = result.item1;
+    var stylesheet = result.item2;
     _scope = Scope();
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     visitStylesheet(stylesheet);
-    return References._(
-        UnmodifiableBidirectionalMapView(_variables),
-        UnmodifiableBidirectionalMapView(_variableReassignments),
-        UnmodifiableBidirectionalMapView(_mixins),
-        UnmodifiableBidirectionalMapView(_functions),
-        UnmodifiableBidirectionalMapView(_getFunctionReferences));
+    return References._(_variables, _variableReassignments, _mixins, _functions,
+        _getFunctionReferences);
   }
-
-  /// Returns the stylesheet at [url].
-  ///
-  /// This reuses the stylesheet if it's already been parsed.
-  Stylesheet getStylesheet(Uri url) => importCache.import(url)?.item2;
 
   /// Visits a stylesheet with an empty [_namespaces], storing it in
   /// [_references].
   @override
   void visitStylesheet(Stylesheet node) {
-    var _oldNamespaces = _namespaces;
+    var oldNamespaces = _namespaces;
+    var oldUrl = _currentUrl;
     _namespaces = {};
+    _currentUrl = node.span.sourceUrl;
     super.visitStylesheet(node);
-    _namespaces = _oldNamespaces;
+    _namespaces = oldNamespaces;
+    _currentUrl = oldUrl;
   }
 
   /// Visits the stylesheet this `@import` rule points to using the existing global
@@ -166,9 +185,14 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     super.visitImportRule(node);
     for (var import in node.imports) {
       if (import is DynamicImport) {
-        var url = node.span.sourceUrl.resolveUri(Uri.parse(import.url));
-        var stylesheet = getStylesheet(url);
-        if (stylesheet != null) visitStylesheet(stylesheet);
+        var result =
+            importCache.import(Uri.parse(import.url), _importer, _currentUrl);
+        if (result != null) {
+          var oldImporter = _importer;
+          _importer = result.item1;
+          visitStylesheet(result.item2);
+          _importer = oldImporter;
+        }
       }
     }
   }
@@ -178,14 +202,17 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
-    var url = node.span.sourceUrl.resolveUri(node.url);
-    var stylesheet = getStylesheet(url);
-    if (stylesheet == null) return;
+    var result = importCache.import(node.url, _importer, _currentUrl);
+    if (result == null) return;
+    var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
     if (!_moduleScopes.containsKey(canonicalUrl)) {
       _scope = Scope();
       _moduleScopes[canonicalUrl] = _scope;
+      var oldImporter = _importer;
+      _importer = result.item1;
       visitStylesheet(stylesheet);
+      _importer = oldImporter;
     }
     var namespace = namespaceForPath(node.url.path);
     _namespaces[namespace] = canonicalUrl;

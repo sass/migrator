@@ -8,15 +8,8 @@ import 'dart:collection';
 
 import 'bidirectional_map.dart';
 
-/// A map that allows you to efficiently find all keys associated with a
-/// particular value.
-///
-/// Each key can be associated with at most one value, but each value can be
-/// associated with more than one key.
-///
-/// This map also provides a mechanism for freezing its contents. Once [freeze]
-/// is called, this map may no longer be modified.
-class UnmodifiableBidirectionalMapView<K, V> extends MapView<K, V>
+/// A unmodifiable view of [BidirectionalMap].
+class UnmodifiableBidirectionalMapView<K, V> extends UnmodifiableMapView<K, V>
     implements BidirectionalMap<K, V> {
   final BidirectionalMap _map;
 

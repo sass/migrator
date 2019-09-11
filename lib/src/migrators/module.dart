@@ -109,9 +109,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
 
-  /// The URL of the current stylesheet.
-  Uri _currentUrl;
-
   /// The URL of the last stylesheet that was completely migrated.
   Uri _lastUrl;
 
@@ -133,6 +130,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Constructs a new module migration visitor.
   ///
+  /// [importCache] must be the same one used by [references].
+  ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
@@ -143,7 +142,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
   String get _semicolonIfNotIndented =>
-      _currentUrl.path.endsWith('.sass') ? "" : ";";
+      currentUrl.path.endsWith('.sass') ? "" : ";";
 
   /// Returns the migrated contents of this stylesheet, based on [patches] and
   /// [_additionalUseRules], or null if the stylesheet does not change.
@@ -195,7 +194,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     categorizeMember(
         SassNode declaration, String originalName, String newName) {
       var url = declaration.span.sourceUrl;
-      if (url == _currentUrl) return;
+      if (url == currentUrl) return;
       if (_shouldForward(originalName) && !originalName.startsWith('-')) {
         shown[url] ??= {};
         shown[url].add(newName);
@@ -240,17 +239,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return forwards.join('');
   }
 
-  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  /// Immediately throw a [MigrationException] when a missing dependency is
+  /// encountered, as the module migrator needs to traverse all dependencies.
   @override
-  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
-    var url = source.resolveUri(dependency);
-    var stylesheet = importCache.import(url)?.item2;
-    if (stylesheet == null) {
-      throw MigrationException(
-          "Error: Could not find Sass file at '${p.prettyUri(url)}'.",
-          span: context);
-    }
-    visitStylesheet(stylesheet);
+  void handleMissingDependency(Uri dependency, FileSpan context) {
+    throw MigrationException(
+        "Error: Could not find Sass file at '${p.prettyUri(dependency)}'.",
+        span: context);
   }
 
   /// Stores per-file state before visiting [node] and restores it afterwards.
@@ -258,17 +253,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitStylesheet(Stylesheet node) {
     var oldNamespaces = _namespaces;
     var oldAdditionalUseRules = _additionalUseRules;
-    var oldUrl = _currentUrl;
     var oldUseAllowed = _useAllowed;
     _namespaces = {};
     _additionalUseRules = Set();
-    _currentUrl = node.span.sourceUrl;
     _useAllowed = true;
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
     _additionalUseRules = oldAdditionalUseRules;
-    _lastUrl = _currentUrl;
-    _currentUrl = oldUrl;
+    _lastUrl = node.span.sourceUrl;
     _useAllowed = oldUseAllowed;
   }
 
@@ -477,7 +469,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = Set();
-    _upstreamStylesheets.add(_currentUrl);
+    _upstreamStylesheets.add(currentUrl);
 
     var oldScope = _scope;
     if (migrateToLoadCss) {
@@ -488,8 +480,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         current = current.parent;
       }
     }
-    visitDependency(Uri.parse(import.url), _currentUrl, import.span);
-    _upstreamStylesheets.remove(_currentUrl);
+    visitDependency(Uri.parse(import.url), import.span);
+    _upstreamStylesheets.remove(currentUrl);
     if (migrateToLoadCss) {
       oldScope.addAllMembers(_scope.global,
           unreferencable: UnreferencableType.globalFromNestedImport);
@@ -504,7 +496,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var locallyConfiguredVariables = <String, VariableDeclaration>{};
     var externallyConfiguredVariables = <String, VariableDeclaration>{};
     for (var variable in _configuredVariables) {
-      if (variable.span.sourceUrl == _currentUrl) {
+      if (variable.span.sourceUrl == currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
       } else {
         externallyConfiguredVariables[variable.name] = variable;
@@ -639,7 +631,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
       var existingNode = _scope.global.variables[name];
       var originalUrl = existingNode?.span?.sourceUrl;
-      if (existingNode != null && originalUrl != _currentUrl) {
+      if (existingNode != null && originalUrl != currentUrl) {
         if (node.isGuarded) {
           _configuredVariables.add(existingNode);
         } else if (!_upstreamStylesheets.contains(originalUrl)) {
@@ -717,7 +709,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `@use` rule if necessary.
   String _namespaceForNode(SassNode node) {
     if (node == null) return null;
-    if (node.span.sourceUrl == _currentUrl) return null;
+    if (node.span.sourceUrl == currentUrl) return null;
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
       // Add new `@use` rule for indirect dependency
       var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
@@ -732,7 +724,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `@use`, `@forward`, or `@import` rule.
   String _absoluteUrlToDependency(Uri uri) {
     var relativePath =
-        p.url.relative(uri.path, from: p.url.dirname(_currentUrl.path));
+        p.url.relative(uri.path, from: p.url.dirname(currentUrl.path));
     var basename = p.url.basenameWithoutExtension(relativePath);
     if (basename.startsWith('_')) basename = basename.substring(1);
     return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
