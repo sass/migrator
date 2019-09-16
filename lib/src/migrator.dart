@@ -62,10 +62,9 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
   Map<Uri, String> run() {
-    var allMigrated = Map<Uri, String>();
+    var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    // TODO(jathak): Add support for passing loadPaths from command line.
-    var importCache = ImportCache([]);
+    var importCache = ImportCache([], loadPaths: globalResults['load-path']);
     for (var entrypoint in argResults.rest) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {

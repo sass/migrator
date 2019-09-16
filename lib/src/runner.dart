@@ -22,6 +22,12 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
+      ..addMultiOption('load-path',
+          abbr: 'I',
+          valueHelp: 'PATH',
+          help: 'A path to use when resolving imports.\n'
+              'May be passed multiple times.',
+          splitCommas: false)
       ..addFlag('migrate-deps',
           abbr: 'd',
           help: 'Migrate dependencies in addition to entrypoints.',
