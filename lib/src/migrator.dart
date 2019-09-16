@@ -15,6 +15,7 @@ import 'package:sass/src/import_cache.dart';
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 
 import 'utils.dart';
@@ -64,7 +65,8 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    var importCache = ImportCache([], loadPaths: globalResults['load-path']);
+    var importCache = ImportCache([NodeModulesImporter()],
+        loadPaths: globalResults['load-path']);
     for (var entrypoint in argResults.rest) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
