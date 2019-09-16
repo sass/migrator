@@ -23,7 +23,7 @@ import '../utils.dart';
 import 'module/built_in_functions.dart';
 import 'module/forward_type.dart';
 import 'module/references.dart';
-import 'module/scope.dart';
+import 'module/unreferencable_members.dart';
 import 'module/unreferencable_type.dart';
 
 /// Migrates stylesheets to the new module system.
@@ -78,10 +78,6 @@ class ModuleMigrator extends Migrator {
 }
 
 class _ModuleMigrationVisitor extends MigrationVisitor {
-  /// The scope containing all variables, mixins, and functions defined in the
-  /// current context.
-  var _scope = Scope();
-
   /// Set of stylesheets currently being migrated.
   ///
   /// Used to ensure that a dependency declaring a variable that an upstream
@@ -91,6 +87,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Maps declarations of members that have been renamed to their new names.
   final _renamedMembers = <SassNode, String>{};
+
+  /// Tracks declarations that reassigned a variable within another module.
+  ///
+  /// When a reference to this declaration is encountered, the original
+  /// declaration will be used for namespacing instead of this one.
+  final _reassignedVariables = <VariableDeclaration>{};
+
+  /// Tracks members that are unreferencable in the current scope.
+  UnreferencableMembers _unreferencable = UnreferencableMembers();
 
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
@@ -176,9 +181,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// If the current stylesheet is the entrypoint, return a string of `@forward`
   /// rules to forward all members for which [_shouldForward] returns true.
   String _getEntrypointForwards() {
-    if (!_scope.isGlobal) {
-      throw StateError('Must be called from root of stylesheet');
-    }
     if (_upstreamStylesheets.isNotEmpty) return '';
     var shown = <Uri, Set<String>>{};
     var hidden = <Uri, Set<String>>{};
@@ -206,17 +208,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Divide all global members from dependencies into sets based on whether
     // they should be forwarded or not.
-    for (var node in _scope.variables.values) {
+    for (var node in references.globalDeclarations) {
       if (node is VariableDeclaration) {
         categorizeMember(
             node, node.name, '\$${_renamedMembers[node] ?? node.name}');
+      } else if (node is MixinRule) {
+        categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
+      } else if (node is FunctionRule) {
+        categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
       }
-    }
-    for (var node in _scope.mixins.values) {
-      categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
-    }
-    for (var node in _scope.functions.values) {
-      categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
     }
 
     // Create a `@forward` rule for each dependency that has members that should
@@ -264,53 +264,35 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _useAllowed = oldUseAllowed;
   }
 
-  /// Visits each of [node]'s expressions and children.
-  ///
-  /// All of [node]'s arguments are declared as local variables in a new scope.
-  @override
-  void visitCallableDeclaration(CallableDeclaration node) {
-    _scope = Scope(_scope);
-    for (var argument in node.arguments.arguments) {
-      _scope.variables[argument.name] = argument;
-      if (argument.defaultValue != null) visitExpression(argument.defaultValue);
-    }
-    super.visitChildren(node);
-    _scope = _scope.parent;
-  }
-
-  /// Visits the children of [node] with a local scope.
-  ///
-  /// Note: The children of a stylesheet are at the root, so we should not add
-  /// a local scope.
+  /// Visits the children of [node] with a new scope for tracking unreferencable
+  /// members.
   @override
   void visitChildren(ParentStatement node) {
-    if (node is Stylesheet) {
-      super.visitChildren(node);
-      return;
-    }
-    _scope = Scope(_scope);
+    _unreferencable = UnreferencableMembers(_unreferencable);
     super.visitChildren(node);
-    _scope = _scope.parent;
+    _unreferencable = _unreferencable.parent;
   }
 
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    _scope.checkUnreferencableFunction(node);
 
     // Don't migrate CSS-compatibility overloads.
     if (_isCssCompatibilityOverload(node)) return;
 
-    _renameReference(nameSpan(node), references.functions[node]);
-    _patchNamespaceForFunction(node, (namespace) {
+    var declaration = references.functions[node];
+    _unreferencable.checkUnreferencable(declaration, node);
+    _renameReference(nameSpan(node), declaration);
+    _patchNamespaceForFunction(node, declaration, (namespace) {
       addPatch(patchBefore(node.name, '$namespace.'));
     });
     visitArgumentInvocation(node.arguments);
 
     if (node.name.asPlain == "get-function") {
-      _renameReference(getStaticNameForGetFunctionCall(node),
-          references.getFunctionReferences[node]);
+      declaration = references.getFunctionReferences[node];
+      _unreferencable.checkUnreferencable(declaration, node);
+      _renameReference(getStaticNameForGetFunctionCall(node), declaration);
 
       // Ignore get-function calls that already have a module argument.
       var moduleArg = node.arguments.named['module'];
@@ -329,7 +311,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
 
-      _patchNamespaceForFunction(node, (namespace) {
+      _patchNamespaceForFunction(node, declaration, (namespace) {
         var beforeParen = node.span.end.offset - 1;
         addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
             ', \$module: "$namespace"'));
@@ -347,17 +329,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// appropriate `color.adjust` argument.
   ///
   /// If [node] is a get-function call, [getFunctionCall] should be true.
-  void _patchNamespaceForFunction(
-      FunctionExpression node, void patchNamespace(String namespace),
+  void _patchNamespaceForFunction(FunctionExpression node,
+      FunctionRule declaration, void patchNamespace(String namespace),
       {bool getFunctionCall = false}) {
     var span = getFunctionCall
         ? getStaticNameForGetFunctionCall(node)
         : nameSpan(node);
     if (span == null) return;
     var name = span.text.replaceAll('_', '-');
-    if (_scope.isLocalFunction(name)) return;
 
-    var namespace = _namespaceForNode(_scope.global.functions[name]);
+    var namespace = _namespaceForNode(declaration);
     if (namespace != null) {
       patchNamespace(namespace);
       return;
@@ -390,7 +371,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     _additionalUseRules.add("sass:$namespace");
     patchNamespace(namespace);
-    if (name != span.text) addPatch(Patch(span, name));
+    if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
 
   /// Returns true if [node] is a function overload that exists to provide
@@ -465,27 +446,32 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Migration of @import rule with multiple imports not supported.");
     }
     var import = node.imports.first as DynamicImport;
-    var migrateToLoadCss = _scope.parent != null || !_useAllowed;
 
     var oldConfiguredVariables = _configuredVariables;
-    _configuredVariables = Set();
+    _configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
-
-    var oldScope = _scope;
-    if (migrateToLoadCss) {
-      _scope = oldScope.copyForNestedImport();
-      var current = oldScope.parent;
-      while (current != null) {
-        _scope.variables.addAll(current.variables);
-        current = current.parent;
+    if (!_useAllowed) {
+      _unreferencable = UnreferencableMembers(_unreferencable);
+      for (var declaration in references.variables.values
+          .followedBy(references.functions.values)
+          .followedBy(references.mixins.values)) {
+        if (declaration.span.sourceUrl != currentUrl) continue;
+        if (references.globalDeclarations.contains(declaration)) continue;
+        _unreferencable.markUnreferencable(
+            declaration, UnreferencableType.localFromImporter);
       }
     }
     visitDependency(Uri.parse(import.url), import.span);
     _upstreamStylesheets.remove(currentUrl);
-    if (migrateToLoadCss) {
-      oldScope.addAllMembers(_scope.global,
-          unreferencable: UnreferencableType.globalFromNestedImport);
-      _scope = oldScope;
+    if (!_useAllowed) {
+      _unreferencable = _unreferencable.parent;
+      for (var declaration in references.variables.values
+          .followedBy(references.functions.values)
+          .followedBy(references.mixins.values)) {
+        if (declaration.span.sourceUrl != _lastUrl) continue;
+        _unreferencable.markUnreferencable(
+            declaration, UnreferencableType.globalFromNestedImport);
+      }
     } else {
       _namespaces[_lastUrl] = namespaceForPath(import.url);
     }
@@ -506,7 +492,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _configuredVariables = oldConfiguredVariables;
 
     if (externallyConfiguredVariables.isNotEmpty) {
-      if (migrateToLoadCss) {
+      if (!_useAllowed) {
         var firstConfig = externallyConfiguredVariables.values.first;
         throw MigrationException(
             "This declaration attempts to override a default value in an "
@@ -544,7 +530,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var end = start + _semicolonIfNotIndented.length;
         if (variable.span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(variable.span.file.span(start, end)));
-        var nameFormat = migrateToLoadCss ? '"$name"' : '\$$name';
+        var nameFormat = _useAllowed ? '\$$name' : '"$name"';
         configured.add("$nameFormat: ${variable.expression}");
       }
     }
@@ -555,7 +541,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       configuration =
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
-    if (migrateToLoadCss) {
+    if (!_useAllowed) {
       _additionalUseRules.add('sass:meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
@@ -570,11 +556,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     _useAllowed = false;
     super.visitIncludeRule(node);
-    _scope.checkUnreferencableMixin(node);
-    if (_scope.isLocalMixin(node.name)) return;
 
-    _renameReference(nameSpan(node), references.mixins[node]);
-    var namespace = _namespaceForNode(_scope.global.mixins[node.name]);
+    var declaration = references.mixins[node];
+    _unreferencable.checkUnreferencable(declaration, node);
+    _renameReference(nameSpan(node), declaration);
+    var namespace = _namespaceForNode(declaration);
     if (namespace != null) {
       addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
     }
@@ -598,11 +584,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
-    _scope.checkUnreferencableVariable(node);
-    if (_scope.isLocalVariable(node.name)) return;
-
-    _renameReference(nameSpan(node), references.originalDeclaration(node));
-    var namespace = _namespaceForNode(_scope.global.variables[node.name]);
+    var declaration = references.variables[node];
+    _unreferencable.checkUnreferencable(declaration, node);
+    if (_reassignedVariables.contains(declaration)) {
+      declaration = references.variableReassignments[declaration];
+    }
+    _renameReference(nameSpan(node), declaration);
+    var namespace = _namespaceForNode(declaration);
     if (namespace != null) {
       addPatch(patchBefore(node, '$namespace.'));
     }
@@ -618,69 +606,64 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Declares a variable within this stylesheet, in the current local scope if
   /// it exists, or as a global variable otherwise.
   void _declareVariable(VariableDeclaration node) {
-    if (_scope.isGlobal || node.isGlobal) {
-      var name = node.name;
-      if (name.startsWith('-') &&
-          references.referencedOutsideDeclaringStylesheet(node)) {
-        // Remove leading `-` since private members can't be accessed outside
-        // the module they're declared in.
-        name = name.substring(1);
-      }
-      name = _unprefix(name);
-      if (name != node.name) _renameDeclaration(node, name);
-
-      var existingNode = _scope.global.variables[name];
-      var originalUrl = existingNode?.span?.sourceUrl;
-      if (existingNode != null && originalUrl != currentUrl) {
-        if (node.isGuarded) {
-          _configuredVariables.add(existingNode);
-        } else if (!_upstreamStylesheets.contains(originalUrl)) {
-          // This declaration reassigns a variable in another module. Since we
-          // don't care about the actual value of the variable while migrating,
-          // we leave the node in _scope.global.variables as-is, so that future
-          // references namespace based on the original declaration, not this
-          // reassignment.
-          var namespace = _namespaceForNode(existingNode);
-          addPatch(patchBefore(node, '$namespace.'));
-          return;
-        }
-      }
+    if (references.defaultVariableDeclarations.containsKey(node)) {
+      _configuredVariables.add(references.defaultVariableDeclarations[node]);
     }
-    _scope.variables[node.name] = node;
+    if (!references.globalDeclarations.contains(node)) return;
+
+    var name = node.name;
+    if (name.startsWith('-') &&
+        references.referencedOutsideDeclaringStylesheet(node)) {
+      // Remove leading `-` since private members can't be accessed outside
+      // the module they're declared in.
+      name = name.substring(1);
+    }
+    name = _unprefix(name);
+    if (name != node.name) _renameDeclaration(node, name);
+
+    var existingNode = references.variableReassignments[node];
+    var originalUrl = existingNode?.span?.sourceUrl;
+    if (existingNode != null &&
+        originalUrl != currentUrl &&
+        !node.isGuarded &&
+        !_upstreamStylesheets.contains(originalUrl)) {
+      var namespace = _namespaceForNode(existingNode);
+      addPatch(patchBefore(node, '$namespace.'));
+      _reassignedVariables.add(node);
+      return;
+    }
   }
 
   /// Declares a mixin within this stylesheet, in the current local scope if
   /// it exists, or as a global mixin otherwise.
   void _declareMixin(MixinRule node) {
-    if (_scope.isGlobal) {
-      var name = node.name;
-      if (name.startsWith('-') &&
-          references.referencedOutsideDeclaringStylesheet(node)) {
-        // Remove leading `-` since private members can't be accessed outside
-        // the module they're declared in.
-        name = name.substring(1);
-      }
-      name = _unprefix(name);
-      if (name != node.name) _renameDeclaration(node, name);
+    if (!references.globalDeclarations.contains(node)) return;
+
+    var name = node.name;
+    if (name.startsWith('-') &&
+        references.referencedOutsideDeclaringStylesheet(node)) {
+      // Remove leading `-` since private members can't be accessed outside
+      // the module they're declared in.
+      name = name.substring(1);
     }
-    _scope.mixins[node.name] = node;
+    name = _unprefix(name);
+    if (name != node.name) _renameDeclaration(node, name);
   }
 
   /// Declares a function within this stylesheet, in the current local scope if
   /// it exists, or as a global function otherwise.
   void _declareFunction(FunctionRule node) {
-    if (_scope.isGlobal) {
-      var name = node.name;
-      if (name.startsWith('-') &&
-          references.referencedOutsideDeclaringStylesheet(node)) {
-        // Remove leading `-` since private members can't be accessed outside
-        // the module they're declared in.
-        name = name.substring(1);
-      }
-      name = _unprefix(name);
-      if (name != node.name) _renameDeclaration(node, name);
+    if (!references.globalDeclarations.contains(node)) return;
+
+    var name = node.name;
+    if (name.startsWith('-') &&
+        references.referencedOutsideDeclaringStylesheet(node)) {
+      // Remove leading `-` since private members can't be accessed outside
+      // the module they're declared in.
+      name = name.substring(1);
     }
-    _scope.functions[node.name] = node;
+    name = _unprefix(name);
+    if (name != node.name) _renameDeclaration(node, name);
   }
 
   /// Renames [declaration] to [newName].

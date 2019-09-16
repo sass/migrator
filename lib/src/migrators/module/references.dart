@@ -12,6 +12,8 @@ import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
+import 'package:collection/collection.dart';
+
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
 import 'scope.dart';
@@ -40,6 +42,14 @@ class References {
   final BidirectionalMap<VariableDeclaration,
       SassNode /*VariableDeclaration|Argument*/ > variableReassignments;
 
+  /// An unmodifiable map from variable declarations with the `!default` flag to
+  /// the declaration they would override were it not for that flag.
+  ///
+  /// This only includes `!default` declarations for variables that already
+  /// exist.
+  final Map<VariableDeclaration, SassNode /*VariableDeclaration|Argument*/ >
+      defaultVariableDeclarations;
+
   /// An unmodifiable map between mixin references and their declarations.
   final BidirectionalMap<IncludeRule, MixinRule> mixins;
 
@@ -55,6 +65,10 @@ class References {
   /// This only includes references to user-defined functions.
   final BidirectionalMap<FunctionExpression, FunctionRule>
       getFunctionReferences;
+
+  /// An unmodifiable set of all member declarations declared in the global
+  /// scope of a stylesheet.
+  final Set<SassNode> globalDeclarations;
 
   /// Returns true if the member declared by [declaration] is referenced within
   /// another stylesheet.
@@ -90,16 +104,22 @@ class References {
       BidirectionalMap<VariableDeclaration,
               SassNode /*VariableDeclaration|Argument*/ >
           variableReassignments,
+      Map<VariableDeclaration, SassNode /*VariableDeclaration|Argument*/ >
+          defaultVariableDeclarations,
       BidirectionalMap<IncludeRule, MixinRule> mixins,
       BidirectionalMap<FunctionExpression, FunctionRule> functions,
-      BidirectionalMap<FunctionExpression, FunctionRule> getFunctionReferences)
+      BidirectionalMap<FunctionExpression, FunctionRule> getFunctionReferences,
+      Set<SassNode> globalDeclarations)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
+        defaultVariableDeclarations =
+            UnmodifiableMapView(defaultVariableDeclarations),
         mixins = UnmodifiableBidirectionalMapView(mixins),
         functions = UnmodifiableBidirectionalMapView(functions),
         getFunctionReferences =
-            UnmodifiableBidirectionalMapView(getFunctionReferences);
+            UnmodifiableBidirectionalMapView(getFunctionReferences),
+        globalDeclarations = UnmodifiableSetView(globalDeclarations);
 
   /// Constructs a new [References] object based on the stylesheet at
   /// [entrypoint] and its dependencies.
@@ -113,10 +133,13 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       SassNode /*VariableDeclaration|Argument*/ >();
   final _variableReassignments = BidirectionalMap<VariableDeclaration,
       SassNode /*VariableDeclaration|Argument*/ >();
+  final _defaultVariableDeclarations =
+      <VariableDeclaration, SassNode /*VariableDeclaration|Argument*/ >{};
   final _mixins = BidirectionalMap<IncludeRule, MixinRule>();
   final _functions = BidirectionalMap<FunctionExpression, FunctionRule>();
   final _getFunctionReferences =
       BidirectionalMap<FunctionExpression, FunctionRule>();
+  final Set<SassNode> _globalDeclarations = {};
 
   /// The current global scope.
   ///
@@ -161,8 +184,14 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _scope = Scope();
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     visitStylesheet(stylesheet);
-    return References._(_variables, _variableReassignments, _mixins, _functions,
-        _getFunctionReferences);
+    return References._(
+        _variables,
+        _variableReassignments,
+        _defaultVariableDeclarations,
+        _mixins,
+        _functions,
+        _getFunctionReferences,
+        _globalDeclarations);
   }
 
   /// Visits a stylesheet with an empty [_namespaces], storing it in
@@ -257,12 +286,22 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Declares a variable in the current scope.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
+    super.visitVariableDeclaration(node);
+
     var scope = _scopeForNamespace(node.namespace);
+    if (node.isGlobal) scope = scope.global;
+
+    if (node.isGuarded) {
+      var existing = scope.findVariable(node.name);
+      if (existing != null) {
+        _defaultVariableDeclarations[node] = existing;
+      }
+    }
     var previous = scope.variables[node.name];
     scope.variables[node.name] = node;
+    if (scope.isGlobal || node.isGlobal) _globalDeclarations.add(node);
     var original = _variableReassignments[previous] ?? previous;
     _variableReassignments[node] = original;
-    super.visitVariableDeclaration(node);
   }
 
   /// Visits the variable reference in [node], storing it.
@@ -280,6 +319,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitMixinRule(MixinRule node) {
     _scope.mixins[node.name] = node;
+    if (_scope.isGlobal) _globalDeclarations.add(node);
     super.visitMixinRule(node);
   }
 
@@ -297,6 +337,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitFunctionRule(FunctionRule node) {
     _scope.functions[node.name] = node;
+    if (_scope.isGlobal) _globalDeclarations.add(node);
     super.visitFunctionRule(node);
   }
 
