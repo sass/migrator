@@ -10,6 +10,7 @@ import 'package:args/args.dart';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 
 import 'package:path/path.dart' as p;
@@ -51,12 +52,13 @@ class ModuleMigrator extends Migrator {
   // Hide this until it's finished and the module system is launched.
   final hidden = true;
 
-  /// Runs the module migrator on [entrypoint] and its dependencies and returns
+  /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
   ///
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
-  Map<Uri, String> migrateFile(ImportCache importCache, Uri entrypoint) {
+  Map<Uri, String> migrateFile(
+      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forward = ForwardType(argResults['forward']);
     if (forward == ForwardType.prefixed &&
         argResults['remove-prefix'] == null) {
@@ -64,14 +66,14 @@ class ModuleMigrator extends Migrator {
           'You must provide --remove-prefix with --forward=prefixed so we know '
           'which prefixed members to forward.');
     }
-    var references = References(importCache, entrypoint);
+    var references = References(importCache, stylesheet, importer);
     var migrated = _ModuleMigrationVisitor(importCache, references,
             prefixToRemove:
                 (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
             forward: forward)
-        .run(entrypoint);
+        .run(stylesheet, importer);
     if (!migrateDependencies) {
-      migrated.removeWhere((url, contents) => url != entrypoint);
+      migrated.removeWhere((url, contents) => url != stylesheet.span.sourceUrl);
     }
     return migrated;
   }

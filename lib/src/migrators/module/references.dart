@@ -121,10 +121,11 @@ class References {
             UnmodifiableBidirectionalMapView(getFunctionReferences),
         globalDeclarations = UnmodifiableSetView(globalDeclarations);
 
-  /// Constructs a new [References] object based on the stylesheet at
-  /// [entrypoint] and its dependencies.
-  factory References(ImportCache importCache, Uri entrypoint) =>
-      _ReferenceVisitor(importCache).build(entrypoint);
+  /// Constructs a new [References] object based on a [stylesheet] (imported by
+  /// [importer]) and its dependencies.
+  factory References(
+          ImportCache importCache, Stylesheet stylesheet, Importer importer) =>
+      _ReferenceVisitor(importCache).build(stylesheet, importer);
 }
 
 /// A visitor that builds a References object.
@@ -175,12 +176,10 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   _ReferenceVisitor(this.importCache);
 
-  /// Constructs a new References object based on the stylesheet at [entrypoint]
-  /// and its dependencies.
-  References build(Uri entrypoint) {
-    var result = importCache.import(entrypoint);
-    _importer = result.item1;
-    var stylesheet = result.item2;
+  /// Constructs a new References object based on a [stylesheet] (imported by
+  /// [importer]) and its dependencies.
+  References build(Stylesheet stylesheet, Importer importer) {
+    _importer = importer;
     _scope = Scope();
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     visitStylesheet(stylesheet);

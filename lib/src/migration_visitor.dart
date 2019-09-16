@@ -60,12 +60,11 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   MigrationVisitor(this.importCache, {this.migrateDependencies = true});
 
-  /// Runs a new migration on [url] (and its dependencies, if
+  /// Runs a new migration on [stylesheet] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
-  Map<Uri, String> run(Uri url) {
-    var result = importCache.import(url);
-    _importer = result.item1;
-    visitStylesheet(result.item2);
+  Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
+    _importer = importer;
+    visitStylesheet(stylesheet);
     return _migrated;
   }
 

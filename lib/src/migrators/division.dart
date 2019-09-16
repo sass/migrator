@@ -37,10 +37,11 @@ More info: https://sass-lang.com/d/slash-div""";
   bool get isPessimistic => argResults['pessimistic'] as bool;
 
   @override
-  Map<Uri, String> migrateFile(ImportCache importCache, Uri entrypoint) {
+  Map<Uri, String> migrateFile(
+      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var visitor = _DivisionMigrationVisitor(
         importCache, this.isPessimistic, migrateDependencies);
-    var result = visitor.run(entrypoint);
+    var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
   }
