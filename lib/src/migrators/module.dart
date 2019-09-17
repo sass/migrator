@@ -106,8 +106,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Set of additional `@use` rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
-  /// This set contains the path provided in the `@use` rule, not the canonical
-  /// path (e.g. "a" rather than "dir/a.scss").
+  /// This set contains the full `@use` rule without a semicolon or line break
+  /// at the end.
   Set<String> _additionalUseRules;
 
   /// Set of variables declared outside the current stylesheet that overrode
@@ -194,8 +194,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   String getMigratedContents() {
     var results = super.getMigratedContents();
     if (results == null) return null;
-    var uses = _additionalUseRules
-        .map((use) => '@use "$use"$_semicolonIfNotIndented\n');
+    var uses = {
+      for (var use in _additionalUseRules) "$use$_semicolonIfNotIndented\n"
+    };
     return _getEntrypointForwards() + uses.join() + results;
   }
 
@@ -408,7 +409,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
     }
-    _additionalUseRules.add("sass:$namespace");
+    _additionalUseRules.add('@use "sass:$namespace"');
     patchNamespace(namespace);
     if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
@@ -502,6 +503,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     visitDependency(Uri.parse(import.url), import.span);
     _upstreamStylesheets.remove(currentUrl);
+    var asClause = '';
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.variables.values
@@ -511,8 +513,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _unreferencable.markUnreferencable(
             declaration, UnreferencableType.globalFromNestedImport);
       }
-    } else {
-      _namespaces[_lastUrl] = namespaceForPath(import.url);
+    } else if (!_addNamespace(_lastUrl, import.url)) {
+      asClause = ' as ${_namespaces[_lastUrl]}';
     }
 
     // Pass the variables that were configured by the importing file to `with`,
@@ -581,12 +583,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
     if (!_useAllowed) {
-      _additionalUseRules.add('sass:meta');
+      _additionalUseRules.add('@use "sass:meta"');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
           '@include meta.load-css(${import.span.text}$configuration)'));
     } else {
-      addPatch(Patch(node.span, '@use ${import.span.text}$configuration'));
+      addPatch(
+          Patch(node.span, '@use ${import.span.text}$asClause$configuration'));
     }
   }
 
@@ -674,6 +677,22 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return name.substring(prefixToRemove.length);
   }
 
+  /// Adds a new namespace where the URL of the `@use` rule is [useRuleUrl] and
+  /// the canonical URL is [canonicalUrl].
+  ///
+  /// This returns true if the default namespace for [useRuleUrl] is used and
+  /// false if an alternate namespace was used.
+  bool _addNamespace(Uri canonicalUrl, String useRuleUrl) {
+    var defaultNamespace = namespaceForPath(useRuleUrl);
+    var namespace = defaultNamespace;
+    var count = 1;
+    while (_namespaces.containsValue(namespace)) {
+      namespace = '$defaultNamespace${++count}';
+    }
+    _namespaces[canonicalUrl] = namespace;
+    return namespace == defaultNamespace;
+  }
+
   /// Finds the namespace for the stylesheet containing [node], adding a new
   /// `@use` rule if necessary.
   String _namespaceForNode(SassNode node) {
@@ -682,8 +701,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
       // Add new `@use` rule for indirect dependency
       var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
-      _additionalUseRules.add(simplePath);
-      _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
+      var asClause = _addNamespace(node.span.sourceUrl, simplePath)
+          ? ''
+          : ' as ${_namespaces[node.span.sourceUrl]}';
+      _additionalUseRules.add('@use "$simplePath"$asClause');
     }
     return _namespaces[node.span.sourceUrl];
   }
