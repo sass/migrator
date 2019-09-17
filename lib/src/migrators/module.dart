@@ -409,8 +409,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
     }
-    _additionalUseRules.add('@use "sass:$namespace"');
-    patchNamespace(namespace);
+    patchNamespace(_findBuiltInNamespace(namespace));
     if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
 
@@ -583,10 +582,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
     if (!_useAllowed) {
-      _additionalUseRules.add('@use "sass:meta"');
+      var namespace = _findBuiltInNamespace('meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
-          '@include meta.load-css(${import.span.text}$configuration)'));
+          '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
       addPatch(
           Patch(node.span, '@use ${import.span.text}$asClause$configuration'));
@@ -691,6 +690,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     _namespaces[canonicalUrl] = namespace;
     return namespace == defaultNamespace;
+  }
+
+  /// Returns the namespace that built-in module [module] is loaded under.
+  ///
+  /// This adds an additional `@use` rule if [module] has not been loaded yet.
+  String _findBuiltInNamespace(String module) {
+    var url = builtInModuleUrls[module];
+    if (_namespaces.containsKey(url)) {
+      return _namespaces[url];
+    } else if (_addNamespace(url, module)) {
+      _additionalUseRules.add('@use "sass:$module"');
+      return module;
+    } else {
+      var namespace = _namespaces[url];
+      _additionalUseRules.add('@use "sass:$module" as $namespace');
+      return namespace;
+    }
   }
 
   /// Finds the namespace for the stylesheet containing [node], adding a new
