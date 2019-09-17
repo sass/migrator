@@ -55,20 +55,25 @@ FileSpan nameSpan(SassNode node) {
     return subspan(node.span,
         start: node.namespace == null ? 1 : node.namespace.length + 2);
   } else if (node is FunctionRule) {
-    var startName = node.span.text.indexOf(node.name, '@function'.length);
+    var startName = node.span.text
+        .replaceAll('_', '-')
+        .indexOf(node.name, '@function'.length);
     return subspan(node.span,
         start: startName, end: startName + node.name.length);
   } else if (node is FunctionExpression) {
     return node.name.span;
   } else if (node is MixinRule) {
     var startName = node.span.text
+        .replaceAll('_', '-')
         .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
     return subspan(node.span,
         start: startName, end: startName + node.name.length);
   } else if (node is IncludeRule) {
-    var endName = node.arguments.span.start.offset;
-    var startName = endName - node.name.length;
-    return node.span.file.span(startName, endName);
+    var startName = node.span.text
+        .replaceAll('_', '-')
+        .indexOf(node.name, node.span.text[0] == '+' ? 1 : '@include'.length);
+    return subspan(node.span,
+        start: startName, end: startName + node.name.length);
   } else {
     throw UnsupportedError(
         "$node of type ${node.runtimeType} doesn't have a name");

@@ -1,0 +1,61 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+We test a variety of whitespace here to ensure that the span that contains the
+mixin name is correctly found.
+
+<==> input/entrypoint.scss
+@import "library";
+a {
+  @include helper {
+    color: $variable;
+  }
+  @include  another_helper
+  {
+    color: $variable;
+  }
+  @include helper{
+    color: $variable;
+  }
+  @include helper(blue) {
+    color: $variable;
+  }
+  @include helper  (blue) {
+    color: $variable;
+  }
+}
+
+<==> input/_library.scss
+@mixin helper($arg: null) {
+  display: block;
+  @content;
+}
+
+@mixin another_helper {
+  display: block;
+  @content;
+}
+
+$variable: green;
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  @include library.helper {
+    color: library.$variable;
+  }
+  @include  library.another_helper
+  {
+    color: library.$variable;
+  }
+  @include library.helper{
+    color: library.$variable;
+  }
+  @include library.helper(blue) {
+    color: library.$variable;
+  }
+  @include library.helper  (blue) {
+    color: library.$variable;
+  }
+}
