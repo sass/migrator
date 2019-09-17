@@ -306,43 +306,44 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Visits the variable reference in [node], storing it.
   @override
   void visitVariableExpression(VariableExpression node) {
+    super.visitVariableExpression(node);
     var declaration =
         _scopeForNamespace(node.namespace).findVariable(node.name);
     if (declaration != null) {
       _variables[node] = declaration;
     }
-    super.visitVariableExpression(node);
   }
 
   /// Declares a mixin in the current scope.
   @override
   void visitMixinRule(MixinRule node) {
+    super.visitMixinRule(node);
     _scope.mixins[node.name] = node;
     if (_scope.isGlobal) _globalDeclarations.add(node);
-    super.visitMixinRule(node);
   }
 
   /// Visits an `@include` rule, storing the mixin reference.
   @override
   void visitIncludeRule(IncludeRule node) {
+    super.visitIncludeRule(node);
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
     if (declaration != null) {
       _mixins[node] = declaration;
-      super.visitIncludeRule(node);
     }
   }
 
   /// Declares a function in the current scope.
   @override
   void visitFunctionRule(FunctionRule node) {
+    super.visitFunctionRule(node);
     _scope.functions[node.name] = node;
     if (_scope.isGlobal) _globalDeclarations.add(node);
-    super.visitFunctionRule(node);
   }
 
   /// Visits a function call, storing it if it is a user-defined function.
   @override
   void visitFunctionExpression(FunctionExpression node) {
+    super.visitFunctionExpression(node);
     if (node.name.asPlain == null) return;
 
     var declaration =
