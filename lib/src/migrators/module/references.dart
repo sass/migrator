@@ -345,9 +345,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     super.visitFunctionExpression(node);
     if (node.name.asPlain == null) return;
+    var name = node.name.asPlain.replaceAll('_', '-');
 
-    var declaration =
-        _scopeForNamespace(node.namespace).findFunction(node.name.asPlain);
+    var declaration = _scopeForNamespace(node.namespace).findFunction(name);
     if (declaration != null) {
       _functions[node] = declaration;
       return;
@@ -358,8 +358,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     if (nameExpression == null) return;
     var moduleExpression = getStaticModuleForGetFunctionCall(node);
     var namespace = moduleExpression?.text;
-    declaration =
-        _scopeForNamespace(namespace).findFunction(nameExpression.text);
+    name = nameExpression.text.replaceAll('_', '-');
+    declaration = _scopeForNamespace(namespace).findFunction(name);
     if (declaration != null) {
       _getFunctionReferences[node] = declaration;
     }
