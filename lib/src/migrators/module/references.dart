@@ -292,11 +292,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
     if (node.isGuarded) {
       var existing = scope.findVariable(node.name);
-      if (existing != null) {
+      if (existing != null && existing.span.sourceUrl != node.span.sourceUrl) {
         _defaultVariableDeclarations[node] = existing;
       }
     }
     var previous = scope.variables[node.name];
+    if (previous == node) return;
     scope.variables[node.name] = node;
     if (scope.isGlobal || node.isGlobal) _globalDeclarations.add(node);
     var original = _variableReassignments[previous] ?? previous;

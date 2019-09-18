@@ -1,0 +1,24 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+This test ensures that configurable variables are only marked as configured
+when the two declarations are in different stylesheets.
+
+<==> input/entrypoint.scss
+@import "library";
+
+a {
+  color: $configurable;
+}
+
+<==> input/_library.scss
+$configurable: red;
+$configurable: green !default;
+
+<==> output/entrypoint.scss
+@use "library";
+
+a {
+  color: library.$configurable;
+}
