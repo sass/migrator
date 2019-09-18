@@ -11,7 +11,7 @@ dependencies:
   args: "^1.5.1"
   charcode: "^1.1.0"
   collection: "^1.8.0"
-  sass: "^1.22.7"
+  sass: "^1.23.0-module.beta.1"
   source_span: "^1.4.0"
   meta: ">=0.9.0 <2.0.0"
   path: "^1.6.0"

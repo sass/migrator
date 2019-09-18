@@ -316,7 +316,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    visitInterpolation(node.name);
+    super.visitFunctionExpression(node);
+    if (node.namespace != null) return;
 
     // Don't migrate CSS-compatibility overloads.
     if (_isCssCompatibilityOverload(node)) return;
@@ -327,7 +328,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _patchNamespaceForFunction(node, declaration, (namespace) {
       addPatch(patchBefore(node.name, '$namespace.'));
     });
-    visitArgumentInvocation(node.arguments);
 
     if (node.name.asPlain == "get-function") {
       declaration = references.getFunctionReferences[node];
@@ -597,6 +597,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     _useAllowed = false;
     super.visitIncludeRule(node);
+    if (node.namespace != null) return;
 
     var declaration = references.mixins[node];
     _unreferencable.checkUnreferencable(declaration, node);
@@ -615,16 +616,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitMixinRule(node);
   }
 
-  @override
-  void visitUseRule(UseRule node) {
-    // TODO(jathak): Handle existing `@use` rules.
-    throw UnsupportedError(
-        "Migrating files with existing @use rules is not yet supported");
-  }
+  /// Don't visit `@use` or `@forward` rules here, as we'll assume that any
+  /// stylesheet depended on this way has already been migrated.
+  ///
+  /// The migrator will use the information from [references] to migrate
+  /// references to members of these dependencies.
+  void visitUseRule(UseRule node) {}
+  void visitForwardRule(ForwardRule node) {}
 
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
+    if (node.namespace != null) return;
     var declaration = references.variables[node];
     _unreferencable.checkUnreferencable(declaration, node);
     if (_reassignedVariables.contains(declaration)) {

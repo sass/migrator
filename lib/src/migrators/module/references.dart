@@ -16,8 +16,9 @@ import 'package:collection/collection.dart';
 
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
-import 'scope.dart';
 import '../../utils.dart';
+import 'forwarded.dart';
+import 'scope.dart';
 
 /// A bidirectional mapping between member declarations and references to those
 /// members.
@@ -244,16 +245,67 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
     if (!_moduleScopes.containsKey(canonicalUrl)) {
+      var previousScope = _scope;
       _scope = Scope();
       _moduleScopes[canonicalUrl] = _scope;
       var oldImporter = _importer;
       _importer = result.item1;
       visitStylesheet(stylesheet);
       _checkUnresolvedReferences(_scope);
+      _scope = previousScope;
       _importer = oldImporter;
     }
     var namespace = namespaceForPath(node.url.path);
     _namespaces[namespace] = canonicalUrl;
+  }
+
+  /// Visits the stylesheet this `@forward` rule points to using a new global
+  /// scope, then copies members from it into the current scope.
+  @override
+  void visitForwardRule(ForwardRule node) {
+    super.visitForwardRule(node);
+    var result = importCache.import(node.url, _importer, _currentUrl);
+    if (result == null) return;
+    var stylesheet = result.item2;
+    var canonicalUrl = stylesheet.span.sourceUrl;
+    if (!_moduleScopes.containsKey(canonicalUrl)) {
+      var previousScope = _scope;
+      _scope = Scope();
+      _moduleScopes[canonicalUrl] = _scope;
+      var oldImporter = _importer;
+      _importer = result.item1;
+      visitStylesheet(stylesheet);
+      _checkUnresolvedReferences(_scope);
+      _scope = previousScope;
+      _importer = oldImporter;
+    }
+    var moduleScope = _moduleScopes[canonicalUrl];
+    var prefix = node.prefix ?? '';
+    for (var name in moduleScope.variables.keys) {
+      if (moduleScope.variables[name] is! VariableDeclaration) {
+        throw StateError(
+            "Arguments should not be present in a module's global scope");
+      }
+      if ((node.shownVariables?.contains(name) ?? true) &&
+          !(node.hiddenVariables?.contains(name) ?? false)) {
+        _scope.variables['$prefix$name'] = ForwardedVariable(
+            moduleScope.variables[name] as VariableDeclaration, node);
+      }
+    }
+    for (var name in moduleScope.mixins.keys) {
+      if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
+          !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
+        _scope.mixins['$prefix$name'] =
+            ForwardedMixin(moduleScope.mixins[name], node);
+      }
+    }
+    for (var name in moduleScope.functions.keys) {
+      if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
+          !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
+        _scope.functions['$prefix$name'] =
+            ForwardedFunction(moduleScope.functions[name], node);
+      }
+    }
   }
 
   /// Visits each of [node]'s expressions and children.
