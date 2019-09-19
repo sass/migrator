@@ -1,0 +1,68 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+Tests migration of users of a library with sublibraries that's already been
+migrated.
+
+In this example, "library" can be loaded either through a monolithic entrypoint
+that prefixes members of each sublibrary, or by loading the necessary
+sublibraries directly and relying on the module system for namespacing.
+
+When migrating a stylesheet that uses the sublibrary entrypoints, both the
+library prefix and the sublibrary prefix should be removed, but when migrating
+one that uses the monolithic entrypoint, only the main library prefixes should
+be removed.
+
+<==> input/entrypoint_monolithic.scss
+@import "library";
+
+a {
+  color: $lib-a-variable;
+  background: $lib-b-variable;
+}
+
+<==> output/entrypoint_monolithic.scss
+@use "library";
+
+a {
+  color: library.$a-variable;
+  background: library.$b-variable;
+}
+
+<==> input/entrypoint_sublibraries.scss
+@import "library/a";
+@import "library/b";
+
+a {
+  color: $lib-a-variable;
+  background: $lib-b-variable;
+}
+
+<==> output/entrypoint_sublibraries.scss
+@use "library/a";
+@use "library/b";
+
+a {
+  color: a.$variable;
+  background: b.$variable;
+}
+
+<==> input/_library.scss
+@forward "library/a" as a-*;
+@forward "library/b" as b-*;
+
+<==> input/_library.import.scss
+@forward "library" as lib-*;
+
+<==> input/library/_a.scss
+$variable: blue;
+
+<==> input/library/_a.import.scss
+@forward "a" as lib-a-*;
+
+<==> input/library/_b.scss
+$variable: green;
+
+<==> input/library/_b.import.scss
+@forward "b" as lib-b-*;
