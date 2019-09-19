@@ -20,6 +20,9 @@ abstract class Forwarded<T extends SassNode> extends SassNode {
   /// The `@forward` rule that forwarded this member.
   final ForwardRule forwardRule;
 
+  /// The canonical URL of the stylesheet this `@forward` rule loads.
+  final Uri sourceUrl;
+
   /// The `@forward` rule's span is used here to indicate that this member
   /// should be treated as if it was declared in the forwarding stylesheet.
   ///
@@ -31,7 +34,7 @@ abstract class Forwarded<T extends SassNode> extends SassNode {
   /// This differs from [member.span] when a member is forwarded multiple times.
   final FileSpan originalSpan;
 
-  Forwarded._(this.member, this.forwardRule)
+  Forwarded._(this.member, this.forwardRule, this.sourceUrl)
       : span = forwardRule.span,
         originalSpan = member is Forwarded ? member.originalSpan : member.span;
 
@@ -44,8 +47,9 @@ abstract class Forwarded<T extends SassNode> extends SassNode {
 /// Implementation of Forwarded<VariableDeclaration>
 class ForwardedVariable extends Forwarded<VariableDeclaration>
     implements VariableDeclaration {
-  ForwardedVariable(VariableDeclaration member, ForwardRule forwardRule)
-      : super._(member, forwardRule);
+  ForwardedVariable(
+      VariableDeclaration member, ForwardRule forwardRule, Uri sourceUrl)
+      : super._(member, forwardRule, sourceUrl);
 
   SilentComment get comment => member.comment;
   void set comment(SilentComment comment) {
@@ -62,8 +66,8 @@ class ForwardedVariable extends Forwarded<VariableDeclaration>
 
 /// Implementation of Forwarded<MixinRule>
 class ForwardedMixin extends Forwarded<MixinRule> implements MixinRule {
-  ForwardedMixin(MixinRule member, ForwardRule forwardRule)
-      : super._(member, forwardRule);
+  ForwardedMixin(MixinRule member, ForwardRule forwardRule, Uri sourceUrl)
+      : super._(member, forwardRule, sourceUrl);
 
   ArgumentDeclaration get arguments => member.arguments;
   List<Statement> get children => member.children;
@@ -76,8 +80,8 @@ class ForwardedMixin extends Forwarded<MixinRule> implements MixinRule {
 /// Implementation of Forwarded<FunctionRule>
 class ForwardedFunction extends Forwarded<FunctionRule>
     implements FunctionRule {
-  ForwardedFunction(FunctionRule member, ForwardRule forwardRule)
-      : super._(member, forwardRule);
+  ForwardedFunction(FunctionRule member, ForwardRule forwardRule, Uri sourceUrl)
+      : super._(member, forwardRule, sourceUrl);
 
   ArgumentDeclaration get arguments => member.arguments;
   List<Statement> get children => member.children;

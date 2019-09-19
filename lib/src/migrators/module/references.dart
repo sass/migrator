@@ -9,6 +9,7 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
+import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
@@ -244,7 +245,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
-    var result = importCache.import(node.url, _importer, _currentUrl);
+    var result =
+        inUseRule(() => importCache.import(node.url, _importer, _currentUrl));
     if (result == null) return;
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
@@ -268,7 +270,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitForwardRule(ForwardRule node) {
     super.visitForwardRule(node);
-    var result = importCache.import(node.url, _importer, _currentUrl);
+    var result =
+        inUseRule(() => importCache.import(node.url, _importer, _currentUrl));
     if (result == null) return;
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
@@ -293,21 +296,23 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       if ((node.shownVariables?.contains(name) ?? true) &&
           !(node.hiddenVariables?.contains(name) ?? false)) {
         _scope.variables['$prefix$name'] = ForwardedVariable(
-            moduleScope.variables[name] as VariableDeclaration, node);
+            moduleScope.variables[name] as VariableDeclaration,
+            node,
+            canonicalUrl);
       }
     }
     for (var name in moduleScope.mixins.keys) {
       if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
           !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
         _scope.mixins['$prefix$name'] =
-            ForwardedMixin(moduleScope.mixins[name], node);
+            ForwardedMixin(moduleScope.mixins[name], node, canonicalUrl);
       }
     }
     for (var name in moduleScope.functions.keys) {
       if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
           !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
         _scope.functions['$prefix$name'] =
-            ForwardedFunction(moduleScope.functions[name], node);
+            ForwardedFunction(moduleScope.functions[name], node, canonicalUrl);
       }
     }
   }

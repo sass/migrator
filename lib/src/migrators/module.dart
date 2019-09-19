@@ -24,6 +24,7 @@ import '../patch.dart';
 import '../utils.dart';
 
 import 'module/built_in_functions.dart';
+import 'module/forwarded.dart';
 import 'module/forward_type.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
@@ -676,8 +677,34 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// If [declaration] was renamed, patches [span] to use the same name.
   void _renameReference(FileSpan span, SassNode declaration) {
-    if (!_renamedMembers.containsKey(declaration)) return;
-    addPatch(Patch(span, _renamedMembers[declaration]));
+    if (_renamedMembers.containsKey(declaration)) {
+      addPatch(Patch(span, _renamedMembers[declaration]));
+      return;
+    }
+    var prefix = "";
+    while (declaration is Forwarded) {
+      var member = declaration as Forwarded;
+      if (_isPrefixedImportOnly(member)) {
+        prefix += member.forwardRule.prefix;
+      }
+      declaration = member.member;
+    }
+    if (prefix != "") {
+      addPatch(patchDelete(span, end: prefix.length));
+    }
+  }
+
+  bool _isPrefixedImportOnly(Forwarded member) {
+    if (member.forwardRule.prefix == null) return false;
+    var containingUrl = member.forwardRule.span.sourceUrl;
+    var forwardedUrl = member.sourceUrl;
+    var containingFile = containingUrl.pathSegments.last;
+    var forwardedFile = forwardedUrl.pathSegments.last;
+    var forwardedBasename = forwardedFile.substring(
+        0, forwardedFile.length - forwardedFile.split('.').last.length - 1);
+    var containingExtension = containingFile.split('.').last;
+    return containingUrl.resolve('.') == forwardedUrl.resolve('.') &&
+        containingFile == "$forwardedBasename.import.$containingExtension";
   }
 
   /// Returns [name] with [prefixToRemove] removed.
