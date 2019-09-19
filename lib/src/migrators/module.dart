@@ -67,7 +67,8 @@ class ModuleMigrator extends Migrator {
           'which prefixed members to forward.');
     }
     var references = References(importCache, stylesheet, importer);
-    var migrated = _ModuleMigrationVisitor(importCache, references,
+    var migrated = _ModuleMigrationVisitor(
+            importCache, references, globalResults['load-path'] as List<String>,
             prefixToRemove:
                 (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
             forward: forward)
@@ -128,6 +129,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Cache used to load stylesheets.
   final ImportCache importCache;
 
+  /// List of paths that stylesheets can be loaded from.
+  final List<String> loadPaths;
+
   /// The prefix to be removed from any members with it, or null if no prefix
   /// should be removed.
   final String prefixToRemove;
@@ -139,10 +143,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// [importCache] must be the same one used by [references].
   ///
+  /// [loadPaths] should be the same list used to create [importCache].
+  ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor(this.importCache, this.references,
+  _ModuleMigrationVisitor(this.importCache, this.references, this.loadPaths,
       {this.prefixToRemove, this.forward})
       : super(importCache, migrateDependencies: true);
 
@@ -688,6 +694,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   String _absoluteUrlToDependency(Uri uri) {
     var relativePath =
         p.url.relative(uri.path, from: p.url.dirname(currentUrl.path));
+    for (var loadPath in loadPaths) {
+      var relativeToLoadPath =
+          p.url.relative(uri.path, from: p.absolute(loadPath));
+      if (relativeToLoadPath.length < relativePath.length) {
+        relativePath = relativeToLoadPath;
+      }
+    }
     var basename = p.url.basenameWithoutExtension(relativePath);
     if (basename.startsWith('_')) basename = basename.substring(1);
     return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
