@@ -93,7 +93,7 @@ const builtInFunctionNameChanges = {
   "map-merge": "merge",
   "map-remove": "remove",
   "map-keys": "keys",
-  "map-value": "values",
+  "map-values": "values",
   "map-has-key": "has-key",
   "selector-nest": "nest",
   "selector-append": "append",
