@@ -26,3 +26,6 @@ $lib-variable: 5;
 }
 
 $variable: 5;
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;

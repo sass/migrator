@@ -37,3 +37,6 @@ $result: fn(0)
 
 lib-selector
   +mixin
+
+<==> output/entrypoint.import.sass
+@forward "entrypoint" as lib-*

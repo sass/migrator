@@ -75,7 +75,9 @@ class ModuleMigrator extends Migrator {
             forward: forward)
         .run(stylesheet, importer);
     if (!migrateDependencies) {
-      migrated.removeWhere((url, contents) => url != stylesheet.span.sourceUrl);
+      var importOnlyUrl = getImportOnlyUrl(stylesheet.span.sourceUrl);
+      migrated.removeWhere((url, contents) =>
+          url != stylesheet.span.sourceUrl && url != importOnlyUrl);
     }
     return migrated;
   }
@@ -158,7 +160,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
     references.globalDeclarations.forEach(_renameDeclaration);
-    return super.run(stylesheet, importer);
+    var migrated = super.run(stylesheet, importer);
+    if (prefixToRemove != null && _renamedMembers.isNotEmpty) {
+      var semicolon = _lastUrl.path.endsWith('.sass') ? '' : ';';
+      var importOnlyUrl = getImportOnlyUrl(_lastUrl);
+      var dependency =
+          _absoluteUrlToDependency(_lastUrl, relativeTo: importOnlyUrl);
+      migrated[importOnlyUrl] =
+          '@forward "$dependency" as $prefixToRemove*$semicolon\n';
+    }
+    return migrated;
   }
 
   /// If [node] should be renamed, adds it to [_renamedMembers].
@@ -683,6 +694,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
+  /// Returns true if [member] was forwarded from a regular stylesheet by an
+  /// import-only stylesheet of the same name.
   bool _isPrefixedImportOnly(Forwarded member) {
     if (member.forwardRule.prefix == null) return false;
     var containingUrl = member.forwardRule.span.sourceUrl;
@@ -758,9 +771,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Converts an absolute URL for a stylesheet into the simplest string that
   /// could be used to depend on that stylesheet from the current one in a
   /// `@use`, `@forward`, or `@import` rule.
-  String _absoluteUrlToDependency(Uri uri) {
+  String _absoluteUrlToDependency(Uri uri, {Uri relativeTo}) {
+    relativeTo ??= currentUrl;
     var relativePath =
-        p.url.relative(uri.path, from: p.url.dirname(currentUrl.path));
+        p.url.relative(uri.path, from: p.url.dirname(relativeTo.path));
     for (var loadPath in loadPaths) {
       var relativeToLoadPath =
           p.url.relative(uri.path, from: p.absolute(loadPath));

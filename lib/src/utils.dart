@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -133,6 +134,14 @@ FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
   return (moduleArg as StringExpression).hasQuotes
       ? subspan(moduleArg.span, start: 1, end: moduleArg.span.length - 2)
       : moduleArg.span;
+}
+
+/// Returns the import-only URL that corresponds to a regular canonical [url].
+Uri getImportOnlyUrl(Uri url) {
+  var filename = url.pathSegments.last;
+  var extension = filename.split('.').last;
+  var basename = filename.substring(0, filename.length - extension.length - 1);
+  return url.resolve('$basename.import.$extension');
 }
 
 /// An exception thrown by a migrator.
