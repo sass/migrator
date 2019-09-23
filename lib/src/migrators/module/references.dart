@@ -155,6 +155,14 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// stylesheet that imported them.
   final _moduleScopes = <Uri, Scope>{};
 
+  /// Mapping between member references for which no definition was found and
+  /// the scope the reference was contained in.
+  ///
+  /// Each key of this map should be a [VariableExpression], an [IncludeRule],
+  /// or a [FunctionExpression].
+  final _unresolvedReferences =
+      <SassNode /*VariableExpression|IncludeRule|FunctionExpression*/, Scope>{};
+
   /// Namespaces present within the current stylesheet.
   ///
   /// Note: Unlike the similar property in _ModuleMigrationVisitor, this only
@@ -183,6 +191,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _scope = Scope();
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     visitStylesheet(stylesheet);
+    _checkUnresolvedReferences(_scope);
     return References._(
         _variables,
         _variableReassignments,
@@ -240,6 +249,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       var oldImporter = _importer;
       _importer = result.item1;
       visitStylesheet(stylesheet);
+      _checkUnresolvedReferences(_scope);
       _importer = oldImporter;
     }
     var namespace = namespaceForPath(node.url.path);
@@ -257,6 +267,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
     super.visitChildren(node);
+    _checkUnresolvedReferences(_scope);
     _scope = _scope.parent;
   }
 
@@ -272,7 +283,44 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     }
     _scope = Scope(_scope);
     super.visitChildren(node);
+    _checkUnresolvedReferences(_scope);
     _scope = _scope.parent;
+  }
+
+  /// Finds any declarations in [scope] that match one of the references in
+  /// [_unresolvedReferences].
+  ///
+  /// This should be called on a scope immediately before it ends.
+  void _checkUnresolvedReferences(Scope scope) {
+    for (var reference in _unresolvedReferences.keys.toList()) {
+      var refScope = _unresolvedReferences[reference];
+      if (!refScope.isDescendentOf(scope)) continue;
+      if (reference is VariableExpression) {
+        if (scope.variables.containsKey(reference.name)) {
+          _variables[reference] = scope.variables[reference.name];
+          _unresolvedReferences.remove(reference);
+        }
+      } else if (reference is IncludeRule) {
+        if (scope.mixins.containsKey(reference.name)) {
+          _mixins[reference] = scope.mixins[reference.name];
+          _unresolvedReferences.remove(reference);
+        }
+      } else if (reference is FunctionExpression) {
+        var name = reference.name.asPlain?.replaceAll('_', '-');
+        if (name == null) continue;
+        if (name == 'get-function') {
+          var nameExpression = getStaticNameForGetFunctionCall(reference);
+          var staticName = nameExpression.text.replaceAll('_', '-');
+          if (scope.functions.containsKey(staticName)) {
+            _getFunctionReferences[reference] = scope.functions[staticName];
+            _unresolvedReferences.remove(reference);
+          }
+        } else if (scope.functions.containsKey(name)) {
+          _functions[reference] = scope.functions[name];
+          _unresolvedReferences.remove(reference);
+        }
+      }
+    }
   }
 
   /// Returns the scope for a given [namespace].
@@ -312,6 +360,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _scopeForNamespace(node.namespace).findVariable(node.name);
     if (declaration != null) {
       _variables[node] = declaration;
+    } else if (node.namespace == null) {
+      _unresolvedReferences[node] = _scope;
     }
   }
 
@@ -330,6 +380,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
     if (declaration != null) {
       _mixins[node] = declaration;
+    } else if (node.namespace == null) {
+      _unresolvedReferences[node] = _scope;
     }
   }
 
@@ -352,6 +404,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     if (declaration != null) {
       _functions[node] = declaration;
       return;
+    } else if (node.namespace == null && name != 'get-function') {
+      _unresolvedReferences[node] = _scope;
+      return;
     }
 
     /// Check for static reference within a get-function call.
@@ -363,6 +418,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     declaration = _scopeForNamespace(namespace).findFunction(name);
     if (declaration != null) {
       _getFunctionReferences[node] = declaration;
+    } else if (namespace == null) {
+      _unresolvedReferences[node] = _scope;
     }
   }
 }

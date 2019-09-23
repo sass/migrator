@@ -35,6 +35,10 @@ class Scope {
   /// Returns true if this scope is global, and false otherwise.
   bool get isGlobal => parent == null;
 
+  /// Returns true if this scope is [ancestor] or one of its descendents.
+  bool isDescendentOf(Scope ancestor) =>
+      this == ancestor || (parent?.isDescendentOf(ancestor) ?? false);
+
   /// Returns the declaration of a variable named [name] if it exists, or null
   /// if it does not.
   SassNode findVariable(String name) =>

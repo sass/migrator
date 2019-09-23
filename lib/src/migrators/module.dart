@@ -146,6 +146,37 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       {this.prefixToRemove, this.forward})
       : super(importCache, migrateDependencies: true);
 
+  /// Checks which global declarations need to be renamed, then runs the
+  /// migrator.
+  @override
+  Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
+    references.globalDeclarations.forEach(_renameDeclaration);
+    return super.run(stylesheet, importer);
+  }
+
+  /// If [node] should be renamed, adds it to [_renamedMembers].
+  void _renameDeclaration(SassNode node) {
+    String originalName;
+    if (node is VariableDeclaration) {
+      originalName = node.name;
+    } else if (node is MixinRule) {
+      originalName = node.name;
+    } else if (node is FunctionRule) {
+      originalName = node.name;
+    } else {
+      return;
+    }
+    var name = originalName;
+    if (name.startsWith('-') &&
+        references.referencedOutsideDeclaringStylesheet(node)) {
+      // Remove leading `-` since private members can't be accessed outside
+      // the module they're declared in.
+      name = name.substring(1);
+    }
+    name = _unprefix(name);
+    if (name != originalName) _renamedMembers[node] = name;
+  }
+
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
   String get _semicolonIfNotIndented =>
@@ -426,11 +457,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (needsParens) addPatch(patchAfter(arg, ')'));
   }
 
-  /// Declares the function within the current scope before visiting it.
+  /// Visits a `@function` rule, renaming if necessary.
   @override
   void visitFunctionRule(FunctionRule node) {
     _useAllowed = false;
-    _declareFunction(node);
+    _renameReference(nameSpan(node), node);
     super.visitFunctionRule(node);
   }
 
@@ -568,11 +599,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Declares the mixin within the current scope before visiting it.
+  /// Visits a `@mixin` rule, renaming it if necessary.
   @override
   void visitMixinRule(MixinRule node) {
     _useAllowed = false;
-    _declareMixin(node);
+    _renameReference(nameSpan(node), node);
     super.visitMixinRule(node);
   }
 
@@ -598,30 +629,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Declares a variable within the current scope before visiting it.
+  /// Visits the variable declaration, tracking configured variables and
+  /// renaming or namespacing if necessary.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _declareVariable(node);
-    super.visitVariableDeclaration(node);
-  }
-
-  /// Declares a variable within this stylesheet, in the current local scope if
-  /// it exists, or as a global variable otherwise.
-  void _declareVariable(VariableDeclaration node) {
     if (references.defaultVariableDeclarations.containsKey(node)) {
       _configuredVariables.add(references.defaultVariableDeclarations[node]);
     }
-    if (!references.globalDeclarations.contains(node)) return;
-
-    var name = node.name;
-    if (name.startsWith('-') &&
-        references.referencedOutsideDeclaringStylesheet(node)) {
-      // Remove leading `-` since private members can't be accessed outside
-      // the module they're declared in.
-      name = name.substring(1);
-    }
-    name = _unprefix(name);
-    if (name != node.name) _renameDeclaration(node, name);
+    _renameReference(nameSpan(node), node);
 
     var existingNode = references.variableReassignments[node];
     var originalUrl = existingNode?.span?.sourceUrl;
@@ -632,46 +647,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var namespace = _namespaceForNode(existingNode);
       addPatch(patchBefore(node, '$namespace.'));
       _reassignedVariables.add(node);
-      return;
     }
-  }
 
-  /// Declares a mixin within this stylesheet, in the current local scope if
-  /// it exists, or as a global mixin otherwise.
-  void _declareMixin(MixinRule node) {
-    if (!references.globalDeclarations.contains(node)) return;
-
-    var name = node.name;
-    if (name.startsWith('-') &&
-        references.referencedOutsideDeclaringStylesheet(node)) {
-      // Remove leading `-` since private members can't be accessed outside
-      // the module they're declared in.
-      name = name.substring(1);
-    }
-    name = _unprefix(name);
-    if (name != node.name) _renameDeclaration(node, name);
-  }
-
-  /// Declares a function within this stylesheet, in the current local scope if
-  /// it exists, or as a global function otherwise.
-  void _declareFunction(FunctionRule node) {
-    if (!references.globalDeclarations.contains(node)) return;
-
-    var name = node.name;
-    if (name.startsWith('-') &&
-        references.referencedOutsideDeclaringStylesheet(node)) {
-      // Remove leading `-` since private members can't be accessed outside
-      // the module they're declared in.
-      name = name.substring(1);
-    }
-    name = _unprefix(name);
-    if (name != node.name) _renameDeclaration(node, name);
-  }
-
-  /// Renames [declaration] to [newName].
-  void _renameDeclaration(SassNode declaration, String newName) {
-    addPatch(Patch(nameSpan(declaration), newName));
-    _renamedMembers[declaration] = newName;
+    super.visitVariableDeclaration(node);
   }
 
   /// If [declaration] was renamed, patches [span] to use the same name.

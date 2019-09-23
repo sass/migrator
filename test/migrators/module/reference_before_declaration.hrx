@@ -1,0 +1,28 @@
+<==> arguments
+--remove-prefix=lib-
+
+<==> README
+Tests that references to a renamed member that appear earlier in the stylesheet
+than their declaration are still renamed.
+
+<==> input/entrypoint.scss
+@function lib-first() {
+  @return lib-second() + $lib-variable;
+}
+
+@function lib-second() {
+  @return 4;
+}
+
+$lib-variable: 5;
+
+<==> output/entrypoint.scss
+@function first() {
+  @return second() + $variable;
+}
+
+@function second() {
+  @return 4;
+}
+
+$variable: 5;
