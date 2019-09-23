@@ -25,7 +25,8 @@ class Patch {
     Patch lastPatch;
     for (var patch in sortedPatches) {
       if (patch.selection == lastPatch?.selection &&
-          patch.replacement == lastPatch?.replacement) {
+          patch.replacement == lastPatch?.replacement &&
+          patch.selection.length > 0) {
         continue;
       }
       if (patch.selection.start.offset < offset) {
