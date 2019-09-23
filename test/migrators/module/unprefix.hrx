@@ -37,3 +37,6 @@ $result: fn(0);
 lib-selector {
   @include mixin;
 }
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;

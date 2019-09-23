@@ -22,6 +22,9 @@ a {
   background: dependency.$pseudoprivate;
 }
 
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;
+
 <==> output/_dependency.scss
 $public: red;
 $pseudoprivate: blue;
