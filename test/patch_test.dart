@@ -28,4 +28,11 @@ void main() {
     var patch2 = Patch(file.span(2, 4), "fgh");
     expect(() => Patch.applyAll(file, [patch1, patch2]), throwsArgumentError);
   });
+
+  test("duplicate patches are ignored", () {
+    var file = SourceFile.fromString("abcde");
+    var patch1 = Patch(file.span(2, 4), "fgh");
+    var patch2 = Patch(file.span(2, 4), "fgh");
+    expect(Patch.applyAll(file, [patch1, patch2]), equals("abfghe"));
+  });
 }

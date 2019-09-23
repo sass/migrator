@@ -22,13 +22,19 @@ class Patch {
       ..sort((a, b) => a.selection.compareTo(b.selection));
     var buffer = StringBuffer();
     int offset = 0;
+    Patch lastPatch;
     for (var patch in sortedPatches) {
+      if (patch.selection == lastPatch?.selection &&
+          patch.replacement == lastPatch?.replacement) {
+        continue;
+      }
       if (patch.selection.start.offset < offset) {
         throw new ArgumentError("Can't apply overlapping patches.");
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));
       buffer.write(patch.replacement);
       offset = patch.selection.end.offset;
+      lastPatch = patch;
     }
     buffer.write(file.getText(offset));
     return buffer.toString();
