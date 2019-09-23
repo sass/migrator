@@ -204,6 +204,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _globalDeclarations);
   }
 
+  @override
+  void visitAtRootRule(AtRootRule node) {
+    if (node.query != null) visitInterpolation(node.query);
+    visitChildren(node);
+  }
+
   /// Visits a stylesheet with an empty [_namespaces], storing it in
   /// [_references].
   @override
@@ -241,6 +247,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
+    if (node.url.scheme == 'sass') return;
     var result =
         inUseRule(() => importCache.import(node.url, _importer, _currentUrl));
     if (result == null) return;
@@ -266,6 +273,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitForwardRule(ForwardRule node) {
     super.visitForwardRule(node);
+    if (node.url.scheme == 'sass') return;
     var result =
         inUseRule(() => importCache.import(node.url, _importer, _currentUrl));
     if (result == null) return;

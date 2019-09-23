@@ -89,6 +89,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _currentUrl = oldUrl;
   }
 
+  @override
+  void visitAtRootRule(AtRootRule node) {
+    if (node.query != null) visitInterpolation(node.query);
+    visitChildren(node);
+  }
+
   /// Visits the stylesheet at [dependency], resolved based on the current
   /// stylesheet's URL and importer.
   @protected
@@ -149,6 +155,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
     if (migrateDependencies) {
+      if (node.url.scheme == 'sass') return;
       visitDependency(node.url, node.span);
     }
   }
