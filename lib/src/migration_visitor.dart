@@ -34,9 +34,11 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   final _migrated = <Uri, String>{};
 
   /// True if dependencies should be migrated as well.
+  @protected
   final bool migrateDependencies;
 
   /// Cache used to load stylesheets.
+  @protected
   final ImportCache importCache;
 
   /// Map of missing dependency URLs to the spans that import/use them.
@@ -45,10 +47,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   final _missingDependencies = <Uri, FileSpan>{};
 
   /// The patches to be applied to the stylesheet being migrated.
+  @protected
   List<Patch> get patches => UnmodifiableListView(_patches);
   List<Patch> _patches;
 
   /// URL of the stylesheet currently being migrated.
+  @protected
   Uri get currentUrl => _currentUrl;
   Uri _currentUrl;
 

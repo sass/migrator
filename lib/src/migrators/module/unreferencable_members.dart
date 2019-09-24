@@ -9,31 +9,30 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
-import 'package:meta/meta.dart';
-import 'package:path/path.dart' as p;
-
-import 'package:sass_migrator/src/utils.dart';
 import 'unreferencable_type.dart';
 
 /// Tracks members that are unreferencable in the current scope.
 class UnreferencableMembers {
+  /// The parent scope of this instance.
   final UnreferencableMembers parent;
+
+  /// The members marked as unreferencable in this scope directly.
   final _unreferencable = <SassNode, UnreferencableType>{};
 
   UnreferencableMembers([this.parent]);
 
   /// Marks [declaration] as unreferencable with the given [type].
-  markUnreferencable(SassNode declaration, UnreferencableType type) {
+  void add(SassNode declaration, UnreferencableType type) {
     _unreferencable[declaration] = type;
   }
 
   /// Checks whether [declaration] is marked as unreferencable within this
   /// scope or any ancestor scope and throws an appropriate exception if it is.
-  checkUnreferencable(SassNode declaration, SassNode reference) {
+  void check(SassNode declaration, SassNode reference) {
     if (_unreferencable.containsKey(declaration)) {
       throw _unreferencable[declaration]
           .toException(reference, declaration.span.sourceUrl);
     }
-    parent?.checkUnreferencable(declaration, reference);
+    parent?.check(declaration, reference);
   }
 }

@@ -155,6 +155,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   }
 
   /// If [node] should be renamed, adds it to [_renamedMembers].
+  ///
+  /// Members are renamed if they start with [prefixToRemove] or if they start
+  /// with `-` or `_` and are referenced outside the stylesheet they were
+  /// declared in.
   void _renameDeclaration(SassNode node) {
     String originalName;
     if (node is VariableDeclaration) {
@@ -164,8 +168,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else if (node is FunctionRule) {
       originalName = node.name;
     } else {
-      return;
+      throw StateError(
+          "Global declarations should not be of type ${node.runtimeType}");
     }
+
     var name = originalName;
     if (name.startsWith('-') &&
         references.referencedOutsideDeclaringStylesheet(node)) {
@@ -219,7 +225,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var hidden = <Uri, Set<String>>{};
 
     /// Adds the member declared in [declaration] to [shown], [hidden], or
-    /// neither depending on its privacy and whether it should be forwarded.
+    /// neither depending on whether it originally started with `-` or `_`
+    /// (indicating package-privacy) and whether it should be forwarded.
     ///
     /// [originalName] is the name of the member prior to migration. For
     /// variables, it does not include the $.
@@ -310,12 +317,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-
-    // Don't migrate CSS-compatibility overloads.
     if (_isCssCompatibilityOverload(node)) return;
 
     var declaration = references.functions[node];
-    _unreferencable.checkUnreferencable(declaration, node);
+    _unreferencable.check(declaration, node);
     _renameReference(nameSpan(node), declaration);
     _patchNamespaceForFunction(node, declaration, (namespace) {
       addPatch(patchBefore(node.name, '$namespace.'));
@@ -324,7 +329,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     if (node.name.asPlain == "get-function") {
       declaration = references.getFunctionReferences[node];
-      _unreferencable.checkUnreferencable(declaration, node);
+      _unreferencable.check(declaration, node);
       _renameReference(getStaticNameForGetFunctionCall(node), declaration);
 
       // Ignore get-function calls that already have a module argument.
@@ -485,24 +490,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _upstreamStylesheets.add(currentUrl);
     if (!_useAllowed) {
       _unreferencable = UnreferencableMembers(_unreferencable);
-      for (var declaration in references.variables.values
-          .followedBy(references.functions.values)
-          .followedBy(references.mixins.values)) {
+      for (var declaration in references.allDeclarations) {
         if (declaration.span.sourceUrl != currentUrl) continue;
         if (references.globalDeclarations.contains(declaration)) continue;
-        _unreferencable.markUnreferencable(
-            declaration, UnreferencableType.localFromImporter);
+        _unreferencable.add(declaration, UnreferencableType.localFromImporter);
       }
     }
     visitDependency(Uri.parse(import.url), import.span);
     _upstreamStylesheets.remove(currentUrl);
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
-      for (var declaration in references.variables.values
-          .followedBy(references.functions.values)
-          .followedBy(references.mixins.values)) {
+      for (var declaration in references.allDeclarations) {
         if (declaration.span.sourceUrl != _lastUrl) continue;
-        _unreferencable.markUnreferencable(
+        _unreferencable.add(
             declaration, UnreferencableType.globalFromNestedImport);
       }
     } else {
@@ -546,8 +546,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var configured = <String>[];
     for (var name in locallyConfiguredVariables.keys) {
       var variable = locallyConfiguredVariables[name];
-      if (variable.isGuarded ||
-          references.variables.keysForValue(variable).isNotEmpty) {
+      if (variable.isGuarded || references.variables.containsValue(variable)) {
         configured.add("\$$name: \$$name");
       } else {
         // TODO(jathak): Handle the case where the expression of this
@@ -591,7 +590,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitIncludeRule(node);
 
     var declaration = references.mixins[node];
-    _unreferencable.checkUnreferencable(declaration, node);
+    _unreferencable.check(declaration, node);
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForNode(declaration);
     if (namespace != null) {
@@ -618,7 +617,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitVariableExpression(VariableExpression node) {
     var declaration = references.variables[node];
-    _unreferencable.checkUnreferencable(declaration, node);
+    _unreferencable.check(declaration, node);
     if (_reassignedVariables.contains(declaration)) {
       declaration = references.variableReassignments[declaration];
     }

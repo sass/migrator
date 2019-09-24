@@ -70,6 +70,10 @@ class References {
   /// scope of a stylesheet.
   final Set<SassNode> globalDeclarations;
 
+  /// An iterable of all member declarations.
+  Iterable<SassNode> get allDeclarations =>
+      variables.values.followedBy(mixins.values).followedBy(functions.values);
+
   /// Returns true if the member declared by [declaration] is referenced within
   /// another stylesheet.
   bool referencedOutsideDeclaringStylesheet(SassNode declaration) {
