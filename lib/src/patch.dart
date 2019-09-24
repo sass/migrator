@@ -24,6 +24,10 @@ class Patch {
     int offset = 0;
     Patch lastPatch;
     for (var patch in sortedPatches) {
+      // The module migrator generates duplicate patches when renaming two nodes
+      // that share the same span (itself a workaround within the parser).
+      // It's easier to ignore the duplicate here than work around it within the
+      // module migrator.
       if (patch.selection == lastPatch?.selection &&
           patch.replacement == lastPatch?.replacement &&
           patch.selection.length > 0) {
