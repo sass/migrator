@@ -13,6 +13,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 
+import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
@@ -148,9 +149,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor(this.importCache, this.references, this.loadPaths,
+  ///
+  /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
+  _ModuleMigrationVisitor(
+      this.importCache, this.references, List<String> loadPaths,
       {this.prefixToRemove, this.forward})
-      : super(importCache, migrateDependencies: true);
+      : loadPaths =
+            loadPaths.map((path) => p.toUri(p.absolute(path)).path).toList(),
+        super(importCache, migrateDependencies: true);
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.
@@ -691,15 +697,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// could be used to depend on that stylesheet from the current one in a
   /// `@use`, `@forward`, or `@import` rule.
   String _absoluteUrlToDependency(Uri uri) {
-    var relativePath =
-        p.url.relative(uri.path, from: p.url.dirname(currentUrl.path));
-    for (var loadPath in loadPaths) {
-      var relativeToLoadPath =
-          p.url.relative(uri.path, from: p.absolute(loadPath));
-      if (relativeToLoadPath.length < relativePath.length) {
-        relativePath = relativeToLoadPath;
-      }
-    }
+    var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
+    var potentialUrls = [
+      p.url.relative(uri.path, from: p.url.dirname(currentUrl.path)),
+      for (var loadPath in loadPathUrls)
+        if (p.url.isWithin(loadPath.path, uri.path))
+          p.url.relative(uri.path, from: loadPath.path)
+    ];
+    var relativePath = minBy(potentialUrls, (url) => url.length);
+
     var basename = p.url.basenameWithoutExtension(relativePath);
     if (basename.startsWith('_')) basename = basename.substring(1);
     return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
