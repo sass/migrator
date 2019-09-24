@@ -22,13 +22,24 @@ class Patch {
       ..sort((a, b) => a.selection.compareTo(b.selection));
     var buffer = StringBuffer();
     int offset = 0;
+    Patch lastPatch;
     for (var patch in sortedPatches) {
+      // The module migrator generates duplicate patches when renaming two nodes
+      // that share the same span (itself a workaround within the parser).
+      // It's easier to ignore the duplicate here than work around it within the
+      // module migrator.
+      if (patch.selection == lastPatch?.selection &&
+          patch.replacement == lastPatch?.replacement &&
+          patch.selection.length > 0) {
+        continue;
+      }
       if (patch.selection.start.offset < offset) {
         throw new ArgumentError("Can't apply overlapping patches.");
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));
       buffer.write(patch.replacement);
       offset = patch.selection.end.offset;
+      lastPatch = patch;
     }
     buffer.write(file.getText(offset));
     return buffer.toString();
