@@ -10,6 +10,8 @@ import 'package:args/args.dart';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/importer.dart';
+import 'package:sass/src/import_cache.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
@@ -21,7 +23,8 @@ import '../utils.dart';
 
 import 'module/built_in_functions.dart';
 import 'module/forward_type.dart';
-import 'module/scope.dart';
+import 'module/references.dart';
+import 'module/unreferencable_members.dart';
 import 'module/unreferencable_type.dart';
 
 /// Migrates stylesheets to the new module system.
@@ -49,12 +52,13 @@ class ModuleMigrator extends Migrator {
   // Hide this until it's finished and the module system is launched.
   final hidden = true;
 
-  /// Runs the module migrator on [entrypoint] and its dependencies and returns
+  /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
   ///
   /// If [migrateDependencies] is false, the migrator will still be run on
   /// dependencies, but they will be excluded from the resulting map.
-  Map<Uri, String> migrateFile(Uri entrypoint) {
+  Map<Uri, String> migrateFile(
+      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forward = ForwardType(argResults['forward']);
     if (forward == ForwardType.prefixed &&
         argResults['remove-prefix'] == null) {
@@ -62,27 +66,20 @@ class ModuleMigrator extends Migrator {
           'You must provide --remove-prefix with --forward=prefixed so we know '
           'which prefixed members to forward.');
     }
-    var migrated = _ModuleMigrationVisitor(
+    var references = References(importCache, stylesheet, importer);
+    var migrated = _ModuleMigrationVisitor(importCache, references,
             prefixToRemove:
                 (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
             forward: forward)
-        .run(entrypoint);
+        .run(stylesheet, importer);
     if (!migrateDependencies) {
-      migrated.removeWhere((url, contents) => url != entrypoint);
+      migrated.removeWhere((url, contents) => url != stylesheet.span.sourceUrl);
     }
     return migrated;
   }
 }
 
 class _ModuleMigrationVisitor extends MigrationVisitor {
-  /// The scope containing all variables, mixins, and functions defined in the
-  /// current context.
-  var _scope = Scope();
-
-  /// Stores whether a given VariableDeclaration has been referenced in an
-  /// expression after being declared.
-  final _referencedVariables = <VariableDeclaration>{};
-
   /// Set of stylesheets currently being migrated.
   ///
   /// Used to ensure that a dependency declaring a variable that an upstream
@@ -90,13 +87,25 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// would cause a circular dependency).
   final _upstreamStylesheets = <Uri>{};
 
+  /// Maps declarations of members that have been renamed to their new names.
+  final _renamedMembers = <SassNode, String>{};
+
+  /// Tracks declarations that reassigned a variable within another module.
+  ///
+  /// When a reference to this declaration is encountered, the original
+  /// declaration will be used for namespacing instead of this one.
+  final _reassignedVariables = <VariableDeclaration>{};
+
+  /// Tracks members that are unreferencable in the current scope.
+  UnreferencableMembers _unreferencable = UnreferencableMembers();
+
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
-  /// Set of additional use rules necessary for referencing members of
+  /// Set of additional `@use` rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
   ///
-  /// This set contains the path provided in the use rule, not the canonical
+  /// This set contains the path provided in the `@use` rule, not the canonical
   /// path (e.g. "a" rather than "dir/a.scss").
   Set<String> _additionalUseRules;
 
@@ -107,11 +116,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
 
-  /// The URL of the current stylesheet.
-  Uri _currentUrl;
-
   /// The URL of the last stylesheet that was completely migrated.
   Uri _lastUrl;
+
+  /// A mapping between member declarations and references.
+  ///
+  /// This performs an initial pass to determine how a declaration seen in the
+  /// main migration pass is used.
+  final References references;
+
+  /// Cache used to load stylesheets.
+  final ImportCache importCache;
 
   /// The prefix to be removed from any members with it, or null if no prefix
   /// should be removed.
@@ -122,16 +137,56 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Constructs a new module migration visitor.
   ///
+  /// [importCache] must be the same one used by [references].
+  ///
   /// Note: We always set [migratedDependencies] to true since the module
   /// migrator needs to always run on dependencies. The `migrateFile` method of
   /// the module migrator will filter out the dependencies' migration results.
-  _ModuleMigrationVisitor({this.prefixToRemove, this.forward})
-      : super(migrateDependencies: true);
+  _ModuleMigrationVisitor(this.importCache, this.references,
+      {this.prefixToRemove, this.forward})
+      : super(importCache, migrateDependencies: true);
+
+  /// Checks which global declarations need to be renamed, then runs the
+  /// migrator.
+  @override
+  Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
+    references.globalDeclarations.forEach(_renameDeclaration);
+    return super.run(stylesheet, importer);
+  }
+
+  /// If [node] should be renamed, adds it to [_renamedMembers].
+  ///
+  /// Members are renamed if they start with [prefixToRemove] or if they start
+  /// with `-` or `_` and are referenced outside the stylesheet they were
+  /// declared in.
+  void _renameDeclaration(SassNode node) {
+    String originalName;
+    if (node is VariableDeclaration) {
+      originalName = node.name;
+    } else if (node is MixinRule) {
+      originalName = node.name;
+    } else if (node is FunctionRule) {
+      originalName = node.name;
+    } else {
+      throw StateError(
+          "Global declarations should not be of type ${node.runtimeType}");
+    }
+
+    var name = originalName;
+    if (name.startsWith('-') &&
+        references.referencedOutsideDeclaringStylesheet(node)) {
+      // Remove leading `-` since private members can't be accessed outside
+      // the module they're declared in.
+      name = name.substring(1);
+    }
+    name = _unprefix(name);
+    if (name != originalName) _renamedMembers[node] = name;
+  }
 
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
   String get _semicolonIfNotIndented =>
-      _currentUrl.path.endsWith('.sass') ? "" : ";";
+      currentUrl.path.endsWith('.sass') ? "" : ";";
 
   /// Returns the migrated contents of this stylesheet, based on [patches] and
   /// [_additionalUseRules], or null if the stylesheet does not change.
@@ -162,42 +217,49 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// If the current stylesheet is the entrypoint, return a string of @forward
+  /// If the current stylesheet is the entrypoint, return a string of `@forward`
   /// rules to forward all members for which [_shouldForward] returns true.
   String _getEntrypointForwards() {
-    if (!_scope.isGlobal) {
-      throw StateError('Must be called from root of stylesheet');
-    }
     if (_upstreamStylesheets.isNotEmpty) return '';
-
-    // Divide all global members from dependencies into sets based on whether
-    // they should be forwarded or not.
     var shown = <Uri, Set<String>>{};
     var hidden = <Uri, Set<String>>{};
-    categorizeMember(Uri url, String originalName, String newName) {
-      if (url == _currentUrl) return;
-      if (_shouldForward(originalName)) {
+
+    /// Adds the member declared in [declaration] to [shown], [hidden], or
+    /// neither depending on whether it originally started with `-` or `_`
+    /// (indicating package-privacy) and whether it should be forwarded.
+    ///
+    /// [originalName] is the name of the member prior to migration. For
+    /// variables, it does not include the $.
+    ///
+    /// [newName] is the name of the member after migration. For variables, it
+    /// includes the $.
+    categorizeMember(
+        SassNode declaration, String originalName, String newName) {
+      var url = declaration.span.sourceUrl;
+      if (url == currentUrl) return;
+      if (_shouldForward(originalName) && !originalName.startsWith('-')) {
         shown[url] ??= {};
         shown[url].add(newName);
-      } else {
+      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
         hidden[url] ??= {};
         hidden[url].add(newName);
       }
     }
 
-    for (var entry in _scope.variables.entries) {
-      if (entry.value is! VariableDeclaration) continue;
-      categorizeMember(entry.value.span.sourceUrl,
-          (entry.value as VariableDeclaration).name, '\$${entry.key}');
-    }
-    for (var entry in _scope.mixins.entries) {
-      categorizeMember(entry.value.span.sourceUrl, entry.value.name, entry.key);
-    }
-    for (var entry in _scope.functions.entries) {
-      categorizeMember(entry.value.span.sourceUrl, entry.value.name, entry.key);
+    // Divide all global members from dependencies into sets based on whether
+    // they should be forwarded or not.
+    for (var node in references.globalDeclarations) {
+      if (node is VariableDeclaration) {
+        categorizeMember(
+            node, node.name, '\$${_renamedMembers[node] ?? node.name}');
+      } else if (node is MixinRule) {
+        categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
+      } else if (node is FunctionRule) {
+        categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
+      }
     }
 
-    // Create a @forward rule for each dependency that has members that should
+    // Create a `@forward` rule for each dependency that has members that should
     // be forwarded.
     var forwards = <String>[];
     for (var url in shown.keys) {
@@ -217,18 +279,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return forwards.join('');
   }
 
-  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  /// Immediately throw a [MigrationException] when a missing dependency is
+  /// encountered, as the module migrator needs to traverse all dependencies.
   @override
-  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
-    var url = source.resolveUri(dependency);
-    var stylesheet = parseStylesheet(url);
-    if (stylesheet == null) {
-      throw MigrationException(
-          "Error: Could not find Sass file at '${p.prettyUri(url)}'.",
-          span: context);
-    }
-
-    visitStylesheet(stylesheet);
+  void handleMissingDependency(Uri dependency, FileSpan context) {
+    throw MigrationException(
+        "Error: Could not find Sass file at '${p.prettyUri(dependency)}'.",
+        span: context);
   }
 
   /// Stores per-file state before visiting [node] and restores it afterwards.
@@ -236,131 +293,123 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitStylesheet(Stylesheet node) {
     var oldNamespaces = _namespaces;
     var oldAdditionalUseRules = _additionalUseRules;
-    var oldUrl = _currentUrl;
     var oldUseAllowed = _useAllowed;
     _namespaces = {};
     _additionalUseRules = Set();
-    _currentUrl = node.span.sourceUrl;
     _useAllowed = true;
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
     _additionalUseRules = oldAdditionalUseRules;
-    _lastUrl = _currentUrl;
-    _currentUrl = oldUrl;
+    _lastUrl = node.span.sourceUrl;
     _useAllowed = oldUseAllowed;
   }
 
-  /// Visits each of [node]'s expressions and children.
-  ///
-  /// All of [node]'s arguments are declared as local variables in a new scope.
-  @override
-  void visitCallableDeclaration(CallableDeclaration node) {
-    _scope = Scope(_scope);
-    for (var argument in node.arguments.arguments) {
-      _scope.variables[argument.name] = argument;
-      if (argument.defaultValue != null) visitExpression(argument.defaultValue);
-    }
-    super.visitChildren(node);
-    _scope = _scope.parent;
-  }
-
-  /// Visits the children of [node] with a local scope.
-  ///
-  /// Note: The children of a stylesheet are at the root, so we should not add
-  /// a local scope.
+  /// Visits the children of [node] with a new scope for tracking unreferencable
+  /// members.
   @override
   void visitChildren(ParentStatement node) {
-    if (node is Stylesheet) {
-      super.visitChildren(node);
-      return;
-    }
-    _scope = Scope(_scope);
+    _unreferencable = UnreferencableMembers(_unreferencable);
     super.visitChildren(node);
-    _scope = _scope.parent;
+    _unreferencable = _unreferencable.parent;
   }
 
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     visitInterpolation(node.name);
-    _scope.checkUnreferencableFunction(node);
-    _patchNamespaceForFunction(node, node.name.asPlain, (name, namespace) {
-      addPatch(
-          Patch(node.name.span, namespace == null ? name : "$namespace.$name"));
+    if (_isCssCompatibilityOverload(node)) return;
+
+    var declaration = references.functions[node];
+    _unreferencable.check(declaration, node);
+    _renameReference(nameSpan(node), declaration);
+    _patchNamespaceForFunction(node, declaration, (namespace) {
+      addPatch(patchBefore(node.name, '$namespace.'));
     });
     visitArgumentInvocation(node.arguments);
 
     if (node.name.asPlain == "get-function") {
-      var nameArgument =
+      declaration = references.getFunctionReferences[node];
+      _unreferencable.check(declaration, node);
+      _renameReference(getStaticNameForGetFunctionCall(node), declaration);
+
+      // Ignore get-function calls that already have a module argument.
+      var moduleArg = node.arguments.named['module'];
+      if (moduleArg == null && node.arguments.positional.length > 2) {
+        moduleArg = node.arguments.positional[2];
+      }
+      if (moduleArg != null) return;
+
+      // Warn for get-function calls without a static name.
+      var nameArg =
           node.arguments.named['name'] ?? node.arguments.positional.first;
-      if (nameArgument is! StringExpression ||
-          (nameArgument as StringExpression).text.asPlain == null) {
-        emitWarning("get-function call may require \$module parameter",
-            nameArgument.span);
+      if (nameArg is! StringExpression ||
+          (nameArg as StringExpression).text.asPlain == null) {
+        emitWarning(
+            "get-function call may require \$module parameter", nameArg.span);
         return;
       }
-      var fnName = nameArgument as StringExpression;
-      _patchNamespaceForFunction(node, fnName.text.asPlain, (name, namespace) {
-        var span = fnName.span;
-        if (fnName.hasQuotes) {
-          span = span.file.span(span.start.offset + 1, span.end.offset - 1);
-        }
-        addPatch(Patch(span, name));
+
+      _patchNamespaceForFunction(node, declaration, (namespace) {
         var beforeParen = node.span.end.offset - 1;
-        if (namespace != null) {
-          addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
-              ', \$module: "$namespace"'));
-        }
-      });
+        addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
+            ', \$module: "$namespace"'));
+      }, getFunctionCall: true);
     }
   }
 
-  /// Calls [patcher] when the function [node] with name [originalName] requires
-  /// a namespace and/or a new name and adds a new use rule if necessary.
+  /// Calls [patchNamespace] when the function [node] requires a namespace.
+  ///
+  /// This also patches the name for any built-in functions whose names change
+  /// in the module system.
   ///
   /// When the function is a color function that's not present in the module
   /// system (like `lighten`), this also migrates its `$amount` argument to the
   /// appropriate `color.adjust` argument.
   ///
-  /// [patcher] takes two arguments: the name used to refer to that function
-  /// when namespaced, and the namespace itself. The name will match the name
-  /// provided to the outer function except for built-in functions whose name
-  /// within a module differs from its original name.
-  void _patchNamespaceForFunction(FunctionExpression node, String originalName,
-      void patcher(String name, String namespace)) {
-    if (originalName == null) return;
-    if (_scope.isLocalFunction(originalName)) return;
+  /// If [node] is a get-function call, [getFunctionCall] should be true.
+  void _patchNamespaceForFunction(FunctionExpression node,
+      FunctionRule declaration, void patchNamespace(String namespace),
+      {bool getFunctionCall = false}) {
+    var span = getFunctionCall
+        ? getStaticNameForGetFunctionCall(node)
+        : nameSpan(node);
+    if (span == null) return;
+    var name = span.text.replaceAll('_', '-');
 
-    var name = _unprefix(originalName) ?? originalName;
-
-    var namespace = _scope.global.functions.containsKey(name)
-        ? _namespaceForNode(_scope.global.functions[name])
-        : null;
-
-    if (namespace == null && builtInFunctionModules.containsKey(name)) {
-      // Don't migrate CSS-compatibility overloads.
-      if (_isCssCompatibilityOverload(node)) return;
-
-      namespace = builtInFunctionModules[name];
-      name = builtInFunctionNameChanges[name] ?? name;
-      if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
-        if (node.arguments.positional.length == 2 &&
-            node.arguments.named.isEmpty) {
-          _patchRemovedColorFunction(name, node.arguments.positional.last);
-          name = 'adjust';
-        } else if (node.arguments.named.containsKey('amount')) {
-          var arg = node.arguments.named['amount'];
-          _patchRemovedColorFunction(name, arg,
-              existingArgName: _findArgNameSpan(arg));
-          name = 'adjust';
-        } else {
-          emitWarning("Could not migrate malformed '$name' call", node.span);
-          return;
-        }
-      }
-      _additionalUseRules.add("sass:$namespace");
+    var namespace = _namespaceForNode(declaration);
+    if (namespace != null) {
+      patchNamespace(namespace);
+      return;
     }
-    if (namespace != null || name != originalName) patcher(name, namespace);
+
+    if (!builtInFunctionModules.containsKey(name)) return;
+
+    namespace = builtInFunctionModules[name];
+    name = builtInFunctionNameChanges[name] ?? name;
+    if (namespace == 'color' && removedColorFunctions.containsKey(name)) {
+      if (getFunctionCall) {
+        emitWarning(
+            "$name is not available in the module system and should be "
+            "manually migrated to color.adjust",
+            span);
+        return;
+      } else if (node.arguments.positional.length == 2 &&
+          node.arguments.named.isEmpty) {
+        _patchRemovedColorFunction(name, node.arguments.positional.last);
+        name = 'adjust';
+      } else if (node.arguments.named.containsKey('amount')) {
+        var arg = node.arguments.named['amount'];
+        _patchRemovedColorFunction(name, arg,
+            existingArgName: _findArgNameSpan(arg));
+        name = 'adjust';
+      } else {
+        emitWarning("Could not migrate malformed '$name' call", node.span);
+        return;
+      }
+    }
+    _additionalUseRules.add("sass:$namespace");
+    patchNamespace(namespace);
+    if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
 
   /// Returns true if [node] is a function overload that exists to provide
@@ -413,15 +462,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (needsParens) addPatch(patchAfter(arg, ')'));
   }
 
-  /// Declares the function within the current scope before visiting it.
+  /// Visits a `@function` rule, renaming if necessary.
   @override
   void visitFunctionRule(FunctionRule node) {
     _useAllowed = false;
-    _declareFunction(node);
+    _renameReference(nameSpan(node), node);
     super.visitFunctionRule(node);
   }
 
-  /// Migrates @import to @use after migrating the imported file.
+  /// Migrates an `@import` rule to a `@use` rule after migrating the imported
+  /// file.
   @override
   void visitImportRule(ImportRule node) {
     if (node.imports.first is StaticImport) {
@@ -434,27 +484,27 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Migration of @import rule with multiple imports not supported.");
     }
     var import = node.imports.first as DynamicImport;
-    var migrateToLoadCss = _scope.parent != null || !_useAllowed;
 
     var oldConfiguredVariables = _configuredVariables;
-    _configuredVariables = Set();
-    _upstreamStylesheets.add(_currentUrl);
-
-    var oldScope = _scope;
-    if (migrateToLoadCss) {
-      _scope = oldScope.copyForNestedImport();
-      var current = oldScope.parent;
-      while (current != null) {
-        _scope.variables.addAll(current.variables);
-        current = current.parent;
+    _configuredVariables = {};
+    _upstreamStylesheets.add(currentUrl);
+    if (!_useAllowed) {
+      _unreferencable = UnreferencableMembers(_unreferencable);
+      for (var declaration in references.allDeclarations) {
+        if (declaration.span.sourceUrl != currentUrl) continue;
+        if (references.globalDeclarations.contains(declaration)) continue;
+        _unreferencable.add(declaration, UnreferencableType.localFromImporter);
       }
     }
-    visitDependency(Uri.parse(import.url), _currentUrl, import.span);
-    _upstreamStylesheets.remove(_currentUrl);
-    if (migrateToLoadCss) {
-      oldScope.addAllMembers(_scope.global,
-          unreferencable: UnreferencableType.globalFromNestedImport);
-      _scope = oldScope;
+    visitDependency(Uri.parse(import.url), import.span);
+    _upstreamStylesheets.remove(currentUrl);
+    if (!_useAllowed) {
+      _unreferencable = _unreferencable.parent;
+      for (var declaration in references.allDeclarations) {
+        if (declaration.span.sourceUrl != _lastUrl) continue;
+        _unreferencable.add(
+            declaration, UnreferencableType.globalFromNestedImport);
+      }
     } else {
       _namespaces[_lastUrl] = namespaceForPath(import.url);
     }
@@ -465,7 +515,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var locallyConfiguredVariables = <String, VariableDeclaration>{};
     var externallyConfiguredVariables = <String, VariableDeclaration>{};
     for (var variable in _configuredVariables) {
-      if (variable.span.sourceUrl == _currentUrl) {
+      if (variable.span.sourceUrl == currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
       } else {
         externallyConfiguredVariables[variable.name] = variable;
@@ -475,7 +525,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _configuredVariables = oldConfiguredVariables;
 
     if (externallyConfiguredVariables.isNotEmpty) {
-      if (migrateToLoadCss) {
+      if (!_useAllowed) {
         var firstConfig = externallyConfiguredVariables.values.first;
         throw MigrationException(
             "This declaration attempts to override a default value in an "
@@ -496,7 +546,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var configured = <String>[];
     for (var name in locallyConfiguredVariables.keys) {
       var variable = locallyConfiguredVariables[name];
-      if (variable.isGuarded || _referencedVariables.contains(variable)) {
+      if (variable.isGuarded || references.variables.containsValue(variable)) {
         configured.add("\$$name: \$$name");
       } else {
         // TODO(jathak): Handle the case where the expression of this
@@ -512,7 +562,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var end = start + _semicolonIfNotIndented.length;
         if (variable.span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(variable.span.file.span(start, end)));
-        var nameFormat = migrateToLoadCss ? '"$name"' : '\$$name';
+        var nameFormat = _useAllowed ? '\$$name' : '"$name"';
         configured.add("$nameFormat: ${variable.expression}");
       }
     }
@@ -523,7 +573,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       configuration =
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
-    if (migrateToLoadCss) {
+    if (!_useAllowed) {
       _additionalUseRules.add('sass:meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
@@ -538,34 +588,27 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     _useAllowed = false;
     super.visitIncludeRule(node);
-    _scope.checkUnreferencableMixin(node);
-    if (_scope.isLocalMixin(node.name)) return;
 
-    var name = _unprefix(node.name);
-    if (!_scope.global.mixins.containsKey(name)) return;
-
-    var namespace = _namespaceForNode(_scope.global.mixins[name]);
-    var endName = node.arguments.span.start.offset;
-    var startName = endName - node.name.length;
-    var nameSpan = node.span.file.span(startName, endName);
-    if (namespace == null) {
-      if (name != node.name) addPatch(Patch(nameSpan, name));
-    } else {
-      addPatch(Patch(nameSpan, "$namespace.$name"));
+    var declaration = references.mixins[node];
+    _unreferencable.check(declaration, node);
+    _renameReference(nameSpan(node), declaration);
+    var namespace = _namespaceForNode(declaration);
+    if (namespace != null) {
+      addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
     }
   }
 
-  /// Declares the mixin within the current scope before visiting it.
+  /// Visits a `@mixin` rule, renaming it if necessary.
   @override
   void visitMixinRule(MixinRule node) {
     _useAllowed = false;
-    _declareMixin(node);
+    _renameReference(nameSpan(node), node);
     super.visitMixinRule(node);
   }
 
   @override
   void visitUseRule(UseRule node) {
-    // TODO(jathak): Handle existing @use rules.
+    // TODO(jathak): Handle existing `@use` rules.
     throw UnsupportedError(
         "Migrating files with existing @use rules is not yet supported");
   }
@@ -573,90 +616,45 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any variable that requires it.
   @override
   void visitVariableExpression(VariableExpression node) {
-    _scope.checkUnreferencableVariable(node);
-    if (_scope.isLocalVariable(node.name)) return;
-
-    var name = _unprefix(node.name);
-    if (!_scope.global.variables.containsKey(name)) return;
-    var declaration = _scope.global.variables[name];
-
-    _referencedVariables.add(declaration);
+    var declaration = references.variables[node];
+    _unreferencable.check(declaration, node);
+    if (_reassignedVariables.contains(declaration)) {
+      declaration = references.variableReassignments[declaration];
+    }
+    _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForNode(declaration);
-    if (namespace == null) {
-      if (name != node.name) addPatch(Patch(node.span, "\$$name"));
-    } else {
-      addPatch(Patch(node.span, "\$$namespace.$name"));
+    if (namespace != null) {
+      addPatch(patchBefore(node, '$namespace.'));
     }
   }
 
-  /// Declares a variable within the current scope before visiting it.
+  /// Visits the variable declaration, tracking configured variables and
+  /// renaming or namespacing if necessary.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _declareVariable(node);
+    if (references.defaultVariableDeclarations.containsKey(node)) {
+      _configuredVariables.add(references.defaultVariableDeclarations[node]);
+    }
+    _renameReference(nameSpan(node), node);
+
+    var existingNode = references.variableReassignments[node];
+    var originalUrl = existingNode?.span?.sourceUrl;
+    if (existingNode != null &&
+        originalUrl != currentUrl &&
+        !node.isGuarded &&
+        !_upstreamStylesheets.contains(originalUrl)) {
+      var namespace = _namespaceForNode(existingNode);
+      addPatch(patchBefore(node, '$namespace.'));
+      _reassignedVariables.add(node);
+    }
+
     super.visitVariableDeclaration(node);
   }
 
-  /// Declares a variable within this stylesheet, in the current local scope if
-  /// it exists, or as a global variable otherwise.
-  void _declareVariable(VariableDeclaration node) {
-    var name = node.name;
-    if (_scope.isGlobal || node.isGlobal) {
-      name = _unprefix(node.name);
-      if (name != node.name) {
-        addPatch(
-            patchDelete(node.span, start: 1, end: prefixToRemove.length + 1));
-      }
-      var existingNode = _scope.global.variables[name];
-      var originalUrl = existingNode?.span?.sourceUrl;
-      if (existingNode != null && originalUrl != _currentUrl) {
-        if (node.isGuarded) {
-          _configuredVariables.add(existingNode);
-        } else if (!_upstreamStylesheets.contains(originalUrl)) {
-          // This declaration reassigns a variable in another module. Since we
-          // don't care about the actual value of the variable while migrating,
-          // we leave the node in _scope.global.variables as-is, so that future
-          // references namespace based on the original declaration, not this
-          // reassignment.
-          var namespace = _namespaceForNode(existingNode);
-          var afterDollarSign = node.span.start.offset + 1;
-          addPatch(Patch(node.span.file.span(afterDollarSign, afterDollarSign),
-              '$namespace.'));
-          return;
-        }
-      }
-    }
-    _scope.variables[name] = node;
-  }
-
-  /// Declares a mixin within this stylesheet, in the current local scope if
-  /// it exists, or as a global mixin otherwise.
-  void _declareMixin(MixinRule node) {
-    var name = node.name;
-    if (_scope.isGlobal) {
-      name = _unprefix(node.name);
-      if (name != node.name) {
-        var nameStart = node.span.text
-            .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
-        addPatch(patchDelete(node.span,
-            start: nameStart, end: nameStart + prefixToRemove.length));
-      }
-    }
-    _scope.mixins[name] = node;
-  }
-
-  /// Declares a function within this stylesheet, in the current local scope if
-  /// it exists, or as a global function otherwise.
-  void _declareFunction(FunctionRule node) {
-    var name = node.name;
-    if (_scope.isGlobal) {
-      name = _unprefix(node.name);
-      if (name != node.name) {
-        var nameStart = node.span.text.indexOf(node.name, '@function'.length);
-        addPatch(patchDelete(node.span,
-            start: nameStart, end: nameStart + prefixToRemove.length));
-      }
-    }
-    _scope.functions[name] = node;
+  /// If [declaration] was renamed, patches [span] to use the same name.
+  void _renameReference(FileSpan span, SassNode declaration) {
+    if (!_renamedMembers.containsKey(declaration)) return;
+    addPatch(Patch(span, _renamedMembers[declaration]));
   }
 
   /// Returns [name] with [prefixToRemove] removed.
@@ -669,12 +667,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return name.substring(prefixToRemove.length);
   }
 
-  /// Finds the namespace for the stylesheet containing [node], adding a new use
-  /// rule if necessary.
+  /// Finds the namespace for the stylesheet containing [node], adding a new
+  /// `@use` rule if necessary.
   String _namespaceForNode(SassNode node) {
-    if (node.span.sourceUrl == _currentUrl) return null;
+    if (node == null) return null;
+    if (node.span.sourceUrl == currentUrl) return null;
     if (!_namespaces.containsKey(node.span.sourceUrl)) {
-      /// Add new use rule for indirect dependency
+      // Add new `@use` rule for indirect dependency
       var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
       _additionalUseRules.add(simplePath);
       _namespaces[node.span.sourceUrl] = namespaceForPath(simplePath);
@@ -683,94 +682,94 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   }
 
   /// Converts an absolute URL for a stylesheet into the simplest string that
-  /// could be used to depend on that stylesheet from the current one in a use,
-  /// forward, or import rule.
+  /// could be used to depend on that stylesheet from the current one in a
+  /// `@use`, `@forward`, or `@import` rule.
   String _absoluteUrlToDependency(Uri uri) {
     var relativePath =
-        p.url.relative(uri.path, from: p.url.dirname(_currentUrl.path));
+        p.url.relative(uri.path, from: p.url.dirname(currentUrl.path));
     var basename = p.url.basenameWithoutExtension(relativePath);
     if (basename.startsWith('_')) basename = basename.substring(1);
     return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
   }
 
-  /// Disallows @use after @at-root rules.
+  /// Disallows `@use` after `@at-root` rules.
   @override
   void visitAtRootRule(AtRootRule node) {
     _useAllowed = false;
     super.visitAtRootRule(node);
   }
 
-  /// Disallows @use after at-rules.
+  /// Disallows `@use` after at-rules.
   @override
   void visitAtRule(AtRule node) {
     _useAllowed = false;
     super.visitAtRule(node);
   }
 
-  /// Disallows @use after @debug rules.
+  /// Disallows `@use` after `@debug` rules.
   @override
   void visitDebugRule(DebugRule node) {
     _useAllowed = false;
     super.visitDebugRule(node);
   }
 
-  /// Disallows @use after @each rules.
+  /// Disallows `@use` after `@each` rules.
   @override
   void visitEachRule(EachRule node) {
     _useAllowed = false;
     super.visitEachRule(node);
   }
 
-  /// Disallows @use after @error rules.
+  /// Disallows `@use` after `@error` rules.
   @override
   void visitErrorRule(ErrorRule node) {
     _useAllowed = false;
     super.visitErrorRule(node);
   }
 
-  /// Disallows @use after @for rules.
+  /// Disallows `@use` after `@for` rules.
   @override
   void visitForRule(ForRule node) {
     _useAllowed = false;
     super.visitForRule(node);
   }
 
-  /// Disallows @use after @if rules.
+  /// Disallows `@use` after `@if` rules.
   @override
   void visitIfRule(IfRule node) {
     _useAllowed = false;
     super.visitIfRule(node);
   }
 
-  /// Disallows @use after @media rules.
+  /// Disallows `@use` after `@media` rules.
   @override
   void visitMediaRule(MediaRule node) {
     _useAllowed = false;
     super.visitMediaRule(node);
   }
 
-  /// Disallows @use after style rules.
+  /// Disallows `@use` after style rules.
   @override
   void visitStyleRule(StyleRule node) {
     _useAllowed = false;
     super.visitStyleRule(node);
   }
 
-  /// Disallows @use after @supports rules.
+  /// Disallows `@use` after `@supports` rules.
   @override
   void visitSupportsRule(SupportsRule node) {
     _useAllowed = false;
     super.visitSupportsRule(node);
   }
 
-  /// Disallows @use after @warn rules.
+  /// Disallows `@use` after `@warn` rules.
   @override
   void visitWarnRule(WarnRule node) {
     _useAllowed = false;
     super.visitWarnRule(node);
   }
 
-  /// Disallows @use after @while rules.
+  /// Disallows `@use` after `@while` rules.
   @override
   void visitWhileRule(WhileRule node) {
     _useAllowed = false;

@@ -10,13 +10,14 @@ import 'dart:collection';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/importer.dart';
+import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:meta/meta.dart';
 import 'package:source_span/source_span.dart';
 
 import 'patch.dart';
-import 'utils.dart';
 
 /// A visitor that migrates a stylesheet.
 ///
@@ -33,7 +34,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   final _migrated = <Uri, String>{};
 
   /// True if dependencies should be migrated as well.
+  @protected
   final bool migrateDependencies;
+
+  /// Cache used to load stylesheets.
+  @protected
+  final ImportCache importCache;
 
   /// Map of missing dependency URLs to the spans that import/use them.
   Map<Uri, FileSpan> get missingDependencies =>
@@ -41,15 +47,28 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   final _missingDependencies = <Uri, FileSpan>{};
 
   /// The patches to be applied to the stylesheet being migrated.
+  @protected
   List<Patch> get patches => UnmodifiableListView(_patches);
   List<Patch> _patches;
 
-  MigrationVisitor({this.migrateDependencies = true});
+  /// URL of the stylesheet currently being migrated.
+  @protected
+  Uri get currentUrl => _currentUrl;
+  Uri _currentUrl;
 
-  /// Runs a new migration on [url] (and its dependencies, if
+  /// The importer that's currently being used to resolve relative imports.
+  ///
+  /// If this is `null`, relative imports aren't supported in the current
+  /// stylesheet.
+  Importer _importer;
+
+  MigrationVisitor(this.importCache, {this.migrateDependencies = true});
+
+  /// Runs a new migration on [stylesheet] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
-  Map<Uri, String> run(Uri url) {
-    visitStylesheet(parseStylesheet(url));
+  Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
+    _importer = importer;
+    visitStylesheet(stylesheet);
     return _migrated;
   }
 
@@ -62,25 +81,40 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   @override
   void visitStylesheet(Stylesheet node) {
     var oldPatches = _patches;
+    var oldUrl = _currentUrl;
     _patches = [];
+    _currentUrl = node.span.sourceUrl;
     super.visitStylesheet(node);
     var results = getMigratedContents();
     if (results != null) {
       _migrated[node.span.sourceUrl] = results;
     }
     _patches = oldPatches;
+    _currentUrl = oldUrl;
   }
 
-  /// Visits the stylesheet at [dependency], resolved relative to [source].
+  /// Visits the stylesheet at [dependency], resolved based on the current
+  /// stylesheet's URL and importer.
   @protected
-  void visitDependency(Uri dependency, Uri source, [FileSpan context]) {
-    var url = source.resolveUri(dependency);
-    var stylesheet = parseStylesheet(url);
-    if (stylesheet != null) {
+  void visitDependency(Uri dependency, FileSpan context) {
+    var result = importCache.import(dependency, _importer, _currentUrl);
+    if (result != null) {
+      _importer = result.item1;
+      var stylesheet = result.item2;
       visitStylesheet(stylesheet);
     } else {
-      _missingDependencies.putIfAbsent(url, () => context);
+      handleMissingDependency(dependency, context);
     }
+  }
+
+  /// Adds the missing [dependency] within the stylesheet at [source] to the
+  /// missing dependency list to warn after migration completes.
+  ///
+  /// Migrators should override this if they want a different behavior.
+  @protected
+  void handleMissingDependency(Uri dependency, FileSpan context) {
+    _missingDependencies.putIfAbsent(
+        context.sourceUrl.resolveUri(dependency), () => context);
   }
 
   /// Returns the migrated contents of this file, or null if the file does not
@@ -107,8 +141,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          visitDependency(
-              Uri.parse(import.url), node.span.sourceUrl, import.span);
+          visitDependency(Uri.parse(import.url), import.span);
         }
       }
     }
@@ -120,7 +153,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   visitUseRule(UseRule node) {
     super.visitUseRule(node);
     if (migrateDependencies) {
-      visitDependency(node.url, node.span.sourceUrl, node.span);
+      visitDependency(node.url, node.span);
     }
   }
 }

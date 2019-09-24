@@ -1,0 +1,27 @@
+<==> arguments
+--migrate-deps --forward=all
+
+<==> input/entrypoint.scss
+@import "dependency";
+
+a {
+  color: $_pseudoprivate;
+}
+
+<==> input/_dependency.scss
+$public: red;
+$_pseudoprivate: blue;
+$_private: green;
+
+<==> output/entrypoint.scss
+@forward "dependency" hide $pseudoprivate;
+@use "dependency";
+
+a {
+  color: dependency.$pseudoprivate;
+}
+
+<==> output/_dependency.scss
+$public: red;
+$pseudoprivate: blue;
+$_private: green;

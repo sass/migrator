@@ -12,7 +12,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:sass_migrator/src/utils.dart';
+import '../../utils.dart';
 
 /// An enum of reasons why a member is unreferencable.
 @sealed

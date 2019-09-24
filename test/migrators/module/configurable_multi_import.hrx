@@ -1,0 +1,31 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+This test ensures that configurable variables aren't marked as configured when
+imported multiple times.
+
+<==> input/entrypoint.scss
+@import "variables";
+@import "library";
+
+<==> input/_variables.scss
+$configurable: green !default;
+
+<==> input/_library.scss
+@import "variables";
+
+a {
+  color: $configurable;
+}
+
+<==> output/entrypoint.scss
+@use "variables";
+@use "library";
+
+<==> output/_library.scss
+@use "variables";
+
+a {
+  color: variables.$configurable;
+}

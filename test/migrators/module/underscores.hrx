@@ -1,0 +1,29 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "library";
+a {
+  b: $y_z;
+  c: y_z();
+  @include y_z;
+}
+
+<==> input/_library.scss
+$y_z: green;
+
+@function y_z() {
+  @return blue;
+}
+
+@mixin y_z {
+  d: red;
+}
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  b: library.$y_z;
+  c: library.y_z();
+  @include library.y_z;
+}
