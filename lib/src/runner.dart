@@ -8,6 +8,7 @@ import 'dart:isolate';
 
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
+import 'package:source_span/source_span.dart';
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
 import 'io.dart';
@@ -30,10 +31,10 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
           abbr: 'n',
           help: 'Show which files would be migrated but make no changes.',
           negatable: false)
-      ..addFlag(
-        'unicode',
-        help: 'Whether to use Unicode characters for messages.',
-      )
+      ..addFlag('color',
+          abbr: 'c', help: 'Whether to use terminal colors for messages..')
+      ..addFlag('unicode',
+          help: 'Whether to use Unicode characters for messages.')
       // TODO(jathak): Make this flag print a diff instead.
       ..addFlag('verbose',
           abbr: 'v', help: 'Print more information.', negatable: false)
@@ -59,6 +60,14 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     Map<Uri, String> migrated;
     try {
       migrated = await runCommand(argResults);
+    } on SourceSpanException catch (e) {
+      printStderr(e.toString(
+          color: argResults.wasParsed('color')
+              ? argResults['color'] as bool
+              : supportsAnsiEscapes));
+      printStderr('Migration failed!');
+      exitCode = 1;
+      return;
     } on MigrationException catch (e) {
       printStderr(e);
       printStderr('Migration failed!');

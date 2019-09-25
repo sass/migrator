@@ -31,6 +31,23 @@ void main() {
   });
 
   group("gracefully handles", () {
+    test("a syntax error", () async {
+      await d.file("test.scss", "a {b: }").create();
+
+      var migrator = await runMigrator(["--no-unicode", "module", "test.scss"]);
+      expect(
+          migrator.stderr,
+          emitsInOrder([
+            "Error: Expected expression.",
+            "  ,",
+            "1 | a {b: }",
+            "  |       ^",
+            "  '",
+            "  test.scss 1:7  root stylesheet"
+          ]));
+      await migrator.shouldExit(1);
+    });
+
     test("an error from a migrator", () async {
       await d.file("test.scss", "@import 'nonexistent'").create();
 
@@ -47,6 +64,26 @@ void main() {
             "Migration failed!"
           ]));
       await migrator.shouldExit(1);
+    });
+
+    group("and colorizes with --color", () {
+      test("a syntax error", () async {
+        await d.file("test.scss", "a {b: }").create();
+
+        var migrator = await runMigrator(
+            ["--no-unicode", "--color", "module", "test.scss"]);
+        expect(
+            migrator.stderr,
+            emitsInOrder([
+              "Error: Expected expression.",
+              "\u001b[34m  ,\u001b[0m",
+              "\u001b[34m1 |\u001b[0m a {b: \u001b[31m\u001b[0m}",
+              "\u001b[34m  |\u001b[0m       \u001b[31m^\u001b[0m",
+              "\u001b[34m  '\u001b[0m",
+              "  test.scss 1:7  root stylesheet",
+            ]));
+        await migrator.shouldExit(1);
+      });
     });
   });
 }
