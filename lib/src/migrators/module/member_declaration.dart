@@ -9,6 +9,10 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
+/// A wrapper class for nodes that declare a variable, function, or mixin.
+///
+/// The member this class wraps will always be a [VariableDeclaration],
+/// an [Argument], a [MixinRule], or a [FunctionRule].
 class MemberDeclaration<T extends SassNode> {
   /// The original definition of the member, after all `@forward` rules have
   /// been resolved.
@@ -67,82 +71,3 @@ class MemberDeclaration<T extends SassNode> {
 
   int get hashCode => member.hashCode;
 }
-/*
-/// Interface for forwarded members.
-abstract class Forwarded<T extends SassNode> extends SassNode {
-  /// The member that this is forwarding.
-  final T member;
-
-  /// The `@forward` rule that forwarded this member.
-  final ForwardRule forwardRule;
-
-  /// The canonical URL of the stylesheet this `@forward` rule loads.
-  final Uri sourceUrl;
-
-  /// The `@forward` rule's span is used here to indicate that this member
-  /// should be treated as if it was declared in the forwarding stylesheet.
-  ///
-  /// Use [originalSpan] to find the span of the actual member declaration.
-  final FileSpan span;
-
-  /// The original span containing this member declaration.
-  ///
-  /// This differs from [member.span] when a member is forwarded multiple times.
-  final FileSpan originalSpan;
-
-  Forwarded._(this.member, this.forwardRule, this.sourceUrl)
-      : span = forwardRule.span,
-        originalSpan = member is Forwarded ? member.originalSpan : member.span;
-
-  T accept<T>(StatementVisitor<T> visitor) =>
-      throw StateError('Forwarded members should not be visited');
-
-  String toString() => "Forwarded($member, ${forwardRule.span.sourceUrl})";
-}
-
-/// Implementation of Forwarded<VariableDeclaration>
-class ForwardedVariable extends Forwarded<VariableDeclaration>
-    implements VariableDeclaration {
-  ForwardedVariable(
-      VariableDeclaration member, ForwardRule forwardRule, Uri sourceUrl)
-      : super._(member, forwardRule, sourceUrl);
-
-  SilentComment get comment => member.comment;
-  void set comment(SilentComment comment) {
-    this.comment = comment;
-  }
-
-  Expression get expression => member.expression;
-  bool get isGlobal => member.isGlobal;
-  bool get isGuarded => member.isGuarded;
-  String get name => member.name;
-  String get namespace => member.namespace;
-  String get originalName => member.originalName;
-}
-
-/// Implementation of Forwarded<MixinRule>
-class ForwardedMixin extends Forwarded<MixinRule> implements MixinRule {
-  ForwardedMixin(MixinRule member, ForwardRule forwardRule, Uri sourceUrl)
-      : super._(member, forwardRule, sourceUrl);
-
-  ArgumentDeclaration get arguments => member.arguments;
-  List<Statement> get children => member.children;
-  SilentComment get comment => member.comment;
-  bool get hasContent => member.hasContent;
-  bool get hasDeclarations => member.hasDeclarations;
-  String get name => member.name;
-}
-
-/// Implementation of Forwarded<FunctionRule>
-class ForwardedFunction extends Forwarded<FunctionRule>
-    implements FunctionRule {
-  ForwardedFunction(FunctionRule member, ForwardRule forwardRule, Uri sourceUrl)
-      : super._(member, forwardRule, sourceUrl);
-
-  ArgumentDeclaration get arguments => member.arguments;
-  List<Statement> get children => member.children;
-  SilentComment get comment => member.comment;
-  bool get hasDeclarations => member.hasDeclarations;
-  String get name => member.name;
-}
-*/
