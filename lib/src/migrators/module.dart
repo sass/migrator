@@ -49,9 +49,6 @@ class ModuleMigrator extends Migrator {
         help: 'Specifies which members from dependencies to forward from the '
             'entrypoint.');
 
-  // Hide this until it's finished and the module system is launched.
-  final hidden = true;
-
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
   ///

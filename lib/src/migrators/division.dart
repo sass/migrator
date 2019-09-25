@@ -27,6 +27,10 @@ Migrates from the / division operator to the divide() function
 
 More info: https://sass-lang.com/d/slash-div""";
 
+  // Hide this until the division deprecation has been launched in at least one
+  // implementation.
+  final hidden = true;
+
   @override
   final argParser = ArgParser()
     ..addFlag('pessimistic',
