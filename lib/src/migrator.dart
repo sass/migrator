@@ -15,6 +15,7 @@ import 'package:sass/src/import_cache.dart';
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 
 import 'utils.dart';
@@ -62,10 +63,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
   Map<Uri, String> run() {
-    var allMigrated = Map<Uri, String>();
+    var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    // TODO(jathak): Add support for passing loadPaths from command line.
-    var importCache = ImportCache([]);
+    var importCache = ImportCache([NodeModulesImporter()],
+        loadPaths: globalResults['load-path']);
     for (var entrypoint in argResults.rest) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
