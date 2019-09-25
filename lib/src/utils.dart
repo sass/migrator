@@ -12,6 +12,7 @@ import 'package:source_span/source_span.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
 
+import 'io.dart';
 import 'patch.dart';
 
 /// Returns the default namespace for a use rule with [path].
@@ -83,9 +84,9 @@ FileSpan nameSpan(SassNode node) {
 /// Emits a warning with [message] and optionally [context];
 void emitWarning(String message, [FileSpan context]) {
   if (context == null) {
-    print("WARNING - $message");
+    printStderr("WARNING: $message");
   } else {
-    print(context.message("WARNING - $message"));
+    printStderr("WARNING on ${context.message(message)}");
   }
 }
 

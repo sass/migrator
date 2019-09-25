@@ -45,18 +45,18 @@ $fn5: meta.get-function($x);
 
 $fn6: meta.get-function(lighten);
 
-<==> log.txt
-line 9, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
+<==> warning.txt
+WARNING on line 9, column 20 of entrypoint.scss: get-function call may require $module parameter
   ,
 9 | $fn4: get-function("incre" + "ment");
   |                    ^^^^^^^^^^^^^^^^
   '
-line 12, column 20 of entrypoint.scss: WARNING - get-function call may require $module parameter
+WARNING on line 12, column 20 of entrypoint.scss: get-function call may require $module parameter
    ,
 12 | $fn5: get-function($x);
    |                    ^^
    '
-line 14, column 20 of entrypoint.scss: WARNING - lighten is not available in the module system and should be manually migrated to color.adjust
+WARNING on line 14, column 20 of entrypoint.scss: lighten is not available in the module system and should be manually migrated to color.adjust
    ,
 14 | $fn6: get-function(lighten);
    |                    ^^^^^^^

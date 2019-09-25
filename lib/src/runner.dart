@@ -60,8 +60,9 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     try {
       migrated = await runCommand(argResults);
     } on MigrationException catch (e) {
-      print(e);
-      print('Migration failed!');
+      printStderr(e);
+      printStderr('Migration failed!');
+      exitCode = 1;
       return;
     }
     if (migrated == null) return;

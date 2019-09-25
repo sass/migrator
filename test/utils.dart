@@ -141,7 +141,15 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
         emitsInOrder(files.expectedLog.trimRight().split("\n")));
   }
   expect(process.stdout, emitsDone);
-  await process.shouldExit(0);
+
+  var expectedStderr = files.expectedError ?? files.expectedWarning;
+  if (expectedStderr != null) {
+    expect(
+        process.stderr, emitsInOrder(expectedStderr.trimRight().split("\n")));
+  }
+  expect(process.stderr, emitsDone);
+
+  await process.shouldExit(files.expectedError != null ? 1 : 0);
 
   await Future.wait([
     Future.wait(files.output.keys
@@ -158,6 +166,8 @@ class _HrxTestFiles {
   Map<String, String> output = {};
   List<String> arguments = [];
   String expectedLog;
+  String expectedError;
+  String expectedWarning;
 
   _HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
@@ -184,6 +194,18 @@ class _HrxTestFiles {
       output[filename.substring(7)] = contents;
     } else if (filename == "log.txt") {
       expectedLog = contents;
+    } else if (filename == "error.txt") {
+      expectedError = contents;
+      if (expectedWarning != null) {
+        throw "Only one of error.txt and warning.txt may be included in a "
+            "given test.";
+      }
+    } else if (filename == "warning.txt") {
+      expectedWarning = contents;
+      if (expectedError != null) {
+        throw "Only one of error.txt and warning.txt may be included in a "
+            "given test.";
+      }
     } else if (filename == "arguments") {
       arguments = contents.trim().split(" ");
     }

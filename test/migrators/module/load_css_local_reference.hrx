@@ -12,7 +12,7 @@ b {
   c: $local;
 }
 
-<==> log.txt
+<==> error.txt
 line 2, column 6 of _library.scss: This stylesheet was loaded by a nested import in entrypoint.scss. The module system only supports loading nested CSS using the load-css() mixin, which doesn't allow access to local variables from the outer stylesheet.
   ,
 2 |   c: $local;

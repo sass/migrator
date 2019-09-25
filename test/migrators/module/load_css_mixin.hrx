@@ -12,7 +12,7 @@ a {
   e: blue;
 }
 
-<==> log.txt
+<==> error.txt
 line 3, column 3 of entrypoint.scss: This mixin was loaded from a nested import of _library.scss. The module system only supports loading nested CSS using the load-css() mixin, which doesn't load mixins.
   ,
 3 |   @include test;
