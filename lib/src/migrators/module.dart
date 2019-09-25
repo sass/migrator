@@ -35,7 +35,9 @@ class ModuleMigrator extends Migrator {
   @override
   final argParser = ArgParser()
     ..addOption('remove-prefix',
-        abbr: 'p', help: 'Removes the provided prefix from members.')
+        abbr: 'p',
+        help: 'Removes PREFIX from all migrated member names.',
+        valueHelp: 'PREFIX')
     ..addOption('forward',
         allowed: ['all', 'none', 'prefixed'],
         allowedHelp: {
