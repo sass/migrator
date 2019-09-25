@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
@@ -13,7 +12,6 @@ import 'package:source_span/source_span.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
 
-import 'migrators/module/forwarded.dart';
 import 'patch.dart';
 
 /// Returns the default namespace for a use rule with [path].
@@ -50,29 +48,32 @@ FileSpan subspan(FileSpan span, {int start = 0, int end}) => span.file
 /// This does not include the namespace if present and does not include the
 /// `$` at the start of variable names.
 FileSpan nameSpan(SassNode node) {
-  var span = node is Forwarded ? node.originalSpan : node.span;
   if (node is VariableDeclaration) {
     var start = node.namespace == null ? 1 : node.namespace.length + 2;
-    return subspan(span, start: start, end: start + node.name.length);
+    return subspan(node.span, start: start, end: start + node.name.length);
   } else if (node is VariableExpression) {
-    return subspan(span,
+    return subspan(node.span,
         start: node.namespace == null ? 1 : node.namespace.length + 2);
   } else if (node is FunctionRule) {
-    var startName =
-        span.text.replaceAll('_', '-').indexOf(node.name, '@function'.length);
-    return subspan(span, start: startName, end: startName + node.name.length);
+    var startName = node.span.text
+        .replaceAll('_', '-')
+        .indexOf(node.name, '@function'.length);
+    return subspan(node.span,
+        start: startName, end: startName + node.name.length);
   } else if (node is FunctionExpression) {
     return node.name.span;
   } else if (node is MixinRule) {
-    var startName = span.text
+    var startName = node.span.text
         .replaceAll('_', '-')
-        .indexOf(node.name, span.text[0] == '=' ? 1 : '@mixin'.length);
-    return subspan(span, start: startName, end: startName + node.name.length);
+        .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
+    return subspan(node.span,
+        start: startName, end: startName + node.name.length);
   } else if (node is IncludeRule) {
-    var startName = span.text
+    var startName = node.span.text
         .replaceAll('_', '-')
-        .indexOf(node.name, span.text[0] == '+' ? 1 : '@include'.length);
-    return subspan(span, start: startName, end: startName + node.name.length);
+        .indexOf(node.name, node.span.text[0] == '+' ? 1 : '@include'.length);
+    return subspan(node.span,
+        start: startName, end: startName + node.name.length);
   } else {
     throw UnsupportedError(
         "$node of type ${node.runtimeType} doesn't have a name");

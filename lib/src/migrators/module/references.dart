@@ -18,7 +18,7 @@ import 'package:collection/collection.dart';
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
 import '../../utils.dart';
-import 'forwarded.dart';
+import 'member_declaration.dart';
 import 'scope.dart';
 
 /// A bidirectional mapping between member declarations and references to those
@@ -32,7 +32,7 @@ class References {
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
   final BidirectionalMap<VariableExpression,
-      SassNode /*VariableDeclaration|Argument*/ > variables;
+      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >> variables;
 
   /// An unmodifiable map between variable reassignments and the original
   /// declaration they override.
@@ -41,44 +41,47 @@ class References {
   /// to the original declaration, not the previous reassignment.
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
-  final BidirectionalMap<VariableDeclaration,
-      SassNode /*VariableDeclaration|Argument*/ > variableReassignments;
+  final BidirectionalMap<MemberDeclaration<VariableDeclaration>,
+          MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
+      variableReassignments;
 
   /// An unmodifiable map from variable declarations with the `!default` flag to
   /// the declaration they would override were it not for that flag.
   ///
   /// This only includes `!default` declarations for variables that already
   /// exist.
-  final Map<VariableDeclaration, SassNode /*VariableDeclaration|Argument*/ >
+  final Map<MemberDeclaration<VariableDeclaration>,
+          MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
       defaultVariableDeclarations;
 
   /// An unmodifiable map between mixin references and their declarations.
-  final BidirectionalMap<IncludeRule, MixinRule> mixins;
+  final BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins;
 
   /// An unmodifiable map between normal function references and their
   /// declarations.
   ///
   /// This only includes references to user-defined functions.
-  final BidirectionalMap<FunctionExpression, FunctionRule> functions;
+  final BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+      functions;
 
   /// An unmodifiable map between statically-known function references within
   /// a `get-function` call and their declarations.
   ///
   /// This only includes references to user-defined functions.
-  final BidirectionalMap<FunctionExpression, FunctionRule>
+  final BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
       getFunctionReferences;
 
   /// An unmodifiable set of all member declarations declared in the global
   /// scope of a stylesheet.
-  final Set<SassNode> globalDeclarations;
+  final Set<MemberDeclaration> globalDeclarations;
 
   /// An iterable of all member declarations.
-  Iterable<SassNode> get allDeclarations =>
+  Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
 
   /// Returns true if the member declared by [declaration] is referenced within
   /// another stylesheet.
-  bool referencedOutsideDeclaringStylesheet(SassNode declaration) {
+  bool referencedOutsideDeclaringStylesheet(MemberDeclaration declaration) {
     Iterable<SassNode> references;
     if (declaration is FunctionRule) {
       references = functions
@@ -89,33 +92,34 @@ class References {
     } else {
       references = variables.keysForValue(declaration);
     }
-    return references.any(
-        (reference) => reference.span.sourceUrl != declaration.span.sourceUrl);
+    return references
+        .any((reference) => reference.span.sourceUrl != declaration.sourceUrl);
   }
 
   /// Finds the original declaration of the variable referenced in [reference].
   ///
-  /// This always returns [VariableDeclaration] or an [Argument], or null if the
-  /// declaration cannot be found.
-  SassNode /*VariableDeclaration|Argument*/ originalDeclaration(
-      VariableExpression reference) {
+  /// The return value always wraps a [VariableDeclaration] or an [Argument].
+  MemberDeclaration originalDeclaration(VariableExpression reference) {
     var declaration = variables[reference];
     return variableReassignments[declaration] ?? declaration;
   }
 
   References._(
       BidirectionalMap<VariableExpression,
-              SassNode /*VariableDeclaration|Argument*/ >
+              MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
           variables,
-      BidirectionalMap<VariableDeclaration,
-              SassNode /*VariableDeclaration|Argument*/ >
+      BidirectionalMap<MemberDeclaration<VariableDeclaration>,
+              MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
           variableReassignments,
-      Map<VariableDeclaration, SassNode /*VariableDeclaration|Argument*/ >
+      Map<MemberDeclaration<VariableDeclaration>,
+              MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
           defaultVariableDeclarations,
-      BidirectionalMap<IncludeRule, MixinRule> mixins,
-      BidirectionalMap<FunctionExpression, FunctionRule> functions,
-      BidirectionalMap<FunctionExpression, FunctionRule> getFunctionReferences,
-      Set<SassNode> globalDeclarations)
+      BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins,
+      BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+          functions,
+      BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+          getFunctionReferences,
+      Set<MemberDeclaration> globalDeclarations)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -137,16 +141,18 @@ class References {
 /// A visitor that builds a References object.
 class _ReferenceVisitor extends RecursiveAstVisitor {
   final _variables = BidirectionalMap<VariableExpression,
-      SassNode /*VariableDeclaration|Argument*/ >();
-  final _variableReassignments = BidirectionalMap<VariableDeclaration,
-      SassNode /*VariableDeclaration|Argument*/ >();
-  final _defaultVariableDeclarations =
-      <VariableDeclaration, SassNode /*VariableDeclaration|Argument*/ >{};
-  final _mixins = BidirectionalMap<IncludeRule, MixinRule>();
-  final _functions = BidirectionalMap<FunctionExpression, FunctionRule>();
+      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>();
+  final _variableReassignments = BidirectionalMap<
+      MemberDeclaration<VariableDeclaration>,
+      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>();
+  final _defaultVariableDeclarations = <MemberDeclaration<VariableDeclaration>,
+      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>{};
+  final _mixins = BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>>();
+  final _functions =
+      BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
   final _getFunctionReferences =
-      BidirectionalMap<FunctionExpression, FunctionRule>();
-  final Set<SassNode> _globalDeclarations = {};
+      BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
+  final Set<MemberDeclaration> _globalDeclarations = {};
 
   /// The current global scope.
   ///
@@ -289,30 +295,29 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var moduleScope = _moduleScopes[canonicalUrl];
     var prefix = node.prefix ?? '';
     for (var name in moduleScope.variables.keys) {
-      if (moduleScope.variables[name] is! VariableDeclaration) {
+      var member = moduleScope.variables[name];
+      if (member.member is! VariableDeclaration) {
         throw StateError(
             "Arguments should not be present in a module's global scope");
       }
       if ((node.shownVariables?.contains(name) ?? true) &&
           !(node.hiddenVariables?.contains(name) ?? false)) {
-        _scope.variables['$prefix$name'] = ForwardedVariable(
-            moduleScope.variables[name] as VariableDeclaration,
-            node,
-            canonicalUrl);
+        _scope.variables['$prefix$name'] =
+            MemberDeclaration.forward(member, node, canonicalUrl);
       }
     }
     for (var name in moduleScope.mixins.keys) {
       if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
           !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
-        _scope.mixins['$prefix$name'] =
-            ForwardedMixin(moduleScope.mixins[name], node, canonicalUrl);
+        _scope.mixins['$prefix$name'] = MemberDeclaration.forward(
+            moduleScope.mixins[name], node, canonicalUrl);
       }
     }
     for (var name in moduleScope.functions.keys) {
       if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
           !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
-        _scope.functions['$prefix$name'] =
-            ForwardedFunction(moduleScope.functions[name], node, canonicalUrl);
+        _scope.functions['$prefix$name'] = MemberDeclaration.forward(
+            moduleScope.functions[name], node, canonicalUrl);
       }
     }
   }
@@ -324,7 +329,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitCallableDeclaration(CallableDeclaration node) {
     _scope = Scope(_scope);
     for (var argument in node.arguments.arguments) {
-      _scope.variables[argument.name] = argument;
+      _scope.variables[argument.name] = MemberDeclaration(argument);
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
     super.visitChildren(node);
@@ -395,22 +400,23 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
     super.visitVariableDeclaration(node);
+    var member = MemberDeclaration(node);
 
     var scope = _scopeForNamespace(node.namespace);
     if (node.isGlobal) scope = scope.global;
 
     if (node.isGuarded) {
       var existing = scope.findVariable(node.name);
-      if (existing != null && existing.span.sourceUrl != node.span.sourceUrl) {
-        _defaultVariableDeclarations[node] = existing;
+      if (existing != null && existing.sourceUrl != member.sourceUrl) {
+        _defaultVariableDeclarations[member] = existing;
       }
     }
     var previous = scope.variables[node.name];
     if (previous == node) return;
-    scope.variables[node.name] = node;
-    if (scope.isGlobal || node.isGlobal) _globalDeclarations.add(node);
+    scope.variables[node.name] = member;
+    if (scope.isGlobal) _globalDeclarations.add(member);
     var original = _variableReassignments[previous] ?? previous;
-    _variableReassignments[node] = original;
+    _variableReassignments[member] = original;
   }
 
   /// Visits the variable reference in [node], storing it.
@@ -430,8 +436,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitMixinRule(MixinRule node) {
     super.visitMixinRule(node);
-    _scope.mixins[node.name] = node;
-    if (_scope.isGlobal) _globalDeclarations.add(node);
+    var member = MemberDeclaration(node);
+    _scope.mixins[node.name] = member;
+    if (_scope.isGlobal) _globalDeclarations.add(member);
   }
 
   /// Visits an `@include` rule, storing the mixin reference.
@@ -450,8 +457,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitFunctionRule(FunctionRule node) {
     super.visitFunctionRule(node);
-    _scope.functions[node.name] = node;
-    if (_scope.isGlobal) _globalDeclarations.add(node);
+    var member = MemberDeclaration(node);
+    _scope.functions[node.name] = member;
+    if (_scope.isGlobal) _globalDeclarations.add(member);
   }
 
   /// Visits a function call, storing it if it is a user-defined function.

@@ -14,6 +14,7 @@ import 'package:sass/src/import_cache.dart';
 import 'package:args/args.dart';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/migrators/module/member_declaration.dart';
 import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 import 'package:tuple/tuple.dart';
@@ -24,8 +25,8 @@ import '../patch.dart';
 import '../utils.dart';
 
 import 'module/built_in_functions.dart';
-import 'module/forwarded.dart';
 import 'module/forward_type.dart';
+import 'module/member_declaration.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
 import 'module/unreferencable_type.dart';
@@ -94,13 +95,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   final _upstreamStylesheets = <Uri>{};
 
   /// Maps declarations of members that have been renamed to their new names.
-  final _renamedMembers = <SassNode, String>{};
+  final _renamedMembers = <MemberDeclaration, String>{};
 
   /// Tracks declarations that reassigned a variable within another module.
   ///
   /// When a reference to this declaration is encountered, the original
   /// declaration will be used for namespacing instead of this one.
-  final _reassignedVariables = <VariableDeclaration>{};
+  final _reassignedVariables = <MemberDeclaration<VariableDeclaration>>{};
 
   /// Maps canonical URLs to the original URL and importer from the `@import`
   /// rule that last imported that URL.
@@ -121,7 +122,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
-  Set<VariableDeclaration> _configuredVariables;
+  Set<MemberDeclaration<VariableDeclaration>> _configuredVariables;
 
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
@@ -183,33 +184,21 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return migrated;
   }
 
-  /// If [node] should be renamed, adds it to [_renamedMembers].
+  /// If [declaration] should be renamed, adds it to [_renamedMembers].
   ///
   /// Members are renamed if they start with [prefixToRemove] or if they start
   /// with `-` or `_` and are referenced outside the stylesheet they were
   /// declared in.
-  void _renameDeclaration(SassNode node) {
-    String originalName;
-    if (node is VariableDeclaration) {
-      originalName = node.name;
-    } else if (node is MixinRule) {
-      originalName = node.name;
-    } else if (node is FunctionRule) {
-      originalName = node.name;
-    } else {
-      throw StateError(
-          "Global declarations should not be of type ${node.runtimeType}");
-    }
-
-    var name = originalName;
+  void _renameDeclaration(MemberDeclaration declaration) {
+    var name = declaration.name;
     if (name.startsWith('-') &&
-        references.referencedOutsideDeclaringStylesheet(node)) {
+        references.referencedOutsideDeclaringStylesheet(declaration)) {
       // Remove leading `-` since private members can't be accessed outside
       // the module they're declared in.
       name = name.substring(1);
     }
     name = _unprefix(name);
-    if (name != originalName) _renamedMembers[node] = name;
+    if (name != declaration.name) _renamedMembers[declaration] = name;
   }
 
   /// Returns a semicolon unless the current stylesheet uses the indented
@@ -258,34 +247,29 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     /// neither depending on whether it originally started with `-` or `_`
     /// (indicating package-privacy) and whether it should be forwarded.
     ///
-    /// [originalName] is the name of the member prior to migration. For
-    /// variables, it does not include the $.
-    ///
     /// [newName] is the name of the member after migration. For variables, it
     /// includes the $.
-    categorizeMember(
-        SassNode declaration, String originalName, String newName) {
-      var url = declaration.span.sourceUrl;
-      if (url == currentUrl) return;
-      if (_shouldForward(originalName) && !originalName.startsWith('-')) {
-        shown[url] ??= {};
-        shown[url].add(newName);
+    categorizeMember(MemberDeclaration declaration, String newName) {
+      if (declaration.sourceUrl == currentUrl) return;
+      if (_shouldForward(declaration.name) &&
+          !declaration.name.startsWith('-')) {
+        shown[declaration.sourceUrl] ??= {};
+        shown[declaration.sourceUrl].add(newName);
       } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
-        hidden[url] ??= {};
-        hidden[url].add(newName);
+        hidden[declaration.sourceUrl] ??= {};
+        hidden[declaration.sourceUrl].add(newName);
       }
     }
 
     // Divide all global members from dependencies into sets based on whether
     // they should be forwarded or not.
-    for (var node in references.globalDeclarations) {
-      if (node is VariableDeclaration) {
+    for (var declaration in references.globalDeclarations) {
+      if (declaration.member is VariableDeclaration) {
+        categorizeMember(declaration,
+            '\$${_renamedMembers[declaration] ?? declaration.name}');
+      } else {
         categorizeMember(
-            node, node.name, '\$${_renamedMembers[node] ?? node.name}');
-      } else if (node is MixinRule) {
-        categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
-      } else if (node is FunctionRule) {
-        categorizeMember(node, node.name, _renamedMembers[node] ?? node.name);
+            declaration, _renamedMembers[declaration] ?? declaration.name);
       }
     }
 
@@ -397,8 +381,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// appropriate `color.adjust` argument.
   ///
   /// If [node] is a get-function call, [getFunctionCall] should be true.
-  void _patchNamespaceForFunction(FunctionExpression node,
-      FunctionRule declaration, void patchNamespace(String namespace),
+  void _patchNamespaceForFunction(
+      FunctionExpression node,
+      MemberDeclaration<FunctionRule> declaration,
+      void patchNamespace(String namespace),
       {bool getFunctionCall = false}) {
     var span = getFunctionCall
         ? getStaticNameForGetFunctionCall(node)
@@ -406,7 +392,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (span == null) return;
     var name = span.text.replaceAll('_', '-');
 
-    var namespace = _namespaceForNode(declaration);
+    var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
       patchNamespace(namespace);
       return;
@@ -495,7 +481,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionRule(FunctionRule node) {
     _useAllowed = false;
-    _renameReference(nameSpan(node), node);
+    _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitFunctionRule(node);
   }
 
@@ -520,7 +506,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (!_useAllowed) {
       _unreferencable = UnreferencableMembers(_unreferencable);
       for (var declaration in references.allDeclarations) {
-        if (declaration.span.sourceUrl != currentUrl) continue;
+        if (declaration.sourceUrl != currentUrl) continue;
         if (references.globalDeclarations.contains(declaration)) continue;
         _unreferencable.add(declaration, UnreferencableType.localFromImporter);
       }
@@ -532,7 +518,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.allDeclarations) {
-        if (declaration.span.sourceUrl != _lastUrl) continue;
+        if (declaration.sourceUrl != _lastUrl) continue;
         _unreferencable.add(
             declaration, UnreferencableType.globalFromNestedImport);
       }
@@ -543,10 +529,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // Pass the variables that were configured by the importing file to `with`,
     // and forward the rest and add them to `oldConfiguredVariables` because
     // they were configured by a further-out import.
-    var locallyConfiguredVariables = <String, VariableDeclaration>{};
-    var externallyConfiguredVariables = <String, VariableDeclaration>{};
+    var locallyConfiguredVariables =
+        <String, MemberDeclaration<VariableDeclaration>>{};
+    var externallyConfiguredVariables =
+        <String, MemberDeclaration<VariableDeclaration>>{};
     for (var variable in _configuredVariables) {
-      if (variable.span.sourceUrl == currentUrl) {
+      if (variable.sourceUrl == currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
       } else {
         externallyConfiguredVariables[variable.name] = variable;
@@ -562,7 +550,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             "This declaration attempts to override a default value in an "
             "indirect, nested import of ${p.prettyUri(_lastUrl)}, which is "
             "not possible in the module system.",
-            span: firstConfig.span);
+            span: firstConfig.member.span);
       }
       addPatch(patchBefore(
           node,
@@ -577,24 +565,26 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var configured = <String>[];
     for (var name in locallyConfiguredVariables.keys) {
       var variable = locallyConfiguredVariables[name];
-      if (variable.isGuarded || references.variables.containsValue(variable)) {
+      if (variable.member.isGuarded ||
+          references.variables.containsValue(variable)) {
         configured.add("\$$name: \$$name");
       } else {
         // TODO(jathak): Handle the case where the expression of this
         // declaration has already been patched.
-        var before = variable.span.start.offset;
-        var beforeDeclaration = variable.span.file
-            .span(before - variable.span.start.column, before);
+        var span = variable.member.span;
+        var before = span.start.offset;
+        var beforeDeclaration =
+            span.file.span(before - span.start.column, before);
         if (beforeDeclaration.text.trim() == '') {
           addPatch(patchDelete(beforeDeclaration));
         }
-        addPatch(patchDelete(variable.span));
-        var start = variable.span.end.offset;
+        addPatch(patchDelete(span));
+        var start = span.end.offset;
         var end = start + _semicolonIfNotIndented.length;
-        if (variable.span.file.span(end, end + 1).text == '\n') end++;
-        addPatch(patchDelete(variable.span.file.span(start, end)));
+        if (span.file.span(end, end + 1).text == '\n') end++;
+        addPatch(patchDelete(span.file.span(start, end)));
         var nameFormat = _useAllowed ? '\$$name' : '"$name"';
-        configured.add("$nameFormat: ${variable.expression}");
+        configured.add("$nameFormat: ${variable.member.expression}");
       }
     }
     if (configured.length == 1) {
@@ -625,7 +615,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var declaration = references.mixins[node];
     _unreferencable.check(declaration, node);
     _renameReference(nameSpan(node), declaration);
-    var namespace = _namespaceForNode(declaration);
+    var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
       addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
     }
@@ -635,7 +625,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitMixinRule(MixinRule node) {
     _useAllowed = false;
-    _renameReference(nameSpan(node), node);
+    _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitMixinRule(node);
   }
 
@@ -657,7 +647,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       declaration = references.variableReassignments[declaration];
     }
     _renameReference(nameSpan(node), declaration);
-    var namespace = _namespaceForNode(declaration);
+    var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
       addPatch(patchBefore(node, '$namespace.'));
     }
@@ -667,50 +657,45 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// renaming or namespacing if necessary.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    if (references.defaultVariableDeclarations.containsKey(node)) {
-      _configuredVariables.add(references.defaultVariableDeclarations[node]);
+    var declaration = MemberDeclaration(node);
+    if (references.defaultVariableDeclarations.containsKey(declaration)) {
+      _configuredVariables
+          .add(references.defaultVariableDeclarations[declaration]);
     }
-    _renameReference(nameSpan(node), node);
+    _renameReference(nameSpan(node), declaration);
 
-    var existingNode = references.variableReassignments[node];
-    var originalUrl = existingNode?.span?.sourceUrl;
+    var existingNode = references.variableReassignments[declaration];
+    var originalUrl = existingNode?.sourceUrl;
     if (existingNode != null &&
         originalUrl != currentUrl &&
         !node.isGuarded &&
         !_upstreamStylesheets.contains(originalUrl)) {
-      var namespace = _namespaceForNode(existingNode);
+      var namespace = _namespaceForDeclaration(existingNode);
       addPatch(patchBefore(node, '$namespace.'));
-      _reassignedVariables.add(node);
+      _reassignedVariables.add(declaration);
     }
 
     super.visitVariableDeclaration(node);
   }
 
   /// If [declaration] was renamed, patches [span] to use the same name.
-  void _renameReference(FileSpan span, SassNode declaration) {
+  void _renameReference(FileSpan span, MemberDeclaration declaration) {
+    if (declaration == null) return;
     if (_renamedMembers.containsKey(declaration)) {
       addPatch(Patch(span, _renamedMembers[declaration]));
       return;
     }
-    var prefix = "";
-    while (declaration is Forwarded) {
-      var member = declaration as Forwarded;
-      if (_isPrefixedImportOnly(member)) {
-        prefix += member.forwardRule.prefix;
-      }
-      declaration = member.member;
-    }
-    if (prefix != "") {
-      addPatch(patchDelete(span, end: prefix.length));
+    if (_isPrefixedImportOnly(declaration)) {
+      addPatch(patchDelete(span, end: declaration.forward.prefix.length));
     }
   }
 
-  /// Returns true if [member] was forwarded from a regular stylesheet by an
-  /// import-only stylesheet of the same name.
-  bool _isPrefixedImportOnly(Forwarded member) {
-    if (member.forwardRule.prefix == null) return false;
-    var containingUrl = member.forwardRule.span.sourceUrl;
-    var forwardedUrl = member.sourceUrl;
+  /// Returns true if [declaration] was forwarded from a regular stylesheet by
+  /// an import-only stylesheet of the same name.
+  bool _isPrefixedImportOnly(MemberDeclaration declaration) {
+    if (declaration.forward?.prefix == null) return false;
+    var containingUrl = declaration.sourceUrl;
+    var forwardedUrl = declaration.forwardedUrl;
     var containingFile = containingUrl.pathSegments.last;
     var forwardedFile = forwardedUrl.pathSegments.last;
     var forwardedBasename = forwardedFile.substring(
@@ -763,20 +748,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Finds the namespace for the stylesheet containing [node], adding a new
-  /// `@use` rule if necessary.
-  String _namespaceForNode(SassNode node) {
-    if (node == null) return null;
-    if (node.span.sourceUrl == currentUrl) return null;
-    if (!_namespaces.containsKey(node.span.sourceUrl)) {
+  /// Finds the namespace for the stylesheet containing [declaration], adding a
+  /// new `@use` rule if necessary.
+  String _namespaceForDeclaration(MemberDeclaration declaration) {
+    if (declaration == null) return null;
+    if (declaration.sourceUrl == currentUrl) return null;
+    if (!_namespaces.containsKey(declaration.sourceUrl)) {
       // Add new `@use` rule for indirect dependency
-      var simplePath = _absoluteUrlToDependency(node.span.sourceUrl);
-      var asClause = _addNamespace(node.span.sourceUrl, simplePath)
+      var simplePath = _absoluteUrlToDependency(declaration.sourceUrl);
+      var asClause = _addNamespace(declaration.sourceUrl, simplePath)
           ? ''
-          : ' as ${_namespaces[node.span.sourceUrl]}';
+          : ' as ${_namespaces[declaration.sourceUrl]}';
       _additionalUseRules.add('@use "$simplePath"$asClause');
     }
-    return _namespaces[node.span.sourceUrl];
+    return _namespaces[declaration.sourceUrl];
   }
 
   /// Converts an absolute URL for a stylesheet into the simplest string that
