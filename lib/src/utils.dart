@@ -137,21 +137,3 @@ FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
       ? subspan(moduleArg.span, start: 1, end: moduleArg.span.length - 2)
       : moduleArg.span;
 }
-
-/// An exception thrown by a migrator.
-class MigrationException {
-  final String message;
-
-  /// The span that triggered this exception, or null if there is none.
-  final FileSpan span;
-
-  MigrationException(this.message, {this.span});
-
-  String toString() {
-    if (span != null) {
-      return span.message(message);
-    } else {
-      return message;
-    }
-  }
-}

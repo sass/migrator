@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
@@ -49,18 +48,18 @@ void main() {
     });
 
     test("an error from a migrator", () async {
-      await d.file("test.scss", "@import 'nonexistent'").create();
+      await d.file("test.scss", "@import 'nonexistent';").create();
 
       var migrator = await runMigrator(["--no-unicode", "module", "test.scss"]);
       expect(
           migrator.stderr,
           emitsInOrder([
-            "line 1, column 9 of test.scss: Error: Could not find Sass file at "
-                "'nonexistent'.",
+            "Error: Could not find Sass file at 'nonexistent'.",
             "  ,",
-            "1 | @import 'nonexistent'",
+            "1 | @import 'nonexistent';",
             "  |         ^^^^^^^^^^^^^",
             "  '",
+            "  test.scss 1:9  root stylesheet",
             "Migration failed!"
           ]));
       await migrator.shouldExit(1);
@@ -81,6 +80,25 @@ void main() {
               "\u001b[34m  |\u001b[0m       \u001b[31m^\u001b[0m",
               "\u001b[34m  '\u001b[0m",
               "  test.scss 1:7  root stylesheet",
+            ]));
+        await migrator.shouldExit(1);
+      });
+
+      test("an error from a migrator", () async {
+        await d.file("test.scss", "@import 'nonexistent';").create();
+
+        var migrator = await runMigrator(
+            ["--no-unicode", "--color", "module", "test.scss"]);
+        expect(
+            migrator.stderr,
+            emitsInOrder([
+              "Error: Could not find Sass file at 'nonexistent'.",
+              "\u001b[34m  ,\u001b[0m",
+              "\u001b[34m1 |\u001b[0m @import \u001b[31m'nonexistent'\u001b[0m;",
+              "\u001b[34m  |\u001b[0m         \u001b[31m^^^^^^^^^^^^^\u001b[0m",
+              "\u001b[34m  '\u001b[0m",
+              "  test.scss 1:9  root stylesheet",
+              "Migration failed!"
             ]));
         await migrator.shouldExit(1);
       });

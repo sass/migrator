@@ -14,7 +14,7 @@ import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'io.dart';
 import 'migrators/division.dart';
 import 'migrators/module.dart';
-import 'utils.dart';
+import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {

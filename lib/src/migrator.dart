@@ -17,6 +17,7 @@ import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
+import 'exception.dart';
 import 'io.dart';
 import 'utils.dart';
 
@@ -70,8 +71,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     for (var entrypoint in argResults.rest) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
-        throw MigrationException(
-            "Error: Could not find Sass file at '$entrypoint'.");
+        throw MigrationException("Could not find Sass file at '$entrypoint'.");
       }
 
       var migrated = migrateFile(importCache, tuple.item2, tuple.item1);
