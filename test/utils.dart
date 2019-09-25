@@ -11,34 +11,71 @@ import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 import 'package:test_process/test_process.dart';
 
+/// Whether to run tests using the Node.js executable, as opposed to the Dart VM
+/// executable.
+///
+/// This is a global variable so that different test files can set it
+/// differently and run the same tests.
+var runNodeTests = false;
+
+/// Whether [ensureExecutableUpToDate] has been called.
+var _ensuredExecutableUpToDate = false;
+
+/// Starts a Sass migrator process with the given [args].
+Future<TestProcess> runMigrator(List<String> args) {
+  expect(_ensuredExecutableUpToDate, isTrue,
+      reason:
+          "ensureExecutableUpToDate() must be called at top of the test file.");
+
+  var executable = runNodeTests ? "node" : Platform.executable;
+
+  var executableArgs = <String>[];
+  if (runNodeTests) {
+    executableArgs.add(p.absolute("build/sass_migrator.dart.js"));
+  } else {
+    executableArgs.add("--enable-asserts");
+
+    var snapshotPath = "build/sass_migrator.dart.app.snapshot";
+    executableArgs.add(p.absolute(File(snapshotPath).existsSync()
+        ? snapshotPath
+        : "bin/sass_migrator.dart"));
+  }
+
+  return TestProcess.start(executable, [...executableArgs, ...args],
+      workingDirectory: d.sandbox, description: "migrator");
+}
+
 /// Runs all tests for [migrator].
 ///
 /// HRX files should be stored in `test/migrators/<migrator name>/`.
-///
-/// If [node] is `true`, runs the Node.js version of the executable. Otherwise,
-/// runs the Dart VM version.
-void testMigrator(String migrator, {bool node: false}) {
-  var useSnapshot = true;
-  if (node) {
-    _ensureUpToDate("build/sass_migrator.dart.js", "pub run grinder js");
-  } else {
-    try {
-      _ensureUpToDate("build/sass_migrator.dart.app.snapshot",
-          'pub run grinder app-snapshot');
-    } catch (_) {
-      useSnapshot = false;
-    }
-  }
+void testMigrator(String migrator) {
+  ensureExecutableUpToDate();
 
   var migrationTests = Directory("test/migrators/$migrator");
   group(migrator, () {
     for (var file in migrationTests.listSync().whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
-        test(
-            p.basenameWithoutExtension(file.path),
-            () =>
-                _testHrx(file, migrator, node: node, useSnapshot: useSnapshot));
+        test(p.basenameWithoutExtension(file.path),
+            () => _testHrx(file, migrator));
       }
+    }
+  });
+}
+
+/// Creates a [setUpAll] that verifies that the compiled form of the migrator
+/// executable is up-to-date, if necessary.
+///
+/// This should always be called before [runMigrator].
+void ensureExecutableUpToDate() {
+  setUpAll(() {
+    _ensuredExecutableUpToDate = true;
+
+    if (runNodeTests) {
+      _ensureUpToDate("build/sass_migrator.dart.js", "pub run grinder js");
+    } else {
+      _ensureUpToDate("build/sass_migrator.dart.app.snapshot",
+          'pub run grinder app-snapshot',
+          ifExists: true);
     }
   });
 }
@@ -48,10 +85,14 @@ void testMigrator(String migrator, {bool node: false}) {
 ///
 /// If [path] isn't up-to-date, this throws an error encouraging the user to run
 /// [commandToRun].
-void _ensureUpToDate(String path, String commandToRun) {
+///
+/// If [ifExists] is `true`, this won't throw an error if the file in question
+/// doesn't exist.
+void _ensureUpToDate(String path, String commandToRun, {bool ifExists: false}) {
   // Ensure path is relative so the error messages are more readable.
   path = p.relative(path);
   if (!File(path).existsSync()) {
+    if (ifExists) return;
     throw "$path does not exist. Run $commandToRun.";
   }
 
@@ -84,36 +125,16 @@ void _ensureUpToDate(String path, String commandToRun) {
 /// Run the migration test in [hrxFile].
 ///
 /// See migrations/README.md for details.
-///
-/// If [node] is `true`, runs the Node.js version of the executable. Otherwise,
-/// runs the Dart VM version.
-///
-/// If [useSnapshot] is `true` and using the Dart VM, an app snapshot will be
-/// used instead of running directly from source.
-Future<void> _testHrx(File hrxFile, String migrator,
-    {bool node: false, bool useSnapshot: false}) async {
+Future<void> _testHrx(File hrxFile, String migrator) async {
   var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
 
-  var executable = node ? "node" : Platform.executable;
-  var executableArgs = node
-      ? [p.absolute("build/sass_migrator.dart.js")]
-      : [
-          "--enable-asserts",
-          p.absolute(useSnapshot
-              ? "build/sass_migrator.dart.app.snapshot"
-              : "bin/sass_migrator.dart")
-        ];
-
-  var process = await TestProcess.start(
-      executable,
-      executableArgs
-        ..addAll([migrator, '--no-unicode'])
-        ..addAll(files.arguments)
-        ..addAll(
-            files.input.keys.where((path) => path.startsWith("entrypoint"))),
-      workingDirectory: d.sandbox,
-      description: "migrator");
+  var process = await runMigrator([
+    migrator,
+    '--no-unicode',
+    ...files.arguments,
+    for (var path in files.input.keys) if (path.startsWith("entrypoint")) path
+  ]);
 
   if (files.expectedLog != null) {
     expect(process.stdout,

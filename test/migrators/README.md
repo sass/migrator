@@ -5,7 +5,7 @@ Each migrator should have:
 * A `<migrator-name>_dart_test.dart` file that looks like:
 
   ```dart
-  import '../migrator_utils.dart';
+  import '../utils.dart';
 
   main() {
     testMigrator("<migrator-name>");
@@ -19,10 +19,11 @@ Each migrator should have:
 
   import 'package:test/test.dart';
 
-  import '../migrator_utils.dart';
+  import '../utils.dart';
 
   main() {
-    testMigrator("<migrator-name>", node: true);
+    runNodeTests = true;
+    testMigrator("<migrator-name>");
   }
   ```
 
