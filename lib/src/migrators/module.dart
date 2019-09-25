@@ -4,8 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:args/args.dart';
-
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
@@ -13,9 +11,12 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 
+import 'package:args/args.dart';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
+import 'package:tuple/tuple.dart';
 
 import '../migration_visitor.dart';
 import '../migrator.dart';
@@ -97,6 +98,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// When a reference to this declaration is encountered, the original
   /// declaration will be used for namespacing instead of this one.
   final _reassignedVariables = <VariableDeclaration>{};
+
+  /// Maps canonical URLs to the original URL and importer from the `@import`
+  /// rule that last imported that URL.
+  final _originalImports = <Uri, Tuple2<String, Importer>>{};
 
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
@@ -510,6 +515,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     visitDependency(Uri.parse(import.url), import.span);
     _upstreamStylesheets.remove(currentUrl);
+    _originalImports[_lastUrl] = Tuple2(import.url, importer);
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.allDeclarations) {
@@ -696,13 +702,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Converts an absolute URL for a stylesheet into the simplest string that
   /// could be used to depend on that stylesheet from the current one in a
   /// `@use`, `@forward`, or `@import` rule.
-  String _absoluteUrlToDependency(Uri uri) {
+  String _absoluteUrlToDependency(Uri url) {
+    var tuple = _originalImports[url];
+    if (tuple?.item2 is NodeModulesImporter) return tuple.item1;
+
     var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
     var potentialUrls = [
-      p.url.relative(uri.path, from: p.url.dirname(currentUrl.path)),
+      p.url.relative(url.path, from: p.url.dirname(currentUrl.path)),
       for (var loadPath in loadPathUrls)
-        if (p.url.isWithin(loadPath.path, uri.path))
-          p.url.relative(uri.path, from: loadPath.path)
+        if (p.url.isWithin(loadPath.path, url.path))
+          p.url.relative(url.path, from: loadPath.path)
     ];
     var relativePath = minBy(potentialUrls, (url) => url.length);
 

@@ -60,6 +60,8 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   ///
   /// If this is `null`, relative imports aren't supported in the current
   /// stylesheet.
+  @protected
+  Importer get importer => _importer;
   Importer _importer;
 
   MigrationVisitor(this.importCache, {this.migrateDependencies = true});

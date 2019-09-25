@@ -16,6 +16,7 @@ dependencies:
   meta: ">=0.9.0 <2.0.0"
   path: "^1.6.0"
   term_glyph: "^1.1.0"
+  tuple: "^1.0.2"
 
 dev_dependencies:
   archive: ">=1.0.0 <3.0.0"
