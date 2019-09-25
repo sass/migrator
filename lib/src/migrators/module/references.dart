@@ -251,9 +251,17 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
+    var canonicalUrl = _loadUseOrForward(node.url);
+    var namespace = namespaceForPath(node.url.path);
+    _namespaces[namespace] = canonicalUrl;
+  }
+
+  /// Given a URL from a `@use` or `@forward` rule, loads and visits the
+  /// stylesheet it points to and returns its canonical URL.
+  Uri _loadUseOrForward(Uri ruleUrl) {
     var result =
-        inUseRule(() => importCache.import(node.url, _importer, _currentUrl));
-    if (result == null) return;
+        inUseRule(() => importCache.import(ruleUrl, _importer, _currentUrl));
+    if (result == null) return null;
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
     if (!_moduleScopes.containsKey(canonicalUrl)) {
@@ -267,8 +275,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _scope = previousScope;
       _importer = oldImporter;
     }
-    var namespace = namespaceForPath(node.url.path);
-    _namespaces[namespace] = canonicalUrl;
+    return canonicalUrl;
   }
 
   /// Visits the stylesheet this `@forward` rule points to using a new global
@@ -276,22 +283,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitForwardRule(ForwardRule node) {
     super.visitForwardRule(node);
-    var result =
-        inUseRule(() => importCache.import(node.url, _importer, _currentUrl));
-    if (result == null) return;
-    var stylesheet = result.item2;
-    var canonicalUrl = stylesheet.span.sourceUrl;
-    if (!_moduleScopes.containsKey(canonicalUrl)) {
-      var previousScope = _scope;
-      _scope = Scope();
-      _moduleScopes[canonicalUrl] = _scope;
-      var oldImporter = _importer;
-      _importer = result.item1;
-      visitStylesheet(stylesheet);
-      _checkUnresolvedReferences(_scope);
-      _scope = previousScope;
-      _importer = oldImporter;
-    }
+    var canonicalUrl = _loadUseOrForward(node.url);
     var moduleScope = _moduleScopes[canonicalUrl];
     var prefix = node.prefix ?? '';
     for (var name in moduleScope.variables.keys) {
@@ -300,27 +292,31 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         throw StateError(
             "Arguments should not be present in a module's global scope");
       }
-      if ((node.shownVariables?.contains(name) ?? true) &&
-          !(node.hiddenVariables?.contains(name) ?? false)) {
+      if (_visibleThroughForward(
+          name, node.shownVariables, node.hiddenVariables)) {
         _scope.variables['$prefix$name'] =
             MemberDeclaration.forward(member, node, canonicalUrl);
       }
     }
     for (var name in moduleScope.mixins.keys) {
-      if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
-          !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
+      if (_visibleThroughForward(
+          name, node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
         _scope.mixins['$prefix$name'] = MemberDeclaration.forward(
             moduleScope.mixins[name], node, canonicalUrl);
       }
     }
     for (var name in moduleScope.functions.keys) {
-      if ((node.shownMixinsAndFunctions?.contains(name) ?? true) &&
-          !(node.hiddenMixinsAndFunctions?.contains(name) ?? false)) {
+      if (_visibleThroughForward(
+          name, node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
         _scope.functions['$prefix$name'] = MemberDeclaration.forward(
             moduleScope.functions[name], node, canonicalUrl);
       }
     }
   }
+
+  bool _visibleThroughForward(
+          String name, Set<String> shown, Set<String> hidden) =>
+      (shown?.contains(name) ?? true) && !(hidden?.contains(name) ?? false);
 
   /// Visits each of [node]'s expressions and children.
   ///

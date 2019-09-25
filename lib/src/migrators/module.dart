@@ -173,6 +173,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
     references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
+
+    // If a prefix was removed from any members, add an import-only stylesheet
+    // that forwards the entrypoint with that prefix.
     if (prefixToRemove != null && _renamedMembers.isNotEmpty) {
       var semicolon = _lastUrl.path.endsWith('.sass') ? '' : ';';
       var importOnlyUrl = getImportOnlyUrl(_lastUrl);
@@ -243,14 +246,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var shown = <Uri, Set<String>>{};
     var hidden = <Uri, Set<String>>{};
 
-    /// Adds the member declared in [declaration] to [shown], [hidden], or
-    /// neither depending on whether it originally started with `-` or `_`
-    /// (indicating package-privacy) and whether it should be forwarded.
-    ///
-    /// [newName] is the name of the member after migration. For variables, it
-    /// includes the $.
-    categorizeMember(MemberDeclaration declaration, String newName) {
-      if (declaration.sourceUrl == currentUrl) return;
+    // Divide all global members from dependencies into sets based on whether
+    // they should be forwarded or not.
+    for (var declaration in references.globalDeclarations) {
+      if (declaration.sourceUrl == currentUrl) continue;
+
+      var newName = _renamedMembers[declaration] ?? declaration.name;
+      if (declaration.member is VariableDeclaration) newName = "\$$newName";
+
       if (_shouldForward(declaration.name) &&
           !declaration.name.startsWith('-')) {
         shown[declaration.sourceUrl] ??= {};
@@ -258,18 +261,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
         hidden[declaration.sourceUrl] ??= {};
         hidden[declaration.sourceUrl].add(newName);
-      }
-    }
-
-    // Divide all global members from dependencies into sets based on whether
-    // they should be forwarded or not.
-    for (var declaration in references.globalDeclarations) {
-      if (declaration.member is VariableDeclaration) {
-        categorizeMember(declaration,
-            '\$${_renamedMembers[declaration] ?? declaration.name}');
-      } else {
-        categorizeMember(
-            declaration, _renamedMembers[declaration] ?? declaration.name);
       }
     }
 
@@ -685,6 +676,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(Patch(span, _renamedMembers[declaration]));
       return;
     }
+
     if (_isPrefixedImportOnly(declaration)) {
       addPatch(patchDelete(span, end: declaration.forward.prefix.length));
     }
@@ -694,15 +686,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// an import-only stylesheet of the same name.
   bool _isPrefixedImportOnly(MemberDeclaration declaration) {
     if (declaration.forward?.prefix == null) return false;
-    var containingUrl = declaration.sourceUrl;
-    var forwardedUrl = declaration.forwardedUrl;
-    var containingFile = containingUrl.pathSegments.last;
-    var forwardedFile = forwardedUrl.pathSegments.last;
-    var forwardedBasename = forwardedFile.substring(
-        0, forwardedFile.length - forwardedFile.split('.').last.length - 1);
-    var containingExtension = containingFile.split('.').last;
-    return containingUrl.resolve('.') == forwardedUrl.resolve('.') &&
-        containingFile == "$forwardedBasename.import.$containingExtension";
+    var containing = declaration.sourceUrl.toString();
+    var forwarded = declaration.forwardedUrl.toString();
+    if (!p.url.equals(p.url.dirname(containing), p.url.dirname(forwarded))) {
+      return false;
+    }
+    return p.url.basename(containing) ==
+        p.url.withoutExtension(p.url.basename(forwarded)) +
+            ".import" +
+            p.url.extension(containing);
   }
 
   /// Returns [name] with [prefixToRemove] removed.

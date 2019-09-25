@@ -22,14 +22,6 @@ a {
   background: $lib-b-variable;
 }
 
-<==> output/entrypoint_monolithic.scss
-@use "library";
-
-a {
-  color: library.$a-variable;
-  background: library.$b-variable;
-}
-
 <==> input/entrypoint_sublibraries.scss
 @import "library/a";
 @import "library/b";
@@ -37,15 +29,6 @@ a {
 a {
   color: $lib-a-variable;
   background: $lib-b-variable;
-}
-
-<==> output/entrypoint_sublibraries.scss
-@use "library/a";
-@use "library/b";
-
-a {
-  color: a.$variable;
-  background: b.$variable;
 }
 
 <==> input/_library.scss
@@ -66,3 +49,20 @@ $variable: green;
 
 <==> input/library/_b.import.scss
 @forward "b" as lib-b-*;
+
+<==> output/entrypoint_monolithic.scss
+@use "library";
+
+a {
+  color: library.$a-variable;
+  background: library.$b-variable;
+}
+
+<==> output/entrypoint_sublibraries.scss
+@use "library/a";
+@use "library/b";
+
+a {
+  color: a.$variable;
+  background: b.$variable;
+}
