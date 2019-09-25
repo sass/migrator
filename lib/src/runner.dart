@@ -17,7 +17,8 @@ import 'utils.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {
-  final invocation = "sass_migrator <migrator> [options] <entrypoint.scss...>";
+  String get invocation =>
+      "$executableName <migrator> [options] <entrypoint.scss...>";
 
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
