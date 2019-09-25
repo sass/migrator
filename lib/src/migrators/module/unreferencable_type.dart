@@ -17,12 +17,11 @@ import '../../exception.dart';
 /// An enum of reasons why a member is unreferencable.
 @sealed
 class UnreferencableType {
-  /// For local members of the importing stylesheet within a nested import.
-  static const localFromImporter = UnreferencableType._('localFromImporter');
+  /// For members of the importing stylesheet within a nested import.
+  static const fromImporter = UnreferencableType._('fromImporter');
 
-  /// For global members from a nested import.
-  static const globalFromNestedImport =
-      UnreferencableType._('globalFromNestedImport');
+  /// For members from a nested import.
+  static const fromNestedImport = UnreferencableType._('fromNestedImport');
 
   /// Identifier for this unreferencable type.
   final String id;
@@ -37,14 +36,14 @@ class UnreferencableType {
         : reference is FunctionExpression ? 'function' : 'variable';
     var url = p.prettyUri(source);
     switch (this) {
-      case localFromImporter:
+      case fromImporter:
         return MigrationSourceSpanException(
-            "This stylesheet was loaded by a nested import in $url. The "
-            "module system only supports loading nested CSS using the "
-            "load-css() mixin, which doesn't allow access to local ${type}s "
-            "from the outer stylesheet.",
+            "This stylesheet was loaded by a nested import in $url. The module "
+            "system only supports loading nested CSS using the load-css() "
+            "mixin, which doesn't allow access to ${type}s from the outer "
+            "stylesheet.",
             reference.span);
-      case globalFromNestedImport:
+      case fromNestedImport:
         return MigrationSourceSpanException(
             "This $type was loaded from a nested import of $url. The module "
             "system only supports loading nested CSS using the load-css() "

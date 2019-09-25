@@ -699,8 +699,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _unreferencable = UnreferencableMembers(_unreferencable);
       for (var declaration in references.allDeclarations) {
         if (declaration.sourceUrl != currentUrl) continue;
-        if (references.globalDeclarations.contains(declaration)) continue;
-        _unreferencable.add(declaration, UnreferencableType.localFromImporter);
+        _unreferencable.add(declaration, UnreferencableType.fromImporter);
       }
     }
     visitDependency(Uri.parse(import.url), import.span);
@@ -711,8 +710,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.allDeclarations) {
         if (declaration.sourceUrl != _lastUrl) continue;
-        _unreferencable.add(
-            declaration, UnreferencableType.globalFromNestedImport);
+        _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
       }
     } else {
       var defaultNamespace = namespaceForPath(import.url);
