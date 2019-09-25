@@ -37,6 +37,9 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       .invocation
       .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
 
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator#$name";
+
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 

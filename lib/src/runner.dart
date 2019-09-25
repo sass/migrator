@@ -20,6 +20,9 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   String get invocation =>
       "$executableName <migrator> [options] <entrypoint.scss...>";
 
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator";
+
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
