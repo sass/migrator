@@ -30,7 +30,7 @@ import 'module/unreferencable_type.dart';
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
   final name = "module";
-  final description = "Migrates stylesheets to the new module system.";
+  final description = "Use the new module system.";
 
   @override
   final argParser = ArgParser()
