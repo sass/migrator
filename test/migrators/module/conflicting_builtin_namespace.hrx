@@ -12,9 +12,9 @@ a {
 $color: blue;
 
 <==> output/entrypoint.scss
-@use "sass:color" as color2;
-@use "color";
+@use "sass:color";
+@use "color" as color2;
 
 a {
-  color: color2.mix(color.$color, red);
+  color: color.mix(color2.$color, red);
 }

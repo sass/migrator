@@ -16,8 +16,11 @@ import 'package:collection/collection.dart';
 
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
-import 'scope.dart';
 import '../../utils.dart';
+
+import 'built_in_functions.dart';
+import 'reference_source.dart';
+import 'scope.dart';
 
 /// A bidirectional mapping between member declarations and references to those
 /// members.
@@ -70,6 +73,13 @@ class References {
   /// scope of a stylesheet.
   final Set<SassNode> globalDeclarations;
 
+  /// A mapping from member references to their source.
+  ///
+  /// This includes references to built-in functions, but it does not include
+  /// functions referenced within `get-function` calls (those nodes instead
+  /// map to the [ReferenceSource] for the `sass:meta` module).
+  final Map<SassNode, ReferenceSource> referenceSources;
+
   /// An iterable of all member declarations.
   Iterable<SassNode> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -113,7 +123,8 @@ class References {
       BidirectionalMap<IncludeRule, MixinRule> mixins,
       BidirectionalMap<FunctionExpression, FunctionRule> functions,
       BidirectionalMap<FunctionExpression, FunctionRule> getFunctionReferences,
-      Set<SassNode> globalDeclarations)
+      Set<SassNode> globalDeclarations,
+      Map<SassNode, ReferenceSource> referenceSources)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -123,7 +134,8 @@ class References {
         functions = UnmodifiableBidirectionalMapView(functions),
         getFunctionReferences =
             UnmodifiableBidirectionalMapView(getFunctionReferences),
-        globalDeclarations = UnmodifiableSetView(globalDeclarations);
+        globalDeclarations = UnmodifiableSetView(globalDeclarations),
+        referenceSources = UnmodifiableMapView(referenceSources);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -145,6 +157,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   final _getFunctionReferences =
       BidirectionalMap<FunctionExpression, FunctionRule>();
   final Set<SassNode> _globalDeclarations = {};
+  final Map<SassNode, ReferenceSource> _referenceSources = {};
 
   /// The current global scope.
   ///
@@ -158,6 +171,10 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// own scope in this map; they will instead share a global scope with the
   /// stylesheet that imported them.
   final _moduleScopes = <Uri, Scope>{};
+
+  Map<SassNode, ReferenceSource> _declarationSources;
+
+  final _moduleSources = <Uri, Map<SassNode, ReferenceSource>>{};
 
   /// Mapping between member references for which no definition was found and
   /// the scope the reference was contained in.
@@ -194,8 +211,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _importer = importer;
     _scope = Scope();
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
+    _declarationSources = {};
+    _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
     visitStylesheet(stylesheet);
     _checkUnresolvedReferences(_scope);
+    _resolveBuiltInFunctionReferences();
     return References._(
         _variables,
         _variableReassignments,
@@ -203,7 +223,45 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _mixins,
         _functions,
         _getFunctionReferences,
-        _globalDeclarations);
+        _globalDeclarations,
+        _referenceSources);
+  }
+
+  void _resolveBuiltInFunctionReferences() {
+    var functions = _unresolvedReferences.keys.whereType<FunctionExpression>();
+    for (var function in functions) {
+      if (_isCssCompatibilityOverload(function)) continue;
+      if (function.name.asPlain == null) continue;
+      var name = function.name.asPlain;
+      if (builtInFunctionModules.containsKey(name)) {
+        var module = builtInFunctionModules[name];
+        var url = builtInModuleUrls[module];
+        _referenceSources[function] = ReferenceSource.builtIn(url, module);
+      }
+    }
+  }
+
+  /// Returns true if [node] is a function overload that exists to provide
+  /// compatiblity with plain CSS function calls, and should therefore not be
+  /// migrated to the module version.
+  bool _isCssCompatibilityOverload(FunctionExpression node) {
+    var argument = getOnlyArgument(node.arguments);
+    switch (node.name.asPlain) {
+      case 'grayscale':
+      case 'invert':
+      case 'opacity':
+        return argument is NumberExpression;
+      case 'saturate':
+        return argument != null;
+      case 'alpha':
+        var totalArgs =
+            node.arguments.positional.length + node.arguments.named.length;
+        if (totalArgs > 1) return true;
+        return argument is BinaryOperationExpression &&
+            argument.operator == BinaryOperator.singleEquals;
+      default:
+        return false;
+    }
   }
 
   /// Visits a stylesheet with an empty [_namespaces], storing it in
@@ -232,6 +290,14 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
           var oldImporter = _importer;
           _importer = result.item1;
           visitStylesheet(result.item2);
+          var url = result.item2.span.sourceUrl;
+          var currentSource = ReferenceSource.current(url);
+          var importSource = ReferenceSource.import(url, import);
+          for (var declaration in _declarationSources.keys.toList()) {
+            if (_declarationSources[declaration] == currentSource) {
+              _declarationSources[declaration] = importSource;
+            }
+          }
           _importer = oldImporter;
         }
       }
@@ -248,16 +314,30 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
     if (!_moduleScopes.containsKey(canonicalUrl)) {
+      var oldScope = _scope;
       _scope = Scope();
       _moduleScopes[canonicalUrl] = _scope;
+      var oldSources = _declarationSources;
+      _declarationSources = {};
+      _moduleSources[canonicalUrl] = _declarationSources;
       var oldImporter = _importer;
       _importer = result.item1;
       visitStylesheet(stylesheet);
       _checkUnresolvedReferences(_scope);
       _importer = oldImporter;
+      _scope = oldScope;
+      _declarationSources = oldSources;
     }
-    var namespace = namespaceForPath(node.url.path);
-    _namespaces[namespace] = canonicalUrl;
+    _namespaces[node.namespace] = canonicalUrl;
+
+    var moduleSources = _moduleSources[canonicalUrl];
+    var currentSource = ReferenceSource.current(canonicalUrl);
+    var useSource = ReferenceSource.use(canonicalUrl, node);
+    for (var declaration in moduleSources.keys) {
+      if (moduleSources[declaration] == currentSource) {
+        _declarationSources[declaration] = useSource;
+      }
+    }
   }
 
   /// Visits each of [node]'s expressions and children.
@@ -301,12 +381,16 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       if (!refScope.isDescendentOf(scope)) continue;
       if (reference is VariableExpression) {
         if (scope.variables.containsKey(reference.name)) {
-          _variables[reference] = scope.variables[reference.name];
+          var declaration = scope.variables[reference.name];
+          _variables[reference] = declaration;
+          _referenceSources[reference] = _declarationSources[declaration];
           _unresolvedReferences.remove(reference);
         }
       } else if (reference is IncludeRule) {
         if (scope.mixins.containsKey(reference.name)) {
-          _mixins[reference] = scope.mixins[reference.name];
+          var declaration = scope.mixins[reference.name];
+          _mixins[reference] = declaration;
+          _referenceSources[reference] = _declarationSources[declaration];
           _unresolvedReferences.remove(reference);
         }
       } else if (reference is FunctionExpression) {
@@ -320,7 +404,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
             _unresolvedReferences.remove(reference);
           }
         } else if (scope.functions.containsKey(name)) {
-          _functions[reference] = scope.functions[name];
+          var declaration = scope.functions[name];
+          _functions[reference] = declaration;
+          _referenceSources[reference] = _declarationSources[declaration];
           _unresolvedReferences.remove(reference);
         }
       }
@@ -338,6 +424,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
     super.visitVariableDeclaration(node);
+    _declarationSources[node] = ReferenceSource.current(_currentUrl);
 
     var scope = _scopeForNamespace(node.namespace);
     if (node.isGlobal) scope = scope.global;
@@ -364,6 +451,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _scopeForNamespace(node.namespace).findVariable(node.name);
     if (declaration != null) {
       _variables[node] = declaration;
+      if (declaration is VariableDeclaration) {
+        _referenceSources[node] = _declarationSources[declaration];
+      }
     } else if (node.namespace == null) {
       _unresolvedReferences[node] = _scope;
     }
@@ -373,6 +463,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitMixinRule(MixinRule node) {
     super.visitMixinRule(node);
+    _declarationSources[node] = ReferenceSource.current(_currentUrl);
     _scope.mixins[node.name] = node;
     if (_scope.isGlobal) _globalDeclarations.add(node);
   }
@@ -384,6 +475,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
     if (declaration != null) {
       _mixins[node] = declaration;
+      _referenceSources[node] = _declarationSources[declaration];
     } else if (node.namespace == null) {
       _unresolvedReferences[node] = _scope;
     }
@@ -393,6 +485,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitFunctionRule(FunctionRule node) {
     super.visitFunctionRule(node);
+    _declarationSources[node] = ReferenceSource.current(_currentUrl);
     _scope.functions[node.name] = node;
     if (_scope.isGlobal) _globalDeclarations.add(node);
   }
@@ -407,10 +500,16 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var declaration = _scopeForNamespace(node.namespace).findFunction(name);
     if (declaration != null) {
       _functions[node] = declaration;
+      _referenceSources[node] = _declarationSources[declaration];
       return;
-    } else if (node.namespace == null && name != 'get-function') {
-      _unresolvedReferences[node] = _scope;
-      return;
+    } else if (node.namespace == null) {
+      if (name == 'get-function') {
+        _referenceSources[node] =
+            ReferenceSource.builtIn(builtInModuleUrls['meta'], 'meta');
+      } else {
+        _unresolvedReferences[node] = _scope;
+        return;
+      }
     }
 
     /// Check for static reference within a get-function call.
