@@ -1,0 +1,16 @@
+<==> arguments
+--remove-prefix=lib-
+
+<==> input/entrypoint.scss
+@import "library";
+
+a {
+  color: $lib-variable;
+}
+
+<==> input/_library.scss
+$lib-variable: green;
+
+<==> error.txt
+Error: The migrator wants to rename a member in _library.scss, but it is not being migrated. You should re-run the migrator with --migrate-deps or with _library.scss as one of your entrypoints.
+Migration failed!

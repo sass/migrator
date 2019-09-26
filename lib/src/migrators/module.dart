@@ -56,6 +56,28 @@ class ModuleMigrator extends Migrator {
         help: 'Specifies which members from dependencies to forward from the '
             'entrypoint.');
 
+  /// Set of files that declare members that the migrator wants to rename.
+  ///
+  /// If one of these files would not be migrated, the migrator will error with
+  /// a message telling the user to use `--migrate-deps` or add the missing
+  /// file to their entrypoints.
+  final _filesWithRenamedDeclarations = <Uri>{};
+
+  @override
+  Map<Uri, String> run() {
+    var results = super.run();
+    for (var file in _filesWithRenamedDeclarations) {
+      if (!results.containsKey(file)) {
+        throw MigrationException(
+            'The migrator wants to rename a member in ${p.prettyUri(file)}, '
+            'but it is not being migrated. You should re-run the migrator with '
+            '--migrate-deps or with ${p.prettyUri(file)} as one of your '
+            'entrypoints.');
+      }
+    }
+    return results;
+  }
+
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
   ///
@@ -71,12 +93,14 @@ class ModuleMigrator extends Migrator {
           'which prefixed members to forward.');
     }
     var references = References(importCache, stylesheet, importer);
-    var migrated = _ModuleMigrationVisitor(
-            importCache, references, globalResults['load-path'] as List<String>,
-            prefixToRemove:
-                (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
-            forward: forward)
-        .run(stylesheet, importer);
+    var visitor = _ModuleMigrationVisitor(
+        importCache, references, globalResults['load-path'] as List<String>,
+        prefixToRemove:
+            (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
+        forward: forward);
+    var migrated = visitor.run(stylesheet, importer);
+    _filesWithRenamedDeclarations.addAll(visitor.renamedMembers.keys
+        .map((declaration) => declaration.sourceUrl));
     if (!migrateDependencies) {
       var importOnlyUrl = getImportOnlyUrl(stylesheet.span.sourceUrl);
       migrated.removeWhere((url, contents) =>
@@ -95,7 +119,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   final _upstreamStylesheets = <Uri>{};
 
   /// Maps declarations of members that have been renamed to their new names.
-  final _renamedMembers = <MemberDeclaration, String>{};
+  final renamedMembers = <MemberDeclaration, String>{};
 
   /// Tracks declarations that reassigned a variable within another module.
   ///
@@ -182,7 +206,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // If a prefix was removed from any members, add an import-only stylesheet
     // that forwards the entrypoint with that prefix.
-    if (prefixToRemove != null && _renamedMembers.isNotEmpty) {
+    if (prefixToRemove != null && renamedMembers.isNotEmpty) {
       var importOnlyUrl = getImportOnlyUrl(_lastUrl);
       var dependency =
           _absoluteUrlToDependency(_lastUrl, relativeTo: importOnlyUrl);
@@ -230,7 +254,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         '@forward "$dependency" show $shown$semicolon\n';
   }
 
-  /// If [declaration] should be renamed, adds it to [_renamedMembers].
+  /// If [declaration] should be renamed, adds it to [renamedMembers].
   ///
   /// Members are renamed if they start with [prefixToRemove] or if they start
   /// with `-` or `_` and are referenced outside the stylesheet they were
@@ -244,7 +268,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       name = name.substring(1);
     }
     name = _unprefix(name);
-    if (name != declaration.name) _renamedMembers[declaration] = name;
+    if (name != declaration.name) renamedMembers[declaration] = name;
   }
 
   /// Returns a semicolon unless the current stylesheet uses the indented
@@ -295,7 +319,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var declaration in references.globalDeclarations) {
       if (declaration.sourceUrl == currentUrl) continue;
 
-      var newName = _renamedMembers[declaration] ?? declaration.name;
+      var newName = renamedMembers[declaration] ?? declaration.name;
       if (declaration.member is VariableDeclaration) newName = "\$$newName";
 
       if (_shouldForward(declaration.name) &&
@@ -865,8 +889,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// If [declaration] was renamed, patches [span] to use the same name.
   void _renameReference(FileSpan span, MemberDeclaration declaration) {
     if (declaration == null) return;
-    if (_renamedMembers.containsKey(declaration)) {
-      addPatch(Patch(span, _renamedMembers[declaration]));
+    if (renamedMembers.containsKey(declaration)) {
+      addPatch(Patch(span, renamedMembers[declaration]));
       return;
     }
 
