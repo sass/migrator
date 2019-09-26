@@ -32,12 +32,14 @@ import 'module/unreferencable_type.dart';
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
   final name = "module";
-  final description = "Migrates stylesheets to the new module system.";
+  final description = "Use the new module system.";
 
   @override
   final argParser = ArgParser()
     ..addOption('remove-prefix',
-        abbr: 'p', help: 'Removes the provided prefix from members.')
+        abbr: 'p',
+        help: 'Removes PREFIX from all migrated member names.',
+        valueHelp: 'PREFIX')
     ..addOption('forward',
         allowed: ['all', 'none', 'prefixed'],
         allowedHelp: {
@@ -50,9 +52,6 @@ class ModuleMigrator extends Migrator {
         defaultsTo: 'none',
         help: 'Specifies which members from dependencies to forward from the '
             'entrypoint.');
-
-  // Hide this until it's finished and the module system is launched.
-  final hidden = true;
 
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.

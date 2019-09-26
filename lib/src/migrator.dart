@@ -34,6 +34,13 @@ import 'utils.dart';
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
 abstract class Migrator extends Command<Map<Uri, String>> {
+  String get invocation => super
+      .invocation
+      .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
+
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator#$name";
+
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 

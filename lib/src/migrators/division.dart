@@ -23,9 +23,13 @@ import 'package:sass_migrator/src/utils.dart';
 class DivisionMigrator extends Migrator {
   final name = "division";
   final description = """
-Migrates from the / division operator to the divide() function
+Use the divide() function instead of the / division operator
 
 More info: https://sass-lang.com/d/slash-div""";
+
+  // Hide this until the division deprecation has been launched in at least one
+  // implementation.
+  final hidden = true;
 
   @override
   final argParser = ArgParser()
