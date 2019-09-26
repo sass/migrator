@@ -13,6 +13,7 @@ import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 
 import 'package:args/command_runner.dart';
+import 'package:glob/glob.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
@@ -68,7 +69,13 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     var importer = FilesystemImporter('.');
     // TODO(jathak): Add support for passing loadPaths from command line.
     var importCache = ImportCache([]);
-    for (var entrypoint in argResults.rest) {
+
+    var entrypoints = [
+      for (var argument in argResults.rest)
+        for (var entry in Glob(argument).listSync())
+          if (entry is File) entry.path
+    ];
+    for (var entrypoint in entrypoints) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
         throw MigrationException("Could not find Sass file at '$entrypoint'.");

@@ -64,6 +64,7 @@ void _js({@required bool release}) {
 #!/usr/bin/env node
 $preambleText
 self.fs = require("fs");
+self.os = require("os");
 self.path = require("path");
 $text""");
 }

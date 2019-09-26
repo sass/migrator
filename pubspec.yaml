@@ -11,6 +11,7 @@ dependencies:
   args: "^1.5.1"
   charcode: "^1.1.0"
   collection: "^1.8.0"
+  glob: "^1.2.0"
   meta: ">=0.9.0 <2.0.0"
   path: "^1.6.0"
   sass: "^1.22.7"
@@ -32,6 +33,9 @@ dev_dependencies:
   test_process: "^1.0.0"
   xml: ">=2.4.0 <4.0.0"
   yaml: "^2.0.0"
+
+dependency_overrides:
+  glob: {git: git://github.com/dart-lang/glob}
 
 executables:
   sass-migrator: sass_migrator
