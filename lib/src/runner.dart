@@ -6,6 +6,7 @@
 
 import 'dart:isolate';
 
+import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
@@ -47,7 +48,15 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   /// Runs a migrator and then writes the migrated files to disk unless
   /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
-    var argResults = parse(args);
+    ArgResults argResults;
+    try {
+      argResults = parse(args);
+    } on UsageException catch (e) {
+      printStderr(e);
+      exitCode = 64;
+      return;
+    }
+
     if (argResults['version'] as bool) {
       print(await _loadVersion());
       exitCode = 0;
@@ -60,6 +69,10 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     Map<Uri, String> migrated;
     try {
       migrated = await runCommand(argResults);
+    } on UsageException catch (e) {
+      printStderr(e);
+      exitCode = 64;
+      return;
     } on SourceSpanException catch (e) {
       printStderr(e.toString(
           color: argResults.wasParsed('color')

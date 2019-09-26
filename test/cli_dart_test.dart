@@ -30,6 +30,22 @@ void main() {
   });
 
   group("gracefully handles", () {
+    test("an unknown command", () async {
+      var migrator = await runMigrator(["asdf"]);
+      expect(migrator.stderr, emits('Could not find a command named "asdf".'));
+      expect(migrator.stderr,
+          emitsThrough(contains('for more information about a command.')));
+      await migrator.shouldExit(64);
+    });
+
+    test("an unknown argument", () async {
+      var migrator = await runMigrator(["--asdf"]);
+      expect(migrator.stderr, emits('Could not find an option named "asdf".'));
+      expect(migrator.stderr,
+          emitsThrough(contains('for more information about a command.')));
+      await migrator.shouldExit(64);
+    });
+
     test("a syntax error", () async {
       await d.file("test.scss", "a {b: }").create();
 
