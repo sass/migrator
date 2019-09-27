@@ -90,3 +90,24 @@ class CurrentSource extends ReferenceSource {
   operator ==(other) => other is CurrentSource && url == other.url;
   int get hashCode => url.hashCode;
 }
+
+/// A source for members forwarded by a `@forward` rule.
+///
+/// Note: Unlike the other sources, this source should not be linked directly to
+/// a reference and is instead used by [References] to track members that should
+/// be forwarded out of the current stylesheet and converted to a [UseSource] or
+/// an [ImportSource] by whichever rule ultimately loads it.
+class ForwardSource extends ReferenceSource {
+  final Uri url;
+
+  /// The `@forward` rule the forwarded a member through the current stylesheet.
+  final ForwardRule forward;
+
+  ForwardSource(this.url, this.forward);
+
+  String get defaultNamespace => null;
+
+  operator ==(other) =>
+      other is ForwardSource && url == other.url && forward == other.forward;
+  int get hashCode => forward.hashCode;
+}

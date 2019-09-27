@@ -365,38 +365,50 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     super.visitForwardRule(node);
     var canonicalUrl = _loadUseOrForward(node.url);
     var moduleScope = _moduleScopes[canonicalUrl];
-    var prefix = node.prefix ?? '';
-    for (var name in moduleScope.variables.keys) {
-      var member = moduleScope.variables[name];
-      if (member.member is! VariableDeclaration) {
+    for (var declaration in moduleScope.variables.values) {
+      if (declaration.member is! VariableDeclaration) {
         throw StateError(
             "Arguments should not be present in a module's global scope");
       }
       if (_visibleThroughForward(
-          name, node.shownVariables, node.hiddenVariables)) {
-        _scope.variables['$prefix$name'] =
-            MemberDeclaration.forward(member, node, canonicalUrl);
+          declaration.name, node.shownVariables, node.hiddenVariables)) {
+        _forwardMember(declaration, node, canonicalUrl, _scope.variables);
       }
     }
-    for (var name in moduleScope.mixins.keys) {
-      if (_visibleThroughForward(
-          name, node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
-        _scope.mixins['$prefix$name'] = MemberDeclaration.forward(
-            moduleScope.mixins[name], node, canonicalUrl);
+    for (var declaration in moduleScope.mixins.values) {
+      if (_visibleThroughForward(declaration.name, node.shownMixinsAndFunctions,
+          node.hiddenMixinsAndFunctions)) {
+        _forwardMember(declaration, node, canonicalUrl, _scope.mixins);
       }
     }
-    for (var name in moduleScope.functions.keys) {
-      if (_visibleThroughForward(
-          name, node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
-        _scope.functions['$prefix$name'] = MemberDeclaration.forward(
-            moduleScope.functions[name], node, canonicalUrl);
+    for (var declaration in moduleScope.functions.values) {
+      if (_visibleThroughForward(declaration.name, node.shownMixinsAndFunctions,
+          node.hiddenMixinsAndFunctions)) {
+        _forwardMember(declaration, node, canonicalUrl, _scope.functions);
       }
     }
   }
 
+  /// Returns true if [name] should be shown based on [shown] and [hidden] from
+  /// a `@forward` rule.
   bool _visibleThroughForward(
           String name, Set<String> shown, Set<String> hidden) =>
       (shown?.contains(name) ?? true) && !(hidden?.contains(name) ?? false);
+
+  /// Forwards [forwarding] into [declarations], adding the forwarded
+  /// declaration to [_declarationSources].
+  void _forwardMember<T extends SassNode>(
+      MemberDeclaration<T> forwarding,
+      ForwardRule forward,
+      Uri forwardedUrl,
+      Map<String, MemberDeclaration<T>> declarations) {
+    var declaration =
+        MemberDeclaration<T>.forward(forwarding, forward, forwardedUrl);
+    var prefix = forward.prefix ?? '';
+    declarations['$prefix${forwarding.name}'] = declaration;
+    _declarationSources[declaration] =
+        ForwardSource(forward.span.sourceUrl, forward);
+  }
 
   /// Visits each of [node]'s expressions and children.
   ///
@@ -514,7 +526,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     super.visitVariableExpression(node);
     var declaration =
         _scopeForNamespace(node.namespace).findVariable(node.name);
-    if (declaration != null) {
+    if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _variables[node] = declaration;
       if (declaration.member is VariableDeclaration) {
         _sources[node] = _declarationSources[declaration];
@@ -539,7 +551,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
-    if (declaration != null) {
+    if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _mixins[node] = declaration;
       _sources[node] = _declarationSources[declaration];
     } else if (node.namespace == null) {
@@ -565,7 +577,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var name = node.name.asPlain.replaceAll('_', '-');
 
     var declaration = _scopeForNamespace(node.namespace).findFunction(name);
-    if (declaration != null) {
+    if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _functions[node] = declaration;
       _sources[node] = _declarationSources[declaration];
       return;
@@ -585,10 +597,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var namespace = moduleExpression?.text;
     name = nameExpression.text.replaceAll('_', '-');
     declaration = _scopeForNamespace(namespace).findFunction(name);
-    if (declaration != null) {
+    if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _getFunctionReferences[node] = declaration;
     } else if (namespace == null) {
       _unresolvedReferences[node] = _scope;
     }
   }
+
+  /// Returns true if [declaration] is from a `@forward` rule in the current
+  /// stylesheet.
+  bool _fromForwardRuleInCurrent(MemberDeclaration declaration) =>
+      declaration.forward != null && declaration.sourceUrl != _currentUrl;
 }

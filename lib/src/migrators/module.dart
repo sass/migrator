@@ -350,9 +350,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Then resolve conflicts where they exist.
     conflictingNamespaces.forEach((namespace, sources) {
-      if (sources.length > 1) {
-        _resolveNamespaceConflict(namespace, sources, namespaces);
-      }
+      _resolveNamespaceConflict(namespace, sources, namespaces);
     });
     return namespaces;
   }
