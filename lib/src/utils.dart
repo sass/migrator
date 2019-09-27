@@ -32,6 +32,9 @@ Patch patchAfter(AstNode node, String text) {
   return Patch(end.file.span(end.offset, end.offset), text);
 }
 
+/// Returns true if [map] does not contain any duplicate values.
+bool valuesAreUnique(Map map) => map.values.toSet().length == map.length;
+
 /// Creates a patch deleting all of or part of [span].
 ///
 /// By default, this deletes the entire span. If [start] and/or [end] are

@@ -1,0 +1,33 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "a/c/variables";
+@import "b/c/variables";
+@import "variables";
+
+a {
+  one: $one;
+  two: $two;
+  three: $three;
+}
+
+<==> input/a/c/_variables.scss
+$one: blue;
+
+<==> input/b/c/_variables.scss
+$two: green;
+
+<==> input/_variables.scss
+$three: red;
+
+<==> output/entrypoint.scss
+@use "a/c/variables" as a-c-variables;
+@use "b/c/variables" as b-c-variables;
+@use "variables";
+
+a {
+  one: a-c-variables.$one;
+  two: b-c-variables.$two;
+  three: variables.$three;
+}

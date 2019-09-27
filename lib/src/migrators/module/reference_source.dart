@@ -11,19 +11,20 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass_migrator/src/utils.dart';
 
 /// A [ReferenceSource] is used to track where a referenced member came from.
-///
-/// There are four types of sources:
-///
-/// - import: For references to members loaded by an `@import` rule.
-/// - use: For references to members loaded by a `@use` rule.
-/// - built-in: For references to built-in functions that are now part of a
-///   built-in module.
-/// - current: For references to members declared in the same stylesheet.
-class ReferenceSource {
+abstract class ReferenceSource {
   /// The canonical URL that contains the declaration being referenced.
+  Uri get url;
+
+  /// Returns the default namespace for this source, or null if the source
+  /// doesn't have a namespace.
+  String get defaultNamespace;
+}
+
+/// A source for references to members loaded by an `@import` rule.
+class ImportSource extends ReferenceSource {
   final Uri url;
 
-  /// For import sources, the import that loaded the member being referenced.
+  /// The import that loaded the member being referenced.
   ///
   /// Note: This is the import that directly loaded the stylesheet defining
   /// the referenced member, not the immediate import within the referencing
@@ -34,8 +35,21 @@ class ReferenceSource {
   /// that imports C, not the import in A that imports B.
   final DynamicImport import;
 
-  /// For use sources, the `@use` rule that made the referenced member available
-  /// in the referencing stylesheet.
+  ImportSource(this.url, this.import);
+
+  String get defaultNamespace => namespaceForPath(import.url);
+
+  operator ==(other) =>
+      other is ImportSource && url == other.url && import == other.import;
+  int get hashCode => import.hashCode;
+}
+
+/// A source for references to members loaded by a `@use` rule.
+class UseSource extends ReferenceSource {
+  final Uri url;
+
+  /// The `@use` rule that made the referenced member available in the
+  /// referencing stylesheet.
   ///
   /// Note: This is the opposite of how import sources work. If A uses B, and B
   /// imports or forwards C, and a member originally defined in C is referenced
@@ -43,57 +57,36 @@ class ReferenceSource {
   /// loads B, not the import or `@forward` rule in B that loads C.
   final UseRule use;
 
-  /// For built-in sources, the name of the built-in module containing the
-  /// referenced member.
-  ///
-  /// This does not include the scheme, so if, for example, the `hue` function
-  /// is referenced, this should be `color` and not `sass:color`.
-  final String builtIn;
+  UseSource(this.url, this.use);
 
-  ReferenceSource._(this.url, {this.import, this.use, this.builtIn});
-
-  /// Constructs a new import source.
-  ReferenceSource.import(Uri url, DynamicImport import)
-      : this._(url, import: import);
-
-  /// Constructs a new use source.
-  ReferenceSource.use(Uri url, UseRule use) : this._(url, use: use);
-
-  /// Constructs a new built-in source.
-  ReferenceSource.builtIn(Uri url, String builtIn)
-      : this._(url, builtIn: builtIn);
-
-  /// Constructs a new current source.
-  ReferenceSource.current(Uri url) : this._(url);
-
-  /// Returns true if this is an import source.
-  bool get isImport => import != null;
-
-  /// Returns true if this is a use source.
-  bool get isUse => use != null;
-
-  /// Returns true if this is a built-in source.
-  bool get isBuiltIn => builtIn != null;
-
-  /// Returns true if this is a current source.
-  bool get isCurrent => !isImport && !isUse && !isBuiltIn;
-
-  /// Returns the default namespace for this source, or null if the source
-  /// doesn't have a namespace.
-  String get defaultNamespace {
-    if (builtIn != null) return builtIn;
-    if (use != null) return use.namespace;
-    if (import != null) return namespaceForPath(import.url);
-    return null;
-  }
+  String get defaultNamespace => use.namespace;
 
   operator ==(other) =>
-      other is ReferenceSource &&
-      url == other.url &&
-      import == other.import &&
-      use == other.use &&
-      builtIn == other.builtIn;
+      other is UseSource && url == other.url && use == other.use;
+  int get hashCode => use.hashCode;
+}
 
-  int get hashCode =>
-      import?.hashCode ?? use?.hashCode ?? builtIn?.hashCode ?? url.hashCode;
+/// A source for references to built-in functions that are now part of a
+/// built-in module.
+class BuiltInSource extends ReferenceSource {
+  final Uri url;
+
+  /// Constructs a [BuiltInSource] for a [module].
+  BuiltInSource(String module) : url = Uri.parse("sass:$module");
+
+  String get defaultNamespace => url.path;
+
+  operator ==(other) => other is BuiltInSource && url == other.url;
+  int get hashCode => url.hashCode;
+}
+
+/// A source for references to members declared in the same stylesheet.
+class CurrentSource extends ReferenceSource {
+  final Uri url;
+  CurrentSource(this.url);
+
+  String get defaultNamespace => null;
+
+  operator ==(other) => other is CurrentSource && url == other.url;
+  int get hashCode => url.hashCode;
 }

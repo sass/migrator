@@ -114,7 +114,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// This includes both `@use` rules migrated from `@import` rules and
   /// additional `@use` rules in the set below.
-  Set<Uri> _hasUseRule;
+  Set<Uri> _usedUrls;
 
   /// Set of additional `@use` rules necessary for referencing members of
   /// implicit dependencies / built-in modules.
@@ -218,10 +218,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   String getMigratedContents() {
     var results = super.getMigratedContents();
     if (results == null) return null;
-    var uses = {
-      for (var use in _additionalUseRules) "$use$_semicolonIfNotIndented\n"
-    };
-    return _getEntrypointForwards() + uses.join() + results;
+    return _getEntrypointForwards() +
+        _additionalUseRules
+            .map((use) => "$use$_semicolonIfNotIndented\n")
+            .join() +
+        results;
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -318,17 +319,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitStylesheet(Stylesheet node) {
     var oldNamespaces = _namespaces;
-    var oldHasUseRule = _hasUseRule;
+    var oldHasUseRule = _usedUrls;
     var oldAdditionalUseRules = _additionalUseRules;
     var oldUseAllowed = _useAllowed;
-    _namespaces = {};
-    _hasUseRule = {};
+    _usedUrls = {};
     _additionalUseRules = {};
     _useAllowed = true;
-    _determineNamespaces(node.span.sourceUrl);
+    _namespaces = _determineNamespaces(node.span.sourceUrl);
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
-    _hasUseRule = oldHasUseRule;
+    _usedUrls = oldHasUseRule;
     _additionalUseRules = oldAdditionalUseRules;
     _lastUrl = node.span.sourceUrl;
     _useAllowed = oldUseAllowed;
@@ -336,46 +336,53 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Determines namespaces for all `@use` rules that the stylesheet will
   /// contain after migration.
-  void _determineNamespaces(Uri url) {
+  Map<Uri, String> _determineNamespaces(Uri url) {
+    var namespaces = <Uri, String>{};
     var sourcesByNamespace = <String, Set<ReferenceSource>>{};
-    for (var reference in references.referenceSources.keys) {
-      if (reference.span.sourceUrl == url) {
-        var source = references.referenceSources[reference];
-        var namespace = source.defaultNamespace;
-        if (namespace != null) {
-          sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
-        }
+    for (var reference in references.sources.keys) {
+      if (reference.span.sourceUrl != url) continue;
+      var source = references.sources[reference];
+      var namespace = source.defaultNamespace;
+      if (namespace == null) continue;
+      // Existing `@use` rules should always keep their namespaces.
+      if (source is UseSource) {
+        namespaces[source.url] = namespace;
+      } else {
+        sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
       }
     }
 
-    for (var namespace in sourcesByNamespace.keys) {
-      var sources = sourcesByNamespace[namespace];
-      if (sources.length == 1) {
-        _namespaces[sources.first.url] = namespace;
+    // First assign namespaces to those without conflicts.
+    var conflictingNamespaces = <String, Set<ReferenceSource>>{};
+    sourcesByNamespace.forEach((namespace, sources) {
+      if (sources.length == 1 && !namespaces.containsValue(namespace)) {
+        namespaces[sources.first.url] = namespace;
       } else {
-        _resolveNamespaceConflict(namespace, sources);
+        conflictingNamespaces[namespace] = sources;
       }
-    }
+    });
+
+    // Then resolve conflicts where they exist.
+    conflictingNamespaces.forEach((namespace, sources) {
+      if (sources.length > 1) {
+        _resolveNamespaceConflict(namespace, sources, namespaces);
+      }
+    });
+    return namespaces;
   }
 
-  /// Resolves a conflict between a set of sources with the same namespace.
-  void _resolveNamespaceConflict(
-      String namespace, Set<ReferenceSource> sources) {
-    // Give first priority to an existing `@use` rule, followed by a built-in
-    // module.
-    var uses = sources.where((source) => source.isUse);
-    if (uses.isNotEmpty) _namespaces[uses.first.url] = namespace;
-    var builtIns = sources.where((source) => source.isBuiltIn);
+  /// Resolves a conflict between a set of sources with the same namespace,
+  /// adding namespaces for all of them to [namespaces].
+  void _resolveNamespaceConflict(String namespace, Set<ReferenceSource> sources,
+      Map<Uri, String> namespaces) {
+    // Give first priority to a built-in module.
+    var builtIns = sources.whereType<BuiltInSource>();
     if (builtIns.isNotEmpty) {
-      _namespaces[builtIns.first.url] = _namespaces.containsValue(namespace) &&
-              !_namespaces.containsValue('sass-$namespace')
-          ? 'sass-$namespace'
-          : _incrementUntilAvailable(namespace);
+      namespaces[builtIns.first.url] =
+          _resolveBuiltInNamespace(namespace, namespaces);
     }
-
     // Then handle `@import` rules, in order of path segment count.
-    for (var sources
-        in _orderSources(sources.where((source) => source.isImport))) {
+    for (var sources in _orderSources(sources.whereType<ImportSource>())) {
       // We remove the last segment since it's already present in the
       // namespace and any segments with dots since they're not valid in a
       // namespace.
@@ -391,13 +398,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // While multiple rules have the same namespace or any rule's
       // namespace is already present, add the next path segment to all
       // namespaces at once.
-      while (aliases.values.toSet().length != sources.length ||
-          aliases.values.any((alias) => _namespaces.containsValue(alias))) {
+      while (!valuesAreUnique(aliases) ||
+          aliases.values.any(namespaces.containsValue)) {
         // If any of the rules runs out of path segments, fallback to just
         // adding numerical suffixes.
         if (paths.values.any((segments) => segments.isEmpty)) {
           for (var source in sources) {
-            _namespaces[source.url] = _incrementUntilAvailable(namespace);
+            namespaces[source.url] =
+                _incrementUntilAvailable(namespace, namespaces);
           }
           return;
         }
@@ -407,18 +415,36 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         };
       }
       for (var source in sources) {
-        _namespaces[source.url] = aliases[source];
+        namespaces[source.url] = aliases[source];
       }
     }
   }
 
-  /// If [defaultNamespace] has not already been used in this stylesheet,
-  /// returns it. Otherwise, returns it with the lowest available number
-  /// appended to the end.
-  String _incrementUntilAvailable(String defaultNamespace) {
+  /// If [module] is not already a value in [existingNamespaces], returns it.
+  /// If it is, but "sass-$module" is not, returns that. Otherwise, returns it
+  /// with the lowest available number appended to the end.
+  ///
+  /// If [existingNamespaces] is not provided, it defaults to [_namespaces].
+  String _resolveBuiltInNamespace(String module,
+      [Map<Uri, String> existingNamespaces]) {
+    existingNamespaces ??= _namespaces;
+    return existingNamespaces.containsValue(module) &&
+            !existingNamespaces.containsValue('sass-$module')
+        ? 'sass-$module'
+        : _incrementUntilAvailable(module, existingNamespaces);
+  }
+
+  /// If [defaultNamespace] has not already been used in this
+  /// [existingNamespaces], returns it. Otherwise, returns it with the lowest
+  /// available number appended to the end.
+  ///
+  /// If [existingNamespaces] is not provided, it defaults to [_namespaces].
+  String _incrementUntilAvailable(String defaultNamespace,
+      [Map<Uri, String> existingNamespaces]) {
+    existingNamespaces ??= _namespaces;
     var count = 1;
     var namespace = defaultNamespace;
-    while (_namespaces.containsValue(namespace)) {
+    while (existingNamespaces.containsValue(namespace)) {
       namespace = '$defaultNamespace${++count}';
     }
     return namespace;
@@ -426,10 +452,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Given a set of import sources, groups them by the number of path segments
   /// and sorts those groups from fewer to more segments.
-  List<Set<ReferenceSource>> _orderSources(Iterable<ReferenceSource> sources) {
-    var byPathLength = <int, Set<ReferenceSource>>{};
+  List<Set<ImportSource>> _orderSources(Iterable<ImportSource> sources) {
+    var byPathLength = <int, Set<ImportSource>>{};
     for (var source in sources) {
-      if (!source.isImport) continue;
       var pathSegments = Uri.parse(source.import.url).pathSegments;
       byPathLength.putIfAbsent(pathSegments.length, () => {}).add(source);
     }
@@ -452,7 +477,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     super.visitFunctionExpression(node);
-    if (references.referenceSources.containsKey(node)) {
+    if (references.sources.containsKey(node)) {
       var declaration = references.functions[node];
       _unreferencable.check(declaration, node);
       _renameReference(nameSpan(node), declaration);
@@ -541,7 +566,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
     }
-    patchNamespace(_findBuiltInNamespace(namespace));
+    patchNamespace(_findBuiltInNamespaceUNSUREOFNAME(namespace));
     if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
 
@@ -693,12 +718,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
     if (!_useAllowed) {
-      var namespace = _findBuiltInNamespace('meta');
+      var namespace = _findBuiltInNamespaceUNSUREOFNAME('meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
-      _hasUseRule.add(_lastUrl);
+      _usedUrls.add(_lastUrl);
       addPatch(
           Patch(node.span, '@use ${import.span.text}$asClause$configuration'));
     }
@@ -791,17 +816,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Returns the namespace that built-in module [module] is loaded under.
   ///
   /// This adds an additional `@use` rule if [module] has not been loaded yet.
-  String _findBuiltInNamespace(String module) {
-    var url = builtInModuleUrls[module];
-    _namespaces.putIfAbsent(url, () => _incrementUntilAvailable(module));
+  String _findBuiltInNamespaceUNSUREOFNAME(String module) {
+    var url = Uri.parse("sass:$module");
+    _namespaces.putIfAbsent(url, () => _resolveBuiltInNamespace(module));
     var namespace = _namespaces[url];
-    if (!_hasUseRule.contains(url)) {
-      _hasUseRule.add(url);
-      if (namespace == module) {
-        _additionalUseRules.add('@use "sass:$module"');
-      } else {
-        _additionalUseRules.add('@use "sass:$module" as $namespace');
-      }
+    if (!_usedUrls.contains(url)) {
+      _usedUrls.add(url);
+      var asClause = namespace == module ? '' : ' as $namespace';
+      _additionalUseRules.add('@use "sass:$module"$asClause');
     }
     return namespace;
   }
@@ -812,18 +834,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (node == null) return null;
     var url = node.span.sourceUrl;
     if (url == currentUrl) return null;
-    if (!_hasUseRule.contains(url)) {
+    if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
       var simplePath = _absoluteUrlToDependency(url);
       var defaultNamespace = namespaceForPath(simplePath);
-      // If a member from this dependency is actually referenced, it should
-      // already have a namespace from [_determineNamespaces], so we just use
-      // a simple number suffix to resolve conflicts at this point.
+      // There are a few edge cases where the reference in [node] wasn't tracked
+      // by [references.sources], so we add a namespace with simple conflict
+      // resolution if one for this URL doesn't already exist.
       _namespaces.putIfAbsent(
           url, () => _incrementUntilAvailable(defaultNamespace));
       var namespace = _namespaces[url];
       var asClause = defaultNamespace == namespace ? '' : ' as $namespace';
-      _hasUseRule.add(url);
+      _usedUrls.add(url);
       _additionalUseRules.add('@use "$simplePath"$asClause');
     }
     return _namespaces[url];
