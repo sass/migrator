@@ -4,18 +4,6 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:collection';
-
-final builtInModuleUrls = UnmodifiableMapView({
-  "color": Uri(scheme: "sass", host: "color"),
-  "map": Uri(scheme: "sass", host: "map"),
-  "selector": Uri(scheme: "sass", host: "selector"),
-  "math": Uri(scheme: "sass", host: "math"),
-  "list": Uri(scheme: "sass", host: "list"),
-  "meta": Uri(scheme: "sass", host: "meta"),
-  "string": Uri(scheme: "sass", host: "string"),
-});
-
 /// Mapping from existing built-in function name to the module it's now part of.
 const builtInFunctionModules = {
   "red": "color",

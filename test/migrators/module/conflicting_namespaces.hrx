@@ -17,10 +17,10 @@ $a: blue;
 $b: green;
 
 <==> output/entrypoint.scss
-@use "a/variables";
-@use "b/variables" as variables2;
+@use "a/variables" as a-variables;
+@use "b/variables" as b-variables;
 
 a {
-  color: variables.$a;
-  background: variables2.$b;
+  color: a-variables.$a;
+  background: b-variables.$b;
 }
