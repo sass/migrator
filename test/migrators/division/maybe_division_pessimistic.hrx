@@ -10,30 +10,32 @@ a {
   f: 3 / $x;
 }
 
-<==> log.txt
-line 2, column 7 of entrypoint.scss: WARNING - Could not determine whether this is division
+<==> warning.txt
+WARNING on line 2, column 7 of entrypoint.scss: Could not determine whether this is division
   ,
 2 |   b: (3 / $x) + 4;
   |       ^^^^^^
   '
-line 3, column 6 of entrypoint.scss: WARNING - Could not determine whether this is division
+WARNING on line 3, column 6 of entrypoint.scss: Could not determine whether this is division
   ,
 3 |   c: 3 / $x - 4;
   |      ^^^^^^
   '
-line 4, column 6 of entrypoint.scss: WARNING - Could not determine whether this is division
+WARNING on line 4, column 6 of entrypoint.scss: Could not determine whether this is division
   ,
 4 |   d: 3 / $x == 4;
   |      ^^^^^^
   '
-line 5, column 6 of entrypoint.scss: WARNING - Could not determine whether this is division
+WARNING on line 5, column 6 of entrypoint.scss: Could not determine whether this is division
   ,
 5 |   e: fn() / 3;
   |      ^^^^^^^^
   '
-line 6, column 6 of entrypoint.scss: WARNING - Could not determine whether this is division
+WARNING on line 6, column 6 of entrypoint.scss: Could not determine whether this is division
   ,
 6 |   f: 3 / $x;
   |      ^^^^^^
   '
+
+<==> log.txt
 Nothing to migrate!

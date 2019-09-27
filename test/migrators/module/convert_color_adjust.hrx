@@ -21,8 +21,8 @@ $g: color.adjust(#37f, $alpha: -20%);
 $h: color.adjust(rgba(10, 20, 30, 0.5), $alpha: -10%);
 $i: lighten(pink, 5%, 10%); // too many arguments
 
-<==> log.txt
-line 9, column 5 of entrypoint.scss: WARNING - Could not migrate malformed 'lighten' call
+<==> warning.txt
+WARNING on line 9, column 5 of entrypoint.scss: Could not migrate malformed 'lighten' call
   ,
 9 | $i: lighten(pink, 5%, 10%); // too many arguments
   |     ^^^^^^^^^^^^^^^^^^^^^^

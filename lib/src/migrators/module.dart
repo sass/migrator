@@ -18,6 +18,7 @@ import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 import 'package:tuple/tuple.dart';
 
+import '../exception.dart';
 import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
@@ -299,9 +300,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// encountered, as the module migrator needs to traverse all dependencies.
   @override
   void handleMissingDependency(Uri dependency, FileSpan context) {
-    throw MigrationException(
-        "Error: Could not find Sass file at '${p.prettyUri(dependency)}'.",
-        span: context);
+    throw MigrationSourceSpanException(
+        "Could not find Sass file at '${p.prettyUri(dependency)}'.", context);
   }
 
   /// Stores per-file state before visiting [node] and restores it afterwards.
@@ -544,11 +544,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (externallyConfiguredVariables.isNotEmpty) {
       if (!_useAllowed) {
         var firstConfig = externallyConfiguredVariables.values.first;
-        throw MigrationException(
+        throw MigrationSourceSpanException(
             "This declaration attempts to override a default value in an "
             "indirect, nested import of ${p.prettyUri(_lastUrl)}, which is "
             "not possible in the module system.",
-            span: firstConfig.span);
+            firstConfig.span);
       }
       addPatch(patchBefore(
           node,

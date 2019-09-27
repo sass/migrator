@@ -13,10 +13,11 @@ a {
 <==> input/_indirect.scss
 $config: green !default;
 
-<==> log.txt
-line 1, column 1 of entrypoint.scss: This declaration attempts to override a default value in an indirect, nested import of _indirect.scss, which is not possible in the module system.
+<==> error.txt
+Error: This declaration attempts to override a default value in an indirect, nested import of _indirect.scss, which is not possible in the module system.
   ,
 1 | $config: red;
   | ^^^^^^^^^^^^
   '
+  entrypoint.scss 1:1  root stylesheet
 Migration failed!

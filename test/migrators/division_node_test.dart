@@ -8,8 +8,9 @@
 
 import 'package:test/test.dart';
 
-import '../migrator_utils.dart';
+import '../utils.dart';
 
 main() {
-  testMigrator("division", node: true);
+  runNodeTests = true;
+  testMigrator("division");
 }

@@ -8,9 +8,10 @@
 
 import 'package:test/test.dart';
 
-import '../utils.dart';
+import 'cli_dart_test.dart' as dart;
+import 'utils.dart';
 
-main() {
+void main() {
   runNodeTests = true;
-  testMigrator("module");
+  dart.main();
 }
