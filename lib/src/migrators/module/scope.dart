@@ -9,6 +9,8 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
+import 'reference_source.dart';
+
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.
 class Scope {

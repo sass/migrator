@@ -1,0 +1,20 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "color";
+
+a {
+  color: mix($color, red);
+}
+
+<==> input/_color.scss
+$color: blue;
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@use "color" as color2;
+
+a {
+  color: color.mix(color2.$color, red);
+}
