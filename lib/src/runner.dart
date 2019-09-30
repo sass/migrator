@@ -6,18 +6,24 @@
 
 import 'dart:isolate';
 
+import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
+import 'package:source_span/source_span.dart';
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
 import 'io.dart';
 import 'migrators/division.dart';
 import 'migrators/module.dart';
-import 'utils.dart';
+import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {
-  final invocation = "sass_migrator <migrator> [options] <entrypoint.scss...>";
+  String get invocation =>
+      "$executableName <migrator> [options] <entrypoint.scss...>";
+
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator";
 
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
@@ -36,10 +42,10 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
           abbr: 'n',
           help: 'Show which files would be migrated but make no changes.',
           negatable: false)
-      ..addFlag(
-        'unicode',
-        help: 'Whether to use Unicode characters for messages.',
-      )
+      ..addFlag('color',
+          abbr: 'c', help: 'Whether to use terminal colors for messages..')
+      ..addFlag('unicode',
+          help: 'Whether to use Unicode characters for messages.')
       // TODO(jathak): Make this flag print a diff instead.
       ..addFlag('verbose',
           abbr: 'v', help: 'Print more information.', negatable: false)
@@ -52,7 +58,15 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   /// Runs a migrator and then writes the migrated files to disk unless
   /// `--dry-run` is passed.
   Future execute(Iterable<String> args) async {
-    var argResults = parse(args);
+    ArgResults argResults;
+    try {
+      argResults = parse(args);
+    } on UsageException catch (e) {
+      printStderr(e);
+      exitCode = 64;
+      return;
+    }
+
     if (argResults['version'] as bool) {
       print(await _loadVersion());
       exitCode = 0;
@@ -65,9 +79,22 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     Map<Uri, String> migrated;
     try {
       migrated = await runCommand(argResults);
+    } on UsageException catch (e) {
+      printStderr(e);
+      exitCode = 64;
+      return;
+    } on SourceSpanException catch (e) {
+      printStderr(e.toString(
+          color: argResults.wasParsed('color')
+              ? argResults['color'] as bool
+              : supportsAnsiEscapes));
+      printStderr('Migration failed!');
+      exitCode = 1;
+      return;
     } on MigrationException catch (e) {
-      print(e);
-      print('Migration failed!');
+      printStderr(e);
+      printStderr('Migration failed!');
+      exitCode = 1;
       return;
     }
     if (migrated == null) return;

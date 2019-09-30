@@ -12,7 +12,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
-import '../../utils.dart';
+import '../../exception.dart';
 
 /// An enum of reasons why a member is unreferencable.
 @sealed
@@ -38,18 +38,18 @@ class UnreferencableType {
     var url = p.prettyUri(source);
     switch (this) {
       case localFromImporter:
-        return MigrationException(
+        return MigrationSourceSpanException(
             "This stylesheet was loaded by a nested import in $url. The "
             "module system only supports loading nested CSS using the "
             "load-css() mixin, which doesn't allow access to local ${type}s "
             "from the outer stylesheet.",
-            span: reference.span);
+            reference.span);
       case globalFromNestedImport:
-        return MigrationException(
+        return MigrationSourceSpanException(
             "This $type was loaded from a nested import of $url. The module "
             "system only supports loading nested CSS using the load-css() "
             "mixin, which doesn't load ${type}s.",
-            span: reference.span);
+            reference.span);
       default:
         throw StateError('Invalid UnreferencableType');
     }

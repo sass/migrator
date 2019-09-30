@@ -18,6 +18,8 @@ import 'package:path/path.dart' as p;
 import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 
+import 'exception.dart';
+import 'io.dart';
 import 'utils.dart';
 
 /// A migrator is a command that migrates the entrypoints provided to it and
@@ -34,6 +36,13 @@ import 'utils.dart';
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
 abstract class Migrator extends Command<Map<Uri, String>> {
+  String get invocation => super
+      .invocation
+      .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
+
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator#$name";
+
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 
@@ -70,8 +79,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     for (var entrypoint in argResults.rest) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
-        throw MigrationException(
-            "Error: Could not find Sass file at '$entrypoint'.");
+        throw MigrationException("Could not find Sass file at '$entrypoint'.");
       }
 
       var migrated = migrateFile(importCache, tuple.item2, tuple.item1);
@@ -108,7 +116,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
           "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.");
       for (var uri in missingDependencies.keys) {
         var context = missingDependencies[uri];
-        print('  ${p.prettyUri(uri)} '
+        printStderr('  ${p.prettyUri(uri)} '
             '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
       }
     }

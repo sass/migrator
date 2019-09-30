@@ -5,7 +5,7 @@ Each migrator should have:
 * A `<migrator-name>_dart_test.dart` file that looks like:
 
   ```dart
-  import '../migrator_utils.dart';
+  import '../utils.dart';
 
   main() {
     testMigrator("<migrator-name>");
@@ -19,10 +19,11 @@ Each migrator should have:
 
   import 'package:test/test.dart';
 
-  import '../migrator_utils.dart';
+  import '../utils.dart';
 
   main() {
-    testMigrator("<migrator-name>", node: true);
+    runNodeTests = true;
+    testMigrator("<migrator-name>");
   }
   ```
 
@@ -47,5 +48,6 @@ For each file in `input` that would be modified by this migration, there should
 be a corresponding file in `output` with the migrated contents. `output` should
 not contain a file if it would not be changed by the migrator.
 
-If any warnings should be emitted by this migration, there should be an
-additional file called `log.txt` that contains the expected printed text.
+The migration's expected standard output should be included in a file named
+`log.txt`. Its standard error should be included in a file called `error.txt` if
+the migration fails, or `warning.txt` if it completes successfully.

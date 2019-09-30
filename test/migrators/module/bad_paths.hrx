@@ -2,10 +2,11 @@
 @import "does_not_exist";
 @import "does_not_exist2";
 
-<==> log.txt
-line 1, column 9 of entrypoint.scss: Error: Could not find Sass file at 'does_not_exist'.
+<==> error.txt
+Error: Could not find Sass file at 'does_not_exist'.
   ,
 1 | @import "does_not_exist";
   |         ^^^^^^^^^^^^^^^^
   '
+  entrypoint.scss 1:9  root stylesheet
 Migration failed!

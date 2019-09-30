@@ -5,15 +5,17 @@
 @import "does_not_exist";
 @import "does_not_exist2";
 
-<==> log.txt
-line 1, column 9 of entrypoint.scss: WARNING - Could not find Sass file at 'does_not_exist'.
+<==> warning.txt
+WARNING on line 1, column 9 of entrypoint.scss: Could not find Sass file at 'does_not_exist'.
   ,
 1 | @import "does_not_exist";
   |         ^^^^^^^^^^^^^^^^
   '
-line 2, column 9 of entrypoint.scss: WARNING - Could not find Sass file at 'does_not_exist2'.
+WARNING on line 2, column 9 of entrypoint.scss: Could not find Sass file at 'does_not_exist2'.
   ,
 2 | @import "does_not_exist2";
   |         ^^^^^^^^^^^^^^^^^
   '
+
+<==> log.txt
 Nothing to migrate!

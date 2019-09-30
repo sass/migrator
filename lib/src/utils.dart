@@ -12,6 +12,7 @@ import 'package:source_span/source_span.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
 
+import 'io.dart';
 import 'patch.dart';
 
 /// Returns the default namespace for a use rule with [path].
@@ -33,7 +34,8 @@ Patch patchAfter(AstNode node, String text) {
 }
 
 /// Returns true if [map] does not contain any duplicate values.
-bool valuesAreUnique(Map map) => map.values.toSet().length == map.length;
+bool valuesAreUnique(Map<Object, Object> map) =>
+    map.values.toSet().length == map.length;
 
 /// Creates a patch deleting all of or part of [span].
 ///
@@ -86,9 +88,9 @@ FileSpan nameSpan(SassNode node) {
 /// Emits a warning with [message] and optionally [context];
 void emitWarning(String message, [FileSpan context]) {
   if (context == null) {
-    print("WARNING - $message");
+    printStderr("WARNING: $message");
   } else {
-    print(context.message("WARNING - $message"));
+    printStderr("WARNING on ${context.message(message)}");
   }
 }
 
@@ -146,22 +148,4 @@ Uri getImportOnlyUrl(Uri url) {
   var extension = filename.split('.').last;
   var basename = filename.substring(0, filename.length - extension.length - 1);
   return url.resolve('$basename.import.$extension');
-}
-
-/// An exception thrown by a migrator.
-class MigrationException {
-  final String message;
-
-  /// The span that triggered this exception, or null if there is none.
-  final FileSpan span;
-
-  MigrationException(this.message, {this.span});
-
-  String toString() {
-    if (span != null) {
-      return span.message(message);
-    } else {
-      return message;
-    }
-  }
 }

@@ -1,0 +1,3 @@
+analyzer:
+  errors:
+    missing_js_lib_annotation: ignore

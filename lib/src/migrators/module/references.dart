@@ -25,6 +25,10 @@ import 'built_in_functions.dart';
 import 'reference_source.dart';
 import 'scope.dart';
 
+import 'built_in_functions.dart';
+import 'reference_source.dart';
+import 'scope.dart';
+
 /// A bidirectional mapping between member declarations and references to those
 /// members.
 ///
