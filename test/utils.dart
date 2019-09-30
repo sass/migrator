@@ -51,11 +51,12 @@ Future<TestProcess> runMigrator(List<String> args) {
 void testMigrator(String migrator) {
   ensureExecutableUpToDate();
 
-  var migrationTests = Directory("test/migrators/$migrator");
+  var dir = "test/migrators/$migrator";
   group(migrator, () {
-    for (var file in migrationTests.listSync().whereType<File>()) {
+    for (var file
+        in Directory(dir).listSync(recursive: true).whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
-        test(p.basenameWithoutExtension(file.path),
+        test(p.withoutExtension(p.relative(file.path, from: dir)),
             () => _testHrx(file, migrator));
       }
     }
