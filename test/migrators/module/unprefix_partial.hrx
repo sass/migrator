@@ -1,0 +1,18 @@
+<==> arguments
+--remove-prefix=lib-
+
+<==> input/entrypoint.scss
+$lib-a: 1;
+$lib-b: 2;
+$c: 3;
+$d: 4;
+
+<==> output/entrypoint.scss
+$a: 1;
+$b: 2;
+$c: 3;
+$d: 4;
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-* hide $lib-c, $lib-d;
+@forward "entrypoint" show $c, $d;

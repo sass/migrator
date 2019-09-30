@@ -183,14 +183,53 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // If a prefix was removed from any members, add an import-only stylesheet
     // that forwards the entrypoint with that prefix.
     if (prefixToRemove != null && _renamedMembers.isNotEmpty) {
-      var semicolon = _lastUrl.path.endsWith('.sass') ? '' : ';';
       var importOnlyUrl = getImportOnlyUrl(_lastUrl);
       var dependency =
           _absoluteUrlToDependency(_lastUrl, relativeTo: importOnlyUrl);
-      migrated[importOnlyUrl] =
-          '@forward "$dependency" as $prefixToRemove*$semicolon\n';
+      var results = _generateImportOnly(_lastUrl, dependency);
+      if (results != null) {
+        migrated[importOnlyUrl] = results;
+      }
     }
     return migrated;
+  }
+
+  /// Generates an import-only stylesheet for [entrypoint] that forwards any
+  /// members that used to have a prefix with that prefix, but forwards other
+  /// members as-is.
+  ///
+  /// If there are no previously-prefixed members to forward, this returns null.
+  String _generateImportOnly(Uri entrypoint, String dependency) {
+    var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
+    var forwardWithPrefix = <MemberDeclaration>{};
+    var forwardWithoutPrefix = <MemberDeclaration>{};
+    for (var declaration in references.globalDeclarations) {
+      var visibleAtEntrypoint = declaration.sourceUrl == entrypoint ||
+          (_shouldForward(declaration.name) &&
+              !declaration.name.startsWith('-'));
+      if (!visibleAtEntrypoint) continue;
+
+      if (declaration.name.startsWith(prefixToRemove)) {
+        forwardWithPrefix.add(declaration);
+      } else {
+        forwardWithoutPrefix.add(declaration);
+      }
+    }
+    if (forwardWithPrefix.isEmpty) return null;
+    if (forwardWithoutPrefix.isEmpty) {
+      return '@forward "$dependency" as $prefixToRemove*$semicolon\n';
+    }
+    var hidden = forwardWithoutPrefix.map((declaration) {
+      var name = '$prefixToRemove${declaration.name}';
+      return declaration.member is VariableDeclaration ? '\$$name' : name;
+    }).join(', ');
+    var shown = forwardWithoutPrefix
+        .map((declaration) => declaration.member is VariableDeclaration
+            ? '\$${declaration.name}'
+            : declaration.name)
+        .join(', ');
+    return '@forward "$dependency" as $prefixToRemove* hide $hidden$semicolon\n'
+        '@forward "$dependency" show $shown$semicolon\n';
   }
 
   /// If [declaration] should be renamed, adds it to [_renamedMembers].

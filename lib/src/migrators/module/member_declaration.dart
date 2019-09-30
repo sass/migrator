@@ -41,17 +41,15 @@ class MemberDeclaration<T extends SassNode> {
   /// Constructs a MemberDefinition for [member], which must be a
   /// [VariableDeclaration], [Argument], [MixinRule], or [FunctionRule].
   MemberDeclaration(this.member)
-      : name = member is VariableDeclaration
-            ? member.name
-            : member is Argument
-                ? member.name
-                : member is MixinRule
-                    ? member.name
-                    : member is FunctionRule
-                        ? member.name
-                        : throw ArgumentError("MemberDefinition must contain a "
-                            "VariableDeclaration, Argument, MixinRule, or "
-                            "FunctionRule"),
+      : name = (() {
+          if (member is VariableDeclaration) return member.name;
+          if (member is Argument) return member.name;
+          if (member is MixinRule) return member.name;
+          if (member is FunctionRule) return member.name;
+          throw ArgumentError(
+              "MemberDefinition must contain a VariableDeclaration, Argument, "
+              "MixinRule, or FunctionRule");
+        })(),
         sourceUrl = member.span.sourceUrl,
         forward = null,
         forwardedUrl = null;
