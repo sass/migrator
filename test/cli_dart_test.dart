@@ -34,40 +34,49 @@ void main() {
       await d.file("test.scss", "a {b: abs(-1)}").create();
 
       var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
-      expect(migrator.stdout, emitsInOrder([
-        "Dry run. Logging migrated files instead of overwriting...",
-        "",
-        "test.scss",
-        emitsDone
-      ]));
+      expect(
+          migrator.stdout,
+          emitsInOrder([
+            "Dry run. Logging migrated files instead of overwriting...",
+            "",
+            "test.scss",
+            emitsDone
+          ]));
       await migrator.shouldExit(0);
     });
 
-    test("doesn't print the name of a file that doesn't need to be migrated", () async {
+    test("doesn't print the name of a file that doesn't need to be migrated",
+        () async {
       await d.file("test.scss", "a {b: abs(-1)}").create();
       await d.file("other.scss", "a {b: c}").create();
 
-      var migrator = await runMigrator(["--dry-run", "module", "test.scss", "other.scss"]);
-      expect(migrator.stdout, emitsInOrder([
-        "Dry run. Logging migrated files instead of overwriting...",
-        "",
-        "test.scss",
-        emitsDone
-      ]));
+      var migrator =
+          await runMigrator(["--dry-run", "module", "test.scss", "other.scss"]);
+      expect(
+          migrator.stdout,
+          emitsInOrder([
+            "Dry run. Logging migrated files instead of overwriting...",
+            "",
+            "test.scss",
+            emitsDone
+          ]));
       await migrator.shouldExit(0);
     });
 
-    test("doesn't print the name of imported files without --migrate-deps", () async {
+    test("doesn't print the name of imported files without --migrate-deps",
+        () async {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
       var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
-      expect(migrator.stdout, emitsInOrder([
-        "Dry run. Logging migrated files instead of overwriting...",
-        "",
-        "test.scss",
-        emitsDone
-      ]));
+      expect(
+          migrator.stdout,
+          emitsInOrder([
+            "Dry run. Logging migrated files instead of overwriting...",
+            "",
+            "test.scss",
+            emitsDone
+          ]));
       await migrator.shouldExit(0);
     });
 
@@ -75,16 +84,16 @@ void main() {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(["--dry-run", "--migrate-deps", "module", "test.scss"]);
-      expect(migrator.stdout, emitsInOrder([
-        "Dry run. Logging migrated files instead of overwriting...",
-        "",
-        emitsInAnyOrder([
-        "test.scss",
-        "_other.scss"
-        ]),
-        emitsDone
-      ]));
+      var migrator = await runMigrator(
+          ["--dry-run", "--migrate-deps", "module", "test.scss"]);
+      expect(
+          migrator.stdout,
+          emitsInOrder([
+            "Dry run. Logging migrated files instead of overwriting...",
+            "",
+            emitsInAnyOrder(["test.scss", "_other.scss"]),
+            emitsDone
+          ]));
       await migrator.shouldExit(0);
     });
 
@@ -92,23 +101,23 @@ void main() {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(["--dry-run", "--migrate-deps", "--verbose", "module", "test.scss"]);
-      expect(migrator.stdout, emitsInOrder([
-        "Dry run. Logging migrated files instead of overwriting...",
-        "",
-        emitsInAnyOrder([
+      var migrator = await runMigrator(
+          ["--dry-run", "--migrate-deps", "--verbose", "module", "test.scss"]);
+      expect(
+          migrator.stdout,
           emitsInOrder([
-            "<===> test.scss",
-            "@use 'other'"
-          ]),
-          emitsInOrder([
-            "<===> _other.scss",
-            '@use "sass:math";',
-            "a {b: math.abs(-1)}"
-          ]),
-        ]),
-        emitsDone
-      ]));
+            "Dry run. Logging migrated files instead of overwriting...",
+            "",
+            emitsInAnyOrder([
+              emitsInOrder(["<===> test.scss", "@use 'other'"]),
+              emitsInOrder([
+                "<===> _other.scss",
+                '@use "sass:math";',
+                "a {b: math.abs(-1)}"
+              ]),
+            ]),
+            emitsDone
+          ]));
       await migrator.shouldExit(0);
     });
   });
