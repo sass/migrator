@@ -1,0 +1,27 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@use "sass:color";
+@import "color";
+
+a {
+  // already namespaced
+  color: color.mix($color, red);
+  // not namespaced
+  background: invert(green);
+}
+
+<==> input/_color.scss
+$color: blue;
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@use "color" as color2;
+
+a {
+  // already namespaced
+  color: color.mix(color2.$color, red);
+  // not namespaced
+  background: color.invert(green);
+}

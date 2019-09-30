@@ -744,12 +744,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitMixinRule(node);
   }
 
-  /// Don't visit `@use` or `@forward` rules here, as we'll assume that any
-  /// stylesheet depended on this way has already been migrated.
+  /// If [node] is for a built-in module, adds its URL to [_usedUrls] so we
+  /// don't add a duplicate one, but ignore other `@use` rules, as we'll assume
+  /// they've already been migrated.
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
-  void visitUseRule(UseRule node) {}
+  void visitUseRule(UseRule node) {
+    if (node.url.scheme == 'sass') _usedUrls.add(node.url);
+  }
+
+  /// Similar to `@use` rules, don't visit `@forward` rules.
+  ///
+  /// The migrator will use the information from [references] to migrate
+  /// references to members of these dependencies.
   void visitForwardRule(ForwardRule node) {}
 
   /// Adds a namespace to any variable that requires it.

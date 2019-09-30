@@ -304,7 +304,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
           var currentSource = CurrentSource(url);
           var importSource = ImportSource(url, import);
           for (var declaration in _declarationSources.keys.toList()) {
-            if (_declarationSources[declaration] == currentSource) {
+            var source = _declarationSources[declaration];
+            if (source == currentSource || source is ForwardSource) {
               _declarationSources[declaration] = importSource;
             }
           }
@@ -319,6 +320,10 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
+    if (node.url.scheme == 'sass') {
+      _namespaces[node.namespace] = node.url;
+      return;
+    }
     var canonicalUrl = _loadUseOrForward(node.url);
     _namespaces[node.namespace] = canonicalUrl;
 
@@ -326,7 +331,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var currentSource = CurrentSource(canonicalUrl);
     var useSource = UseSource(canonicalUrl, node);
     for (var declaration in moduleSources.keys) {
-      if (moduleSources[declaration] == currentSource) {
+      var source = moduleSources[declaration];
+      if (source == currentSource || source is ForwardSource) {
         _declarationSources[declaration] = useSource;
       }
     }
@@ -550,6 +556,10 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
+    if (_namespaces[node.namespace]?.scheme == 'sass') {
+      _sources[node] = BuiltInSource(_namespaces[node.namespace].path);
+      return;
+    }
     var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _mixins[node] = declaration;
@@ -573,6 +583,10 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     super.visitFunctionExpression(node);
+    if (_namespaces[node.namespace]?.scheme == 'sass') {
+      _sources[node] = BuiltInSource(_namespaces[node.namespace].path);
+      return;
+    }
     if (node.name.asPlain == null) return;
     var name = node.name.asPlain.replaceAll('_', '-');
 
