@@ -334,8 +334,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _useAllowed = oldUseAllowed;
   }
 
-  /// Determines namespaces for all `@use` rules that the stylesheet will
-  /// contain after migration.
+  /// Determines namespaces for all `@use` rules that the stylesheet at [url]
+  /// will contain after migration.
   Map<Uri, String> _determineNamespaces(Uri url) {
     var namespaces = <Uri, String>{};
     var sourcesByNamespace = <String, Set<ReferenceSource>>{};
@@ -344,6 +344,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var source = references.sources[reference];
       var namespace = source.defaultNamespace;
       if (namespace == null) continue;
+
       // Existing `@use` rules should always keep their namespaces.
       if (source is UseSource) {
         namespaces[source.url] = namespace;
@@ -352,7 +353,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     }
 
-    // First assign namespaces to those without conflicts.
+    // First assign namespaces to module URLs without conflicts.
     var conflictingNamespaces = <String, Set<ReferenceSource>>{};
     sourcesByNamespace.forEach((namespace, sources) {
       if (sources.length == 1 && !namespaces.containsValue(namespace)) {
@@ -364,15 +365,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Then resolve conflicts where they exist.
     conflictingNamespaces.forEach((namespace, sources) {
-      if (sources.length > 1) {
-        _resolveNamespaceConflict(namespace, sources, namespaces);
-      }
+      _resolveNamespaceConflict(namespace, sources, namespaces);
     });
     return namespaces;
   }
 
-  /// Resolves a conflict between a set of sources with the same namespace,
-  /// adding namespaces for all of them to [namespaces].
+  /// Resolves a conflict between a set of sources with the same default
+  /// namespace, adding namespaces for all of them to [namespaces].
   void _resolveNamespaceConflict(String namespace, Set<ReferenceSource> sources,
       Map<Uri, String> namespaces) {
     // Give first priority to a built-in module.
@@ -423,11 +422,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// If [module] is not already a value in [existingNamespaces], returns it.
   /// If it is, but "sass-$module" is not, returns that. Otherwise, returns it
   /// with the lowest available number appended to the end.
-  ///
-  /// If [existingNamespaces] is not provided, it defaults to [_namespaces].
-  String _resolveBuiltInNamespace(String module,
-      [Map<Uri, String> existingNamespaces]) {
-    existingNamespaces ??= _namespaces;
+  String _resolveBuiltInNamespace(
+      String module, Map<Uri, String> existingNamespaces) {
     return existingNamespaces.containsValue(module) &&
             !existingNamespaces.containsValue('sass-$module')
         ? 'sass-$module'
@@ -437,11 +433,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// If [defaultNamespace] has not already been used in this
   /// [existingNamespaces], returns it. Otherwise, returns it with the lowest
   /// available number appended to the end.
-  ///
-  /// If [existingNamespaces] is not provided, it defaults to [_namespaces].
-  String _incrementUntilAvailable(String defaultNamespace,
-      [Map<Uri, String> existingNamespaces]) {
-    existingNamespaces ??= _namespaces;
+  String _incrementUntilAvailable(
+      String defaultNamespace, Map<Uri, String> existingNamespaces) {
     var count = 1;
     var namespace = defaultNamespace;
     while (existingNamespaces.containsValue(namespace)) {
@@ -566,7 +559,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
     }
-    patchNamespace(_findBuiltInNamespaceUNSUREOFNAME(namespace));
+    patchNamespace(_findOrAddBuiltInNamespace(namespace));
     if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
 
@@ -647,8 +640,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // If a member from this dependency is actually referenced, it should
       // already have a namespace from [_determineNamespaces], so we just use
       // a simple number suffix to resolve conflicts at this point.
-      _namespaces.putIfAbsent(
-          _lastUrl, () => _incrementUntilAvailable(defaultNamespace));
+      _namespaces.putIfAbsent(_lastUrl,
+          () => _incrementUntilAvailable(defaultNamespace, _namespaces));
       var namespace = _namespaces[_lastUrl];
       if (namespace != defaultNamespace) asClause = ' as $namespace';
     }
@@ -718,7 +711,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
     if (!_useAllowed) {
-      var namespace = _findBuiltInNamespaceUNSUREOFNAME('meta');
+      var namespace = _findOrAddBuiltInNamespace('meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch(node.span,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
@@ -816,9 +809,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Returns the namespace that built-in module [module] is loaded under.
   ///
   /// This adds an additional `@use` rule if [module] has not been loaded yet.
-  String _findBuiltInNamespaceUNSUREOFNAME(String module) {
+  String _findOrAddBuiltInNamespace(String module) {
     var url = Uri.parse("sass:$module");
-    _namespaces.putIfAbsent(url, () => _resolveBuiltInNamespace(module));
+    _namespaces.putIfAbsent(
+        url, () => _resolveBuiltInNamespace(module, _namespaces));
     var namespace = _namespaces[url];
     if (!_usedUrls.contains(url)) {
       _usedUrls.add(url);
@@ -842,7 +836,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // by [references.sources], so we add a namespace with simple conflict
       // resolution if one for this URL doesn't already exist.
       _namespaces.putIfAbsent(
-          url, () => _incrementUntilAvailable(defaultNamespace));
+          url, () => _incrementUntilAvailable(defaultNamespace, _namespaces));
       var namespace = _namespaces[url];
       var asClause = defaultNamespace == namespace ? '' : ' as $namespace';
       _usedUrls.add(url);

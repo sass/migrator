@@ -33,7 +33,8 @@ Patch patchAfter(AstNode node, String text) {
 }
 
 /// Returns true if [map] does not contain any duplicate values.
-bool valuesAreUnique(Map map) => map.values.toSet().length == map.length;
+bool valuesAreUnique(Map<Object, Object> map) =>
+    map.values.toSet().length == map.length;
 
 /// Creates a patch deleting all of or part of [span].
 ///
