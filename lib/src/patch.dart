@@ -16,6 +16,10 @@ class Patch {
   /// Constructs a patch that replaces [selection] with [replacement].
   const Patch(this.selection, this.replacement);
 
+  /// Constructs a patch that inserts [replacement] at [location].
+  Patch.insert(FileLocation location, String replacement)
+      : this(location.pointSpan(), replacement);
+
   /// Applies a series of non-overlapping patches to the text of a file.
   static String applyAll(SourceFile file, List<Patch> patches) {
     var sortedPatches = patches.toList()

@@ -1,0 +1,5 @@
+<==> input/entrypoint.sass
+@import "one.css", "http://two", "three" screen
+
+<==> log.txt
+Nothing to migrate!

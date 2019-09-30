@@ -4,7 +4,9 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:charcode/charcode.dart';
 import 'package:source_span/source_span.dart';
+import 'package:tuple/tuple.dart';
 
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
@@ -22,16 +24,12 @@ String namespaceForPath(String path) {
 }
 
 /// Creates a patch that adds [text] immediately before [node].
-Patch patchBefore(AstNode node, String text) {
-  var start = node.span.start;
-  return Patch(start.file.span(start.offset, start.offset), text);
-}
+Patch patchBefore(AstNode node, String text) =>
+    Patch.insert(node.span.start, text);
 
 /// Creates a patch that adds [text] immediately after [node].
-Patch patchAfter(AstNode node, String text) {
-  var end = node.span.end;
-  return Patch(end.file.span(end.offset, end.offset), text);
-}
+Patch patchAfter(AstNode node, String text) =>
+    Patch.insert(node.span.end, text);
 
 /// Returns true if [map] does not contain any duplicate values.
 bool valuesAreUnique(Map<Object, Object> map) =>
@@ -47,6 +45,53 @@ Patch patchDelete(FileSpan span, {int start = 0, int end}) =>
 /// Returns a subsection of [span].
 FileSpan subspan(FileSpan span, {int start = 0, int end}) => span.file
     .span(span.start.offset + start, span.start.offset + (end ?? span.length));
+
+/// Extends [span] so it encompasses any whitespace on either side of it.
+FileSpan extendThroughWhitespace(FileSpan span) {
+  var text = span.file.getText(0);
+
+  var start = span.start.offset - 1;
+  for (; start >= 0; start--) {
+    if (!isWhitespace(text.codeUnitAt(start))) break;
+  }
+
+  var end = span.end.offset;
+  for (; end < text.length; end++) {
+    if (!isWhitespace(text.codeUnitAt(end))) break;
+  }
+
+  // Add 1 to start because it's guaranteed to end on either -1 or a character
+  // that's not whitespace.
+  return span.file.span(start + 1, end);
+}
+
+/// Extends [span] forward if it's followed by exactly [text].
+///
+/// If [span] is followed by anything other than [text], returns `null`.
+FileSpan extendForward(FileSpan span, String text) {
+  var end = span.end.offset;
+  if (end + text.length > span.file.length) return null;
+  if (span.file.getText(end, end + text.length) != text) return null;
+  return span.file.span(span.start.offset, end + text.length);
+}
+
+/// Extends [span] backward if it's preceded by exactly [text].
+///
+/// If [span] is preceded by anything other than [text], returns `null`.
+FileSpan extendBackward(FileSpan span, String text) {
+  var start = span.start.offset;
+  if (start - text.length < 0) return null;
+  if (span.file.getText(start - text.length, start) != text) return null;
+  return span.file.span(start - text.length, span.end.offset);
+}
+
+/// Returns whether [character] is whitespace, according to Sass's definition.
+bool isWhitespace(int character) =>
+    character == $space ||
+    character == $tab ||
+    character == $lf ||
+    character == $cr ||
+    character == $ff;
 
 /// Returns a span containing the name of a member declaration or reference.
 ///
@@ -140,4 +185,24 @@ FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
   return (moduleArg as StringExpression).hasQuotes
       ? subspan(moduleArg.span, start: 1, end: moduleArg.span.length - 2)
       : moduleArg.span;
+}
+
+/// Partitions [iterable] into two lists based on the types of its inputs.
+///
+/// This asserts that every element in [iterable] is either an `F` or a `G`, and
+/// returns one list containing all the `F`s and one containing all the `G`s.
+Tuple2<List<F>, List<G>> partitionOnType<E, F extends E, G extends E>(
+    Iterable<E> iterable) {
+  var fs = <F>[];
+  var gs = <G>[];
+
+  for (var element in iterable) {
+    if (element is F) {
+      fs.add(element);
+    } else {
+      gs.add(element as G);
+    }
+  }
+
+  return Tuple2(fs, gs);
 }
