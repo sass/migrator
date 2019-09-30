@@ -629,17 +629,47 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// file.
   @override
   void visitImportRule(ImportRule node) {
-    if (node.imports.first is StaticImport) {
+    var imports =
+        partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
+    var staticImports = imports.item1;
+    var dynamicImports = imports.item2;
+
+    var start = node.span.start;
+    var first = true;
+    for (var import in dynamicImports) {
+      if (first) {
+        first = false;
+      } else {
+        addPatch(Patch.insert(start, "\n"));
+      }
+
+      _migrateImport(import, start);
+    }
+
+    if (staticImports.isNotEmpty) {
+      if (dynamicImports.isNotEmpty) addPatch(Patch.insert(start, "\n"));
+
       _useAllowed = false;
       super.visitImportRule(node);
-      return;
-    }
-    if (node.imports.length > 1) {
-      throw UnimplementedError(
-          "Migration of @import rule with multiple imports not supported.");
-    }
-    var import = node.imports.first as DynamicImport;
 
+      // Delete any dynamic imports intermixed with static imports, as well as
+      // any whitespace surrounding them and the preceding comma separator (or
+      // following if the first import is dynamic).
+      for (var import in dynamicImports) {
+        var extended = extendThroughWhitespace(import.span);
+        addPatch(patchDelete(
+            extendForward(extended, ",") ?? extendBackward(extended, ",")));
+      }
+    } else {
+      addPatch(patchDelete(node.span));
+    }
+  }
+
+  /// Migrates a single imported URL to a `@use` rule.
+  ///
+  /// The [importStart] is the original location of the beginning of the
+  /// `@import` rule, at which point the new `@use` should be injected.
+  void _migrateImport(DynamicImport import, FileLocation importStart) {
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
@@ -699,8 +729,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             "not possible in the module system.",
             firstConfig.member.span);
       }
-      addPatch(patchBefore(
-          node,
+      addPatch(Patch.insert(
+          importStart,
           "@forward ${import.span.text} show " +
               externallyConfiguredVariables.keys
                   .map((variable) => "\$$variable")
@@ -737,19 +767,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (configured.length == 1) {
       configuration = " with (" + configured.first + ")";
     } else if (configured.isNotEmpty) {
-      var indent = ' ' * node.span.start.column;
+      var indent = ' ' * importStart.column;
       configuration =
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
     if (!_useAllowed) {
       var namespace = _findOrAddBuiltInNamespace('meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
-      addPatch(Patch(node.span,
+      addPatch(Patch.insert(importStart,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
       _usedUrls.add(_lastUrl);
-      addPatch(
-          Patch(node.span, '@use ${import.span.text}$asClause$configuration'));
+      addPatch(Patch.insert(
+          importStart, '@use ${import.span.text}$asClause$configuration'));
     }
   }
 

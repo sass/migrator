@@ -106,12 +106,16 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
 
     if (argResults['dry-run']) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
+
       for (var url in migrated.keys) {
-        print(p.prettyUri(url));
         if (argResults['verbose']) {
-          print('=' * 80);
+          // This isn't *strictly* HRX format, since it can produce absolute
+          // URLs rather than those that are relative to the HRX root, but we
+          // just need it to be readable, not to interoperate with other tools.
+          print('<===> ${p.prettyUri(url)}');
           print(migrated[url]);
-          print('-' * 80);
+        } else {
+          print(p.prettyUri(url));
         }
       }
     } else {
