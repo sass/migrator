@@ -15,12 +15,13 @@ import 'package:sass/src/import_cache.dart';
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
-import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 
 import 'exception.dart';
 import 'io.dart';
 import 'utils.dart';
+import 'util/node_modules_importer.dart';
+import 'util/reversible_filesystem_importer.dart';
 
 /// A migrator is a command that migrates the entrypoints provided to it and
 /// (optionally) their dependencies.
@@ -74,8 +75,11 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    var importCache = ImportCache([NodeModulesImporter()],
-        loadPaths: globalResults['load-path']);
+    var importCache = ImportCache([
+      for (var path in globalResults['load-path'] as List<String>)
+        ReversibleFilesystemImporter(path),
+      NodeModulesImporter()
+    ]);
     for (var entrypoint in argResults.rest) {
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
