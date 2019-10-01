@@ -116,6 +116,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
       // If [dependency] comes from a non-relative import, don't migrate it,
       // because it's likely to be outside the user's repository and may even be
       // authored by a different person.
+      //
+      // TODO(nweiz): Add a flag to override this behavior for load paths
+      // (#104).
       if (result.item1 != _importer) return;
 
       var oldImporter = _importer;
@@ -123,19 +126,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
       var stylesheet = result.item2;
       visitStylesheet(stylesheet);
       _importer = oldImporter;
-    } else {
-      handleMissingDependency(dependency, context);
     }
-  }
-
-  /// Adds the missing [dependency] within the stylesheet at [source] to the
-  /// missing dependency list to warn after migration completes.
-  ///
-  /// Migrators should override this if they want a different behavior.
-  @protected
-  void handleMissingDependency(Uri dependency, FileSpan context) {
-    _missingDependencies.putIfAbsent(
-        context.sourceUrl.resolveUri(dependency), () => context);
   }
 
   /// Returns the migrated contents of this file, or null if the file does not

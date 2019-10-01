@@ -1,0 +1,22 @@
+<==> input/entrypoint.scss
+@import "a";
+@import "b";
+
+a {
+  color: fn();
+}
+
+<==> input/_a.scss
+@import "b";
+@function fn() {@return blue;}
+
+<==> input/_b.scss
+@function fn() {@return green;}
+
+<==> output/entrypoint.scss
+@use "a";
+@use "b";
+
+a {
+  color: b.fn();
+}

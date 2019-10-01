@@ -320,14 +320,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
               import.span);
         }
 
-        // TODO(nweiz): Rather than skipping a stylesheet we've already visited,
-        // visit it again and throw an error if it produces different results
-        // (#99).
-        var url = result.item2.span.sourceUrl;
-        if (_importers.containsKey(url)) return;
-
         var oldImporter = _importer;
         _importer = result.item1;
+        var url = result.item2.span.sourceUrl;
         _importers[url] = _importer;
         visitStylesheet(result.item2);
         var importSource = ImportSource(url, import);
