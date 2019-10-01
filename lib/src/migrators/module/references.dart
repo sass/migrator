@@ -7,6 +7,7 @@
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
+import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
 import 'package:sass/src/importer/utils.dart';
@@ -14,7 +15,9 @@ import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:collection/collection.dart';
+import 'package:path/path.dart' as p;
 
+import '../../exception.dart';
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
 import '../../utils.dart';
@@ -311,7 +314,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       if (import is DynamicImport) {
         var result =
             importCache.import(Uri.parse(import.url), _importer, _currentUrl);
-        if (result == null) return;
+        if (result == null) {
+          throw MigrationSourceSpanException(
+              "Could not find Sass file at '${p.prettyUri(import.url)}'.",
+              import.span);
+        }
 
         // TODO(nweiz): Rather than skipping a stylesheet we've already visited,
         // visit it again and throw an error if it produces different results
@@ -345,7 +352,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _namespaces[node.namespace] = node.url;
       return;
     }
-    var canonicalUrl = _loadUseOrForward(node.url);
+    var canonicalUrl = _loadUseOrForward(node.url, node);
     _namespaces[node.namespace] = canonicalUrl;
 
     var moduleSources = _moduleSources[canonicalUrl];
@@ -361,10 +368,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// Given a URL from a `@use` or `@forward` rule, loads and visits the
   /// stylesheet it points to and returns its canonical URL.
-  Uri _loadUseOrForward(Uri ruleUrl) {
+  Uri _loadUseOrForward(Uri ruleUrl, AstNode nodeForSpan) {
     var result =
         inUseRule(() => importCache.import(ruleUrl, _importer, _currentUrl));
-    if (result == null) return null;
+    if (result == null) {
+      throw MigrationSourceSpanException(
+          "Could not find Sass file at '${p.prettyUri(ruleUrl)}'.",
+          nodeForSpan.span);
+    }
+
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
     if (_moduleScopes.containsKey(canonicalUrl)) return canonicalUrl;
@@ -391,7 +403,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitForwardRule(ForwardRule node) {
     super.visitForwardRule(node);
-    var canonicalUrl = _loadUseOrForward(node.url);
+    var canonicalUrl = _loadUseOrForward(node.url, node);
     var moduleScope = _moduleScopes[canonicalUrl];
     for (var declaration in moduleScope.variables.values) {
       if (declaration.member is! VariableDeclaration) {

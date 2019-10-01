@@ -80,9 +80,6 @@ class ModuleMigrator extends Migrator {
 
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
-  ///
-  /// If [migrateDependencies] is false, the migrator will still be run on
-  /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forward = ForwardType(argResults['forward']);
@@ -92,20 +89,17 @@ class ModuleMigrator extends Migrator {
           'You must provide --remove-prefix with --forward=prefixed so we know '
           'which prefixed members to forward.');
     }
+
     var references = References(importCache, stylesheet, importer);
     var visitor = _ModuleMigrationVisitor(
         importCache, references, globalResults['load-path'] as List<String>,
+        migrateDependencies: migrateDependencies,
         prefixToRemove:
             (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
         forward: forward);
     var migrated = visitor.run(stylesheet, importer);
     _filesWithRenamedDeclarations.addAll(visitor.renamedMembers.keys
         .map((declaration) => declaration.sourceUrl));
-    if (!migrateDependencies) {
-      var importOnlyUrl = getImportOnlyUrl(stylesheet.span.sourceUrl);
-      migrated.removeWhere((url, contents) =>
-          url != stylesheet.span.sourceUrl && url != importOnlyUrl);
-    }
     return migrated;
   }
 }
@@ -189,10 +183,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
   _ModuleMigrationVisitor(
       this.importCache, this.references, List<String> loadPaths,
-      {this.prefixToRemove, this.forward})
+      {bool migrateDependencies, this.prefixToRemove, this.forward})
       : loadPaths =
             loadPaths.map((path) => p.toUri(p.absolute(path)).path).toList(),
-        super(importCache, migrateDependencies: true);
+        super(importCache, migrateDependencies: migrateDependencies);
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.
@@ -347,14 +341,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     forwards.sort();
     return forwards.join('');
-  }
-
-  /// Immediately throw a [MigrationException] when a missing dependency is
-  /// encountered, as the module migrator needs to traverse all dependencies.
-  @override
-  void handleMissingDependency(Uri dependency, FileSpan context) {
-    throw MigrationSourceSpanException(
-        "Could not find Sass file at '${p.prettyUri(dependency)}'.", context);
   }
 
   /// Stores per-file state and determines namespaces for this stylesheet before
@@ -700,7 +686,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
 
     var parsedUrl = Uri.parse(import.url);
-    visitDependency(parsedUrl, import.span);
+    if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
 
     // Associate the importer for this URL with the resolved URL so that we can
