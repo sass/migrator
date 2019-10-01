@@ -126,6 +126,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
       var stylesheet = result.item2;
       visitStylesheet(stylesheet);
       _importer = oldImporter;
+    } else {
+      _missingDependencies.putIfAbsent(
+          context.sourceUrl.resolveUri(dependency), () => context);
     }
   }
 
