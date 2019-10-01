@@ -115,6 +115,7 @@ const builtInFunctionNameChanges = {
 /// If the value from the removed function must be negated when passed to
 /// `adjust-color`, the parameter ends with a `-`.
 const removedColorFunctions = {
+  "adjust-hue": r"$hue: ",
   "lighten": r"$lightness: ",
   "darken": r"$lightness: -",
   "saturate": r"$saturation: ",

@@ -8,6 +8,7 @@ $f: fade-in($color: purple, $amount: 10%);
 $g: transparentize(#37f, 20%);
 $h: fade-out(rgba(10, 20, 30, 0.5), 10%);
 $i: lighten(pink, 5%, 10%); // too many arguments
+$j: adjust-hue(green, 10%);
 
 <==> output/entrypoint.scss
 @use "sass:color";
@@ -20,6 +21,7 @@ $f: color.adjust($color: purple, $alpha: 10%);
 $g: color.adjust(#37f, $alpha: -20%);
 $h: color.adjust(rgba(10, 20, 30, 0.5), $alpha: -10%);
 $i: lighten(pink, 5%, 10%); // too many arguments
+$j: color.adjust(green, $hue: 10%);
 
 <==> warning.txt
 WARNING on line 9, column 5 of entrypoint.scss: Could not migrate malformed 'lighten' call
