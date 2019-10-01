@@ -9,7 +9,7 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
-import 'reference_source.dart';
+import 'member_declaration.dart';
 
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.
@@ -21,13 +21,14 @@ class Scope {
   ///
   /// These are usually VariableDeclarations, but can also be Arguments from
   /// a CallableDeclaration.
-  final variables = <String, SassNode /*VariableDeclaration|Argument*/ >{};
+  final variables =
+      <String, MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>{};
 
   /// Mixins defined in this scope.
-  final mixins = <String, MixinRule>{};
+  final mixins = <String, MemberDeclaration<MixinRule>>{};
 
   /// Functions defined in this scope.
-  final functions = <String, FunctionRule>{};
+  final functions = <String, MemberDeclaration<FunctionRule>>{};
 
   Scope([this.parent]);
 
@@ -43,15 +44,16 @@ class Scope {
 
   /// Returns the declaration of a variable named [name] if it exists, or null
   /// if it does not.
-  SassNode findVariable(String name) =>
+  MemberDeclaration findVariable(String name) =>
       variables[name] ?? parent?.findVariable(name);
 
   /// Returns the declaration of a mixin named [name] if it exists, or null if
   /// it does not.
-  MixinRule findMixin(String name) => mixins[name] ?? parent?.findMixin(name);
+  MemberDeclaration<MixinRule> findMixin(String name) =>
+      mixins[name] ?? parent?.findMixin(name);
 
   /// Returns the declaration of a function named [name] if it exists, or null
   /// if it does not.
-  FunctionRule findFunction(String name) =>
+  MemberDeclaration<FunctionRule> findFunction(String name) =>
       functions[name] ?? parent?.findFunction(name);
 }

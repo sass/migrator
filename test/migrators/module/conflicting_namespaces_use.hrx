@@ -1,0 +1,26 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@use "a/variables";
+@import "b/variables";
+
+a {
+  color: variables.$a;
+  background: $b;
+}
+
+<==> input/a/_variables.scss
+$a: blue;
+
+<==> input/b/_variables.scss
+$b: green;
+
+<==> output/entrypoint.scss
+@use "a/variables";
+@use "b/variables" as b-variables;
+
+a {
+  color: variables.$a;
+  background: b-variables.$b;
+}

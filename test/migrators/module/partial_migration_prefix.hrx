@@ -1,0 +1,34 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "library";
+
+a {
+  color: $lib-variable;
+  background: lib-fn();
+  @include lib-mixin;
+}
+
+<==> input/_library.scss
+$variable: green;
+
+@function fn() {
+  @return blue;
+}
+
+@mixin mixin {
+  display: block;
+}
+
+<==> input/_library.import.scss
+@forward "library" as lib-*;
+
+<==> output/entrypoint.scss
+@use "library";
+
+a {
+  color: library.$variable;
+  background: library.fn();
+  @include library.mixin;
+}

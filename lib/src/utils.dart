@@ -187,6 +187,14 @@ FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
       : moduleArg.span;
 }
 
+/// Returns the import-only URL that corresponds to a regular canonical [url].
+Uri getImportOnlyUrl(Uri url) {
+  var filename = url.pathSegments.last;
+  var extension = filename.split('.').last;
+  var basename = filename.substring(0, filename.length - extension.length - 1);
+  return url.resolve('$basename.import.$extension');
+}
+
 /// Partitions [iterable] into two lists based on the types of its inputs.
 ///
 /// This asserts that every element in [iterable] is either an `F` or a `G`, and

@@ -15,12 +15,11 @@ $lib_b: $lib-a + 2
 @function lib-fn($lib-local)
   @return $lib-local
 
-$result: lib-fn(0)
-
 =lib-mixin
   lib-property: lib-value
 
 lib-selector
+  lib-property: lib-fn(0)
   +lib-mixin
 
 <==> output/entrypoint.sass
@@ -30,10 +29,12 @@ $b: $a + 2
 @function fn($lib-local)
   @return $lib-local
 
-$result: fn(0)
-
 =mixin
   lib-property: lib-value
 
 lib-selector
+  lib-property: fn(0)
   +mixin
+
+<==> output/entrypoint.import.sass
+@forward "entrypoint" as lib-*
