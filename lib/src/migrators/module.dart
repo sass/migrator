@@ -15,13 +15,15 @@ import 'package:args/args.dart';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
+import 'package:tuple/tuple.dart';
 
 import '../exception.dart';
 import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
 import '../utils.dart';
-import '../util/reversible_importer.dart';
+import '../util/node_modules_importer.dart';
+
 import 'module/built_in_functions.dart';
 import 'module/forward_type.dart';
 import 'module/member_declaration.dart';
@@ -119,6 +121,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// declaration will be used for namespacing instead of this one.
   final _reassignedVariables = <MemberDeclaration<VariableDeclaration>>{};
 
+  /// Maps canonical URLs to the original URL and importer from the `@import`
+  /// rule that last imported that URL.
+  final _originalImports = <Uri, Tuple2<String, Importer>>{};
+
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
 
@@ -144,10 +150,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
-
-  /// The importer used to load files relative to the entrypoint, as opposed to
-  /// through `node_modules` or load paths.
-  Importer _entrypointImporter;
 
   /// A mapping between member declarations and references.
   ///
@@ -190,7 +192,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// migrator.
   @override
   Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
-    _entrypointImporter = importer;
     references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
 
@@ -688,8 +689,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
 
-    var resolvedUrl =
-        importCache.canonicalize(parsedUrl, importer, currentUrl).item2;
+    // Associate the importer for this URL with the resolved URL so that we can
+    // re-use this import URL later on.
+    var tuple = importCache.canonicalize(parsedUrl, importer, currentUrl);
+    var resolvedUrl = tuple.item2;
+    _originalImports.putIfAbsent(
+        resolvedUrl, () => Tuple2(import.url, tuple.item1));
+
     var asClause = '';
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
@@ -951,11 +957,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `@use`, `@forward`, or `@import` rule.
   String _absoluteUrlToDependency(Uri url, {Uri relativeTo}) {
     relativeTo ??= currentUrl;
-
-    var importer = references.importers[url];
-    if (importer != _entrypointImporter) {
-      return (importer as ReversibleImporter).decanonicalize(url).toString();
-    }
+    var tuple = _originalImports[url];
+    if (tuple?.item2 is NodeModulesImporter) return tuple.item1;
 
     var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
     var potentialUrls = [

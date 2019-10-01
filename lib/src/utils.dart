@@ -5,7 +5,6 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:charcode/charcode.dart';
-import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 import 'package:tuple/tuple.dart';
 
@@ -194,14 +193,6 @@ Uri getImportOnlyUrl(Uri url) {
   var extension = filename.split('.').last;
   var basename = filename.substring(0, filename.length - extension.length - 1);
   return url.resolve('$basename.import.$extension');
-}
-
-/// Removes a non-canonical URL's basename's initial `_` and extension.
-Uri cleanBasename(Uri url) {
-  var string = url.toString();
-  var basename = p.url.basenameWithoutExtension(string);
-  if (basename.startsWith("_")) basename = basename.substring(1);
-  return Uri.parse(p.url.join(p.url.dirname(string), basename));
 }
 
 /// Partitions [iterable] into two lists based on the types of its inputs.
