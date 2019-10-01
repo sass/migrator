@@ -58,7 +58,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   Uri get currentUrl => _currentUrl;
   Uri _currentUrl;
 
-  /// The importer that's currently being used to resolve relative imports.
+  /// The importer that's being used to resolve relative imports.
   ///
   /// If this is `null`, relative imports aren't supported in the current
   /// stylesheet.
@@ -113,6 +113,11 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   void visitDependency(Uri dependency, FileSpan context) {
     var result = importCache.import(dependency, _importer, _currentUrl);
     if (result != null) {
+      // If [dependency] comes from a non-relative import, don't migrate it,
+      // because it's likely to be outside the user's repository and may even be
+      // authored by a different person.
+      if (result.item1 != _importer) return;
+
       var oldImporter = _importer;
       _importer = result.item1;
       var stylesheet = result.item2;

@@ -1,0 +1,23 @@
+<==> arguments
+--migrate-deps --load-path a/b/c
+
+<==> input/entrypoint.scss
+@import "dependency";
+
+a {
+  color: $variable;
+}
+
+<==> input/a/b/c/_dependency.scss
+@import "other"
+
+<==> input/a/b/c/_other.scss
+$variable: green;
+
+<==> output/entrypoint.scss
+@use "other";
+@use "dependency";
+
+a {
+  color: other.$variable;
+}

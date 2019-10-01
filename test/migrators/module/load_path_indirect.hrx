@@ -1,28 +1,25 @@
 <==> arguments
---migrate-deps --load-path .
+--migrate-deps --load-path load_path
 
 <==> README
 This test confirms that the URLs of extra `@use` rules can be written relative
 to a load path instead of the current file if the resulting URL is shorter.
 
-<==> input/entrypoint/a/b/c.scss
+<==> input/entrypoint.scss
 @import "direct";
 a {
   color: $variable;
 }
 
-<==> input/_direct.scss
+<==> input/load_path/_direct.scss
 @import "indirect";
 
-<==> input/_indirect.scss
+<==> input/load_path/_indirect.scss
 $variable: blue;
 
-<==> output/entrypoint/a/b/c.scss
+<==> output/entrypoint.scss
 @use "indirect";
 @use "direct";
 a {
   color: indirect.$variable;
 }
-
-<==> output/_direct.scss
-@use "indirect";
