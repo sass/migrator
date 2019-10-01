@@ -6,6 +6,10 @@
 
 import 'dart:collection';
 
+import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
+import 'package:source_span/source_span.dart';
+
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
@@ -14,9 +18,7 @@ import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
-import 'package:meta/meta.dart';
-import 'package:source_span/source_span.dart';
-
+import 'exception.dart';
 import 'patch.dart';
 
 /// A visitor that migrates a stylesheet.
@@ -87,10 +89,20 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _patches = [];
     _currentUrl = node.span.sourceUrl;
     super.visitStylesheet(node);
+
     var results = getMigratedContents();
     if (results != null) {
-      _migrated[node.span.sourceUrl] = results;
+      var existingResults = _migrated[_currentUrl];
+      if (existingResults != null && existingResults != results) {
+        throw MigrationException(
+            "The migrator has found multiple possible migrations for "
+            "${p.prettyUri(_currentUrl)}, depending on the context in which "
+            "it's loaded.");
+      }
+
+      _migrated[_currentUrl] = results;
     }
+
     _patches = oldPatches;
     _currentUrl = oldUrl;
   }

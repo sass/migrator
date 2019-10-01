@@ -87,7 +87,8 @@ abstract class Migrator extends Command<Map<Uri, String>> {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {
           throw MigrationException(
-              "$file is migrated in more than one way by these entrypoints.");
+              "The migrator has found multiple possible migrations for $file, "
+              "depending on the context in which it's loaded.");
         }
         allMigrated[file] = migrated[file];
       }
