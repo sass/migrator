@@ -15,15 +15,13 @@ import 'package:args/args.dart';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
-import 'package:tuple/tuple.dart';
 
 import '../exception.dart';
 import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
 import '../utils.dart';
-import '../util/node_modules_importer.dart';
-
+import '../util/reversible_importer.dart';
 import 'module/built_in_functions.dart';
 import 'module/forward_type.dart';
 import 'module/member_declaration.dart';
@@ -80,9 +78,6 @@ class ModuleMigrator extends Migrator {
 
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
-  ///
-  /// If [migrateDependencies] is false, the migrator will still be run on
-  /// dependencies, but they will be excluded from the resulting map.
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forward = ForwardType(argResults['forward']);
@@ -92,20 +87,17 @@ class ModuleMigrator extends Migrator {
           'You must provide --remove-prefix with --forward=prefixed so we know '
           'which prefixed members to forward.');
     }
+
     var references = References(importCache, stylesheet, importer);
     var visitor = _ModuleMigrationVisitor(
         importCache, references, globalResults['load-path'] as List<String>,
+        migrateDependencies: migrateDependencies,
         prefixToRemove:
             (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
         forward: forward);
     var migrated = visitor.run(stylesheet, importer);
     _filesWithRenamedDeclarations.addAll(visitor.renamedMembers.keys
         .map((declaration) => declaration.sourceUrl));
-    if (!migrateDependencies) {
-      var importOnlyUrl = getImportOnlyUrl(stylesheet.span.sourceUrl);
-      migrated.removeWhere((url, contents) =>
-          url != stylesheet.span.sourceUrl && url != importOnlyUrl);
-    }
     return migrated;
   }
 }
@@ -126,10 +118,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// When a reference to this declaration is encountered, the original
   /// declaration will be used for namespacing instead of this one.
   final _reassignedVariables = <MemberDeclaration<VariableDeclaration>>{};
-
-  /// Maps canonical URLs to the original URL and importer from the `@import`
-  /// rule that last imported that URL.
-  final _originalImports = <Uri, Tuple2<String, Importer>>{};
 
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
@@ -157,8 +145,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
 
-  /// The URL of the last stylesheet that was completely migrated.
-  Uri _lastUrl;
+  /// The importer used to load files relative to the entrypoint, as opposed to
+  /// through `node_modules` or load paths.
+  Importer _entrypointImporter;
 
   /// A mapping between member declarations and references.
   ///
@@ -192,25 +181,26 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
   _ModuleMigrationVisitor(
       this.importCache, this.references, List<String> loadPaths,
-      {this.prefixToRemove, this.forward})
+      {bool migrateDependencies, this.prefixToRemove, this.forward})
       : loadPaths =
             loadPaths.map((path) => p.toUri(p.absolute(path)).path).toList(),
-        super(importCache, migrateDependencies: true);
+        super(importCache, migrateDependencies: migrateDependencies);
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.
   @override
   Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
+    _entrypointImporter = importer;
     references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
 
     // If a prefix was removed from any members, add an import-only stylesheet
     // that forwards the entrypoint with that prefix.
     if (prefixToRemove != null && renamedMembers.isNotEmpty) {
-      var importOnlyUrl = getImportOnlyUrl(_lastUrl);
-      var dependency =
-          _absoluteUrlToDependency(_lastUrl, relativeTo: importOnlyUrl);
-      var results = _generateImportOnly(_lastUrl, dependency);
+      var url = stylesheet.span.sourceUrl;
+      var importOnlyUrl = getImportOnlyUrl(url);
+      var dependency = _absoluteUrlToDependency(url, relativeTo: importOnlyUrl);
+      var results = _generateImportOnly(url, dependency);
       if (results != null) migrated[importOnlyUrl] = results;
     }
     return migrated;
@@ -352,14 +342,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return forwards.join('');
   }
 
-  /// Immediately throw a [MigrationException] when a missing dependency is
-  /// encountered, as the module migrator needs to traverse all dependencies.
-  @override
-  void handleMissingDependency(Uri dependency, FileSpan context) {
-    throw MigrationSourceSpanException(
-        "Could not find Sass file at '${p.prettyUri(dependency)}'.", context);
-  }
-
   /// Stores per-file state and determines namespaces for this stylesheet before
   /// visiting it and restores the per-file state afterwards.
   @override
@@ -376,7 +358,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _namespaces = oldNamespaces;
     _usedUrls = oldHasUseRule;
     _additionalUseRules = oldAdditionalUseRules;
-    _lastUrl = node.span.sourceUrl;
     _useAllowed = oldUseAllowed;
   }
 
@@ -702,14 +683,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _unreferencable.add(declaration, UnreferencableType.fromImporter);
       }
     }
-    visitDependency(Uri.parse(import.url), import.span);
+
+    var parsedUrl = Uri.parse(import.url);
+    if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
-    _originalImports[_lastUrl] = Tuple2(import.url, importer);
+
+    var resolvedUrl =
+        importCache.canonicalize(parsedUrl, importer, currentUrl).item2;
     var asClause = '';
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.allDeclarations) {
-        if (declaration.sourceUrl != _lastUrl) continue;
+        if (declaration.sourceUrl != resolvedUrl) continue;
         _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
       }
     } else {
@@ -717,9 +702,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // If a member from this dependency is actually referenced, it should
       // already have a namespace from [_determineNamespaces], so we just use
       // a simple number suffix to resolve conflicts at this point.
-      _namespaces.putIfAbsent(_lastUrl,
+      _namespaces.putIfAbsent(resolvedUrl,
           () => _incrementUntilAvailable(defaultNamespace, _namespaces));
-      var namespace = _namespaces[_lastUrl];
+      var namespace = _namespaces[resolvedUrl];
       if (namespace != defaultNamespace) asClause = ' as $namespace';
     }
 
@@ -745,7 +730,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var firstConfig = externallyConfiguredVariables.values.first;
         throw MigrationSourceSpanException(
             "This declaration attempts to override a default value in an "
-            "indirect, nested import of ${p.prettyUri(_lastUrl)}, which is "
+            "indirect, nested import of ${p.prettyUri(resolvedUrl)}, which is "
             "not possible in the module system.",
             firstConfig.member.span);
       }
@@ -797,7 +782,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(Patch.insert(importStart,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
-      _usedUrls.add(_lastUrl);
+      _usedUrls.add(resolvedUrl);
       addPatch(Patch.insert(
           importStart, '@use ${import.span.text}$asClause$configuration'));
     }
@@ -966,8 +951,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `@use`, `@forward`, or `@import` rule.
   String _absoluteUrlToDependency(Uri url, {Uri relativeTo}) {
     relativeTo ??= currentUrl;
-    var tuple = _originalImports[url];
-    if (tuple?.item2 is NodeModulesImporter) return tuple.item1;
+
+    var importer = references.importers[url];
+    if (importer != _entrypointImporter) {
+      return (importer as ReversibleImporter).decanonicalize(url).toString();
+    }
 
     var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
     var potentialUrls = [

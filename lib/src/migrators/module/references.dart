@@ -7,6 +7,7 @@
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
+import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
 import 'package:sass/src/importer/utils.dart';
@@ -14,18 +15,14 @@ import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'package:collection/collection.dart';
+import 'package:path/path.dart' as p;
 
+import '../../exception.dart';
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
 import '../../utils.dart';
+import 'built_in_functions.dart';
 import 'member_declaration.dart';
-import 'scope.dart';
-
-import 'built_in_functions.dart';
-import 'reference_source.dart';
-import 'scope.dart';
-
-import 'built_in_functions.dart';
 import 'reference_source.dart';
 import 'scope.dart';
 
@@ -90,6 +87,18 @@ class References {
   /// map to the [ReferenceSource] for the `sass:meta` module).
   final Map<SassNode, ReferenceSource> sources;
 
+  /// The importers that were used to load each canonical URL.
+  ///
+  /// If a URL is loaded multiple times through different importers, this
+  /// contains only the first importer.
+  ///
+  /// This isn't necessarily the same as the importer that would be returned by
+  /// [ImportCache.import]. For URLs that multiple importers canonicalize into
+  /// the same format (like `file:` URLs), the [ImportCache] will use the first
+  /// importer that recognizes the canonical format, whereas this tracks the
+  /// importer that originally loaded the URL from its non-canonical form.
+  final Map<Uri, Importer> importers;
+
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -135,7 +144,8 @@ class References {
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
           getFunctionReferences,
       Set<MemberDeclaration> globalDeclarations,
-      Map<SassNode, ReferenceSource> sources)
+      Map<SassNode, ReferenceSource> sources,
+      Map<Uri, Importer> importers)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -146,7 +156,8 @@ class References {
         getFunctionReferences =
             UnmodifiableBidirectionalMapView(getFunctionReferences),
         globalDeclarations = UnmodifiableSetView(globalDeclarations),
-        sources = UnmodifiableMapView(sources);
+        sources = UnmodifiableMapView(sources),
+        importers = UnmodifiableMapView(importers);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -171,6 +182,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
   final _globalDeclarations = <MemberDeclaration>{};
   final _sources = <SassNode, ReferenceSource>{};
+  final _importers = <Uri, Importer>{};
 
   /// The current global scope.
   ///
@@ -225,6 +237,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   References build(Stylesheet stylesheet, Importer importer) {
     _importer = importer;
     _scope = Scope();
+    _importers[stylesheet.span.sourceUrl] = importer;
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     _declarationSources = {};
     _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
@@ -239,7 +252,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _functions,
         _getFunctionReferences,
         _globalDeclarations,
-        _sources);
+        _sources,
+        _importers);
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -300,21 +314,26 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       if (import is DynamicImport) {
         var result =
             importCache.import(Uri.parse(import.url), _importer, _currentUrl);
-        if (result != null) {
-          var oldImporter = _importer;
-          _importer = result.item1;
-          visitStylesheet(result.item2);
-          var url = result.item2.span.sourceUrl;
-          var importSource = ImportSource(url, import);
-          for (var declaration in _declarationSources.keys.toList()) {
-            var source = _declarationSources[declaration];
-            if (source.url == url &&
-                (source is CurrentSource || source is ForwardSource)) {
-              _declarationSources[declaration] = importSource;
-            }
-          }
-          _importer = oldImporter;
+        if (result == null) {
+          throw MigrationSourceSpanException(
+              "Could not find Sass file at '${p.prettyUri(import.url)}'.",
+              import.span);
         }
+
+        var oldImporter = _importer;
+        _importer = result.item1;
+        var url = result.item2.span.sourceUrl;
+        _importers[url] = _importer;
+        visitStylesheet(result.item2);
+        var importSource = ImportSource(url, import);
+        for (var declaration in _declarationSources.keys.toList()) {
+          var source = _declarationSources[declaration];
+          if (source.url == url &&
+              (source is CurrentSource || source is ForwardSource)) {
+            _declarationSources[declaration] = importSource;
+          }
+        }
+        _importer = oldImporter;
       }
     }
   }
@@ -328,7 +347,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _namespaces[node.namespace] = node.url;
       return;
     }
-    var canonicalUrl = _loadUseOrForward(node.url);
+    var canonicalUrl = _loadUseOrForward(node.url, node);
     _namespaces[node.namespace] = canonicalUrl;
 
     var moduleSources = _moduleSources[canonicalUrl];
@@ -344,27 +363,33 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// Given a URL from a `@use` or `@forward` rule, loads and visits the
   /// stylesheet it points to and returns its canonical URL.
-  Uri _loadUseOrForward(Uri ruleUrl) {
+  Uri _loadUseOrForward(Uri ruleUrl, AstNode nodeForSpan) {
     var result =
         inUseRule(() => importCache.import(ruleUrl, _importer, _currentUrl));
-    if (result == null) return null;
+    if (result == null) {
+      throw MigrationSourceSpanException(
+          "Could not find Sass file at '${p.prettyUri(ruleUrl)}'.",
+          nodeForSpan.span);
+    }
+
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
-    if (!_moduleScopes.containsKey(canonicalUrl)) {
-      var oldScope = _scope;
-      _scope = Scope();
-      _moduleScopes[canonicalUrl] = _scope;
-      var oldSources = _declarationSources;
-      _declarationSources = {};
-      _moduleSources[canonicalUrl] = _declarationSources;
-      var oldImporter = _importer;
-      _importer = result.item1;
-      visitStylesheet(stylesheet);
-      _checkUnresolvedReferences(_scope);
-      _importer = oldImporter;
-      _scope = oldScope;
-      _declarationSources = oldSources;
-    }
+    if (_moduleScopes.containsKey(canonicalUrl)) return canonicalUrl;
+
+    var oldScope = _scope;
+    _scope = Scope();
+    _moduleScopes[canonicalUrl] = _scope;
+    var oldSources = _declarationSources;
+    _declarationSources = {};
+    _importers[canonicalUrl] = result.item1;
+    _moduleSources[canonicalUrl] = _declarationSources;
+    var oldImporter = _importer;
+    _importer = result.item1;
+    visitStylesheet(stylesheet);
+    _checkUnresolvedReferences(_scope);
+    _importer = oldImporter;
+    _scope = oldScope;
+    _declarationSources = oldSources;
     return canonicalUrl;
   }
 
@@ -373,7 +398,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitForwardRule(ForwardRule node) {
     super.visitForwardRule(node);
-    var canonicalUrl = _loadUseOrForward(node.url);
+    var canonicalUrl = _loadUseOrForward(node.url, node);
     var moduleScope = _moduleScopes[canonicalUrl];
     for (var declaration in moduleScope.variables.values) {
       if (declaration.member is! VariableDeclaration) {
