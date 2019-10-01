@@ -157,9 +157,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
 
-  /// The URL of the last stylesheet that was completely migrated.
-  Uri _lastUrl;
-
   /// A mapping between member declarations and references.
   ///
   /// This performs an initial pass to determine how a declaration seen in the
@@ -207,10 +204,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // If a prefix was removed from any members, add an import-only stylesheet
     // that forwards the entrypoint with that prefix.
     if (prefixToRemove != null && renamedMembers.isNotEmpty) {
-      var importOnlyUrl = getImportOnlyUrl(_lastUrl);
-      var dependency =
-          _absoluteUrlToDependency(_lastUrl, relativeTo: importOnlyUrl);
-      var results = _generateImportOnly(_lastUrl, dependency);
+      var url = stylesheet.span.sourceUrl;
+      var importOnlyUrl = getImportOnlyUrl(url);
+      var dependency = _absoluteUrlToDependency(url, relativeTo: importOnlyUrl);
+      var results = _generateImportOnly(url, dependency);
       if (results != null) migrated[importOnlyUrl] = results;
     }
     return migrated;
@@ -376,7 +373,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _namespaces = oldNamespaces;
     _usedUrls = oldHasUseRule;
     _additionalUseRules = oldAdditionalUseRules;
-    _lastUrl = node.span.sourceUrl;
     _useAllowed = oldUseAllowed;
   }
 
@@ -702,14 +698,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _unreferencable.add(declaration, UnreferencableType.fromImporter);
       }
     }
-    visitDependency(Uri.parse(import.url), import.span);
+
+    var parsedUrl = Uri.parse(import.url);
+    visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
-    _originalImports[_lastUrl] = Tuple2(import.url, importer);
+
+    // Associate the importer for this URL with the resolved URL so that we can
+    // re-use this import URL later on.
+    var tuple = importCache.canonicalize(parsedUrl, importer, currentUrl);
+    var resolvedUrl = tuple.item2;
+    _originalImports.putIfAbsent(
+        resolvedUrl, () => Tuple2(import.url, tuple.item1));
+
     var asClause = '';
     if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.allDeclarations) {
-        if (declaration.sourceUrl != _lastUrl) continue;
+        if (declaration.sourceUrl != resolvedUrl) continue;
         _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
       }
     } else {
@@ -717,9 +722,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // If a member from this dependency is actually referenced, it should
       // already have a namespace from [_determineNamespaces], so we just use
       // a simple number suffix to resolve conflicts at this point.
-      _namespaces.putIfAbsent(_lastUrl,
+      _namespaces.putIfAbsent(resolvedUrl,
           () => _incrementUntilAvailable(defaultNamespace, _namespaces));
-      var namespace = _namespaces[_lastUrl];
+      var namespace = _namespaces[resolvedUrl];
       if (namespace != defaultNamespace) asClause = ' as $namespace';
     }
 
@@ -745,7 +750,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var firstConfig = externallyConfiguredVariables.values.first;
         throw MigrationSourceSpanException(
             "This declaration attempts to override a default value in an "
-            "indirect, nested import of ${p.prettyUri(_lastUrl)}, which is "
+            "indirect, nested import of ${p.prettyUri(resolvedUrl)}, which is "
             "not possible in the module system.",
             firstConfig.member.span);
       }
@@ -797,7 +802,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(Patch.insert(importStart,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
-      _usedUrls.add(_lastUrl);
+      _usedUrls.add(resolvedUrl);
       addPatch(Patch.insert(
           importStart, '@use ${import.span.text}$asClause$configuration'));
     }

@@ -113,9 +113,11 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   void visitDependency(Uri dependency, FileSpan context) {
     var result = importCache.import(dependency, _importer, _currentUrl);
     if (result != null) {
+      var oldImporter = _importer;
       _importer = result.item1;
       var stylesheet = result.item2;
       visitStylesheet(stylesheet);
+      _importer = oldImporter;
     } else {
       handleMissingDependency(dependency, context);
     }
