@@ -11,10 +11,10 @@ class Patch {
   final FileSpan selection;
 
   /// Text to replace the selection with.
-  final String replacement;
+  String replacement;
 
   /// Constructs a patch that replaces [selection] with [replacement].
-  const Patch(this.selection, this.replacement);
+  Patch(this.selection, this.replacement);
 
   /// Constructs a patch that inserts [replacement] at [location].
   Patch.insert(FileLocation location, String replacement)

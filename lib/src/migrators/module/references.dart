@@ -561,7 +561,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     scope.variables[node.name] = member;
     if (scope.isGlobal) _globalDeclarations.add(member);
     var original = _variableReassignments[previous] ?? previous;
-    _variableReassignments[member] = original;
+    if (original != null) _variableReassignments[member] = original;
   }
 
   /// Visits the variable reference in [node], storing it.

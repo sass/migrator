@@ -126,6 +126,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// rule that last imported that URL.
   final _originalImports = <Uri, Tuple2<String, Importer>>{};
 
+  /// Tracks `@import` rules within the entrypoint that could potentially be
+  /// converted to `@forward` instead of `@use`.
+  ///
+  /// If an `@import` rule is visited but none of its members are referenced,
+  /// its canonical URL will be added to this, mapped to the patch that
+  /// converted it to a `@use` rule.
+  ///
+  /// When determining `@forward` rules to add based on --forward, if a URL that
+  /// would have an extra rule is a key in this map, the migrator will instead
+  /// mutate the patch to be a `@forward` rule instead of a `@use` rule.
+  final _possibleForwardConversions = <Uri, Patch>{};
+
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
 
@@ -297,10 +309,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Create a `@forward` rule for each dependency that has members that should
     // be forwarded.
-    var forwards = <String>[];
+    var loadPathForwards = <String>[];
+    var relativeForwards = <String>[];
     for (var url in shown.keys) {
       var hiddenCount = hidden[url]?.length ?? 0;
-      var forward = '@forward "${_absoluteUrlToDependency(url).item1}"';
+      var tuple = _absoluteUrlToDependency(url);
+      var forward = '@forward "${tuple.item1}"';
+      var isRelative = tuple.item2;
 
       // When not all members from a dependency should be forwarded, use a
       // `hide` clause to hide the ones that shouldn't.
@@ -308,10 +323,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var hiddenMembers = hidden[url].toList()..sort();
         forward += ' hide ${hiddenMembers.join(", ")}';
       }
-      forward += '$_semicolonIfNotIndented\n';
-      forwards.add(forward);
+      if (_possibleForwardConversions.containsKey(url)) {
+        _possibleForwardConversions[url].replacement = forward;
+      } else {
+        forward += '$_semicolonIfNotIndented\n';
+        (isRelative ? relativeForwards : loadPathForwards).add(forward);
+      }
     }
-    forwards.sort();
+    loadPathForwards.sort();
+    relativeForwards.sort();
+    var forwards = loadPathForwards.followedBy(relativeForwards);
     return forwards.isEmpty ? '' : '\n' + forwards.join('');
   }
 
@@ -794,9 +815,45 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
       _state.usedUrls.add(resolvedUrl);
-      addPatch(Patch.insert(
-          importStart, '@use ${import.span.text}$asClause$configuration'));
+      var patch = Patch.insert(
+          importStart, '@use ${import.span.text}$asClause$configuration');
+      addPatch(patch);
+      if (_upstreamStylesheets.isEmpty &&
+          configuration.isEmpty &&
+          !_anyMemberReferenced(resolvedUrl)) {
+        _possibleForwardConversions[resolvedUrl] = patch;
+      }
     }
+  }
+
+  /// Returns true if any member of [url] is referenced within the current
+  /// stylesheet.
+  bool _anyMemberReferenced(Uri url) {
+    for (var entry in references.variables.entries) {
+      if (entry.key.span.sourceUrl != currentUrl) continue;
+      var declaration = _reassignedVariables.contains(entry.value)
+          ? references.variableReassignments[entry.value]
+          : entry.value;
+      if (declaration.sourceUrl == url) return true;
+    }
+    for (var entry in references.variableReassignments.entries) {
+      if (entry.key.sourceUrl == currentUrl && entry.value.sourceUrl == url) {
+        return true;
+      }
+    }
+    for (var entry in references.mixins.entries) {
+      if (entry.key.span.sourceUrl == currentUrl &&
+          entry.value.sourceUrl == url) {
+        return true;
+      }
+    }
+    for (var entry in references.functions.entries) {
+      if (entry.key.span.sourceUrl == currentUrl &&
+          entry.value.sourceUrl == url) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Adds a namespace to any mixin include that requires it.
@@ -972,6 +1029,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Converts an absolute URL for a stylesheet into the simplest string that
   /// could be used to depend on that stylesheet from the current one in a
   /// `@use`, `@forward`, or `@import` rule.
+  ///
+  /// The first item of the returned tuple is the dependency, the second item
+  /// is true when this dependency is resolved relative to the current URL and
+  /// false when it's resolved relative to a load path.
   Tuple2<String, bool> _absoluteUrlToDependency(Uri url, {Uri relativeTo}) {
     relativeTo ??= currentUrl;
     var tuple = _originalImports[url];
