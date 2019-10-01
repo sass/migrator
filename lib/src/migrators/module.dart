@@ -187,9 +187,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var dependency =
           _absoluteUrlToDependency(_lastUrl, relativeTo: importOnlyUrl);
       var results = _generateImportOnly(_lastUrl, dependency);
-      if (results != null) {
-        migrated[importOnlyUrl] = results;
-      }
+      if (results != null) migrated[importOnlyUrl] = results;
     }
     return migrated;
   }

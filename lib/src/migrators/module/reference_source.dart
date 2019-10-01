@@ -93,10 +93,14 @@ class CurrentSource extends ReferenceSource {
 
 /// A source for members forwarded by a `@forward` rule.
 ///
-/// Note: Unlike the other sources, this source should not be linked directly to
-/// a reference and is instead used by [References] to track members that should
-/// be forwarded out of the current stylesheet and converted to a [UseSource] or
-/// an [ImportSource] by whichever rule ultimately loads it.
+/// This source is used by [_ReferenceVisitor] to track members forwarded in a
+/// stylesheet. It is then replaced by an [ImportSource] or [UseSource] when
+/// that stylesheet is loaded by a `@use` or `@import` rule.
+///
+/// It should not be present in the final [sources] property of [References],
+/// since forwarded members cannot be referenced in the stylesheet that forwards
+/// them, and this will be replaced by an [ImportSource] or [UseSource] in any
+/// context where a forwarded member can be referenced.
 class ForwardSource extends ReferenceSource {
   final Uri url;
 

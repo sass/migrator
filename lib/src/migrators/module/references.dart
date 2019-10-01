@@ -305,11 +305,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
           _importer = result.item1;
           visitStylesheet(result.item2);
           var url = result.item2.span.sourceUrl;
-          var currentSource = CurrentSource(url);
           var importSource = ImportSource(url, import);
           for (var declaration in _declarationSources.keys.toList()) {
             var source = _declarationSources[declaration];
-            if (source == currentSource || source is ForwardSource) {
+            if (source.url == url &&
+                (source is CurrentSource || source is ForwardSource)) {
               _declarationSources[declaration] = importSource;
             }
           }
@@ -332,11 +332,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _namespaces[node.namespace] = canonicalUrl;
 
     var moduleSources = _moduleSources[canonicalUrl];
-    var currentSource = CurrentSource(canonicalUrl);
     var useSource = UseSource(canonicalUrl, node);
     for (var declaration in moduleSources.keys) {
       var source = moduleSources[declaration];
-      if (source == currentSource || source is ForwardSource) {
+      if (source.url == canonicalUrl &&
+          (source is CurrentSource || source is ForwardSource)) {
         _declarationSources[declaration] = useSource;
       }
     }
