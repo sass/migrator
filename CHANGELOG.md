@@ -1,3 +1,7 @@
+## 1.0.0-beta.1
+
+* Too many changes to list.
+
 ## 1.0.0-alpha.5
 
 * **Breaking change**: Remove `lib/runner.dart`. This package is only meant to
