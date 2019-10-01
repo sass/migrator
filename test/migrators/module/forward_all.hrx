@@ -8,5 +8,6 @@
 $variable: blue;
 
 <==> output/entrypoint.scss
-@forward "library";
 @use "library";
+
+@forward "library";

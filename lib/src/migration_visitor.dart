@@ -89,8 +89,10 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _patches = [];
     _currentUrl = node.span.sourceUrl;
     super.visitStylesheet(node);
-
-    var results = getMigratedContents();
+    afterVisitingStylesheet(node);
+    var results = patches.isNotEmpty
+        ? Patch.applyAll(patches.first.selection.file, patches)
+        : null;
     if (results != null) {
       var existingResults = _migrated[_currentUrl];
       if (existingResults != null && existingResults != results) {
@@ -106,6 +108,14 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _patches = oldPatches;
     _currentUrl = oldUrl;
   }
+
+  /// Called after visiting [node], but before [currentUrl] and [patches] are
+  /// reset to their previous values.
+  ///
+  /// A migrator should override this if it needs to add any additional patches
+  /// after a stylesheet is visited.
+  @protected
+  void afterVisitingStylesheet(Stylesheet node) {}
 
   /// Visits the stylesheet at [dependency], resolved based on the current
   /// stylesheet's URL and importer.
@@ -132,20 +142,18 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     }
   }
 
-  /// Returns the migrated contents of this file, or null if the file does not
-  /// change.
-  ///
-  /// This will be called by [run] and the results will be stored in
-  /// `migrator.migrated`.
-  @protected
-  String getMigratedContents() => patches.isNotEmpty
-      ? Patch.applyAll(patches.first.selection.file, patches)
-      : null;
-
   /// Adds a new patch that should be applied to the current stylesheet.
+  ///
+  /// If [beforeExisting] is true, this patch will be added to the beginning of
+  /// the patch list. This should be used for insertion patches that should be
+  /// inserted before any existing insertion patches at the same location.
   @protected
-  void addPatch(Patch patch) {
-    _patches.add(patch);
+  void addPatch(Patch patch, {bool beforeExisting = false}) {
+    if (beforeExisting) {
+      _patches.insert(0, patch);
+    } else {
+      _patches.add(patch);
+    }
   }
 
   /// If [migrateDependencies] is enabled, any dynamic imports within

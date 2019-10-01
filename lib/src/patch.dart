@@ -48,4 +48,7 @@ class Patch {
     buffer.write(file.getText(offset));
     return buffer.toString();
   }
+
+  toString() =>
+      "'${selection.text}' (${selection.start.offset}-${selection.end.offset}) -> '$replacement'";
 }

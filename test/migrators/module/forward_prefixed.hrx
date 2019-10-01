@@ -24,10 +24,11 @@ $c: 3;
 }
 
 <==> output/entrypoint.scss
-@forward "lib1";
-@forward "lib2" hide $c, not-prefixed;
 @use "lib1";
 @use "lib2";
+
+@forward "lib1";
+@forward "lib2" hide $c, not-prefixed;
 
 <==> output/entrypoint.import.scss
 @forward "entrypoint" as lib-*;

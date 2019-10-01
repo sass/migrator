@@ -14,8 +14,9 @@ a {
 $variable: blue;
 
 <==> output/entrypoint.scss
-@use "indirect";
 @use "direct";
+@use "indirect";
+
 a {
   color: indirect.$variable;
 }
