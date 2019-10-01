@@ -21,8 +21,14 @@ import '../../exception.dart';
 import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
 import '../../utils.dart';
-import 'built_in_functions.dart';
 import 'member_declaration.dart';
+import 'scope.dart';
+
+import 'built_in_functions.dart';
+import 'reference_source.dart';
+import 'scope.dart';
+
+import 'built_in_functions.dart';
 import 'reference_source.dart';
 import 'scope.dart';
 
@@ -87,18 +93,6 @@ class References {
   /// map to the [ReferenceSource] for the `sass:meta` module).
   final Map<SassNode, ReferenceSource> sources;
 
-  /// The importers that were used to load each canonical URL.
-  ///
-  /// If a URL is loaded multiple times through different importers, this
-  /// contains only the first importer.
-  ///
-  /// This isn't necessarily the same as the importer that would be returned by
-  /// [ImportCache.import]. For URLs that multiple importers canonicalize into
-  /// the same format (like `file:` URLs), the [ImportCache] will use the first
-  /// importer that recognizes the canonical format, whereas this tracks the
-  /// importer that originally loaded the URL from its non-canonical form.
-  final Map<Uri, Importer> importers;
-
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -144,8 +138,7 @@ class References {
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
           getFunctionReferences,
       Set<MemberDeclaration> globalDeclarations,
-      Map<SassNode, ReferenceSource> sources,
-      Map<Uri, Importer> importers)
+      Map<SassNode, ReferenceSource> sources)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -156,8 +149,7 @@ class References {
         getFunctionReferences =
             UnmodifiableBidirectionalMapView(getFunctionReferences),
         globalDeclarations = UnmodifiableSetView(globalDeclarations),
-        sources = UnmodifiableMapView(sources),
-        importers = UnmodifiableMapView(importers);
+        sources = UnmodifiableMapView(sources);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -182,7 +174,6 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
   final _globalDeclarations = <MemberDeclaration>{};
   final _sources = <SassNode, ReferenceSource>{};
-  final _importers = <Uri, Importer>{};
 
   /// The current global scope.
   ///
@@ -237,7 +228,6 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   References build(Stylesheet stylesheet, Importer importer) {
     _importer = importer;
     _scope = Scope();
-    _importers[stylesheet.span.sourceUrl] = importer;
     _moduleScopes[stylesheet.span.sourceUrl] = _scope;
     _declarationSources = {};
     _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
@@ -252,8 +242,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _functions,
         _getFunctionReferences,
         _globalDeclarations,
-        _sources,
-        _importers);
+        _sources);
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -322,9 +311,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
         var oldImporter = _importer;
         _importer = result.item1;
-        var url = result.item2.span.sourceUrl;
-        _importers[url] = _importer;
         visitStylesheet(result.item2);
+        var url = result.item2.span.sourceUrl;
         var importSource = ImportSource(url, import);
         for (var declaration in _declarationSources.keys.toList()) {
           var source = _declarationSources[declaration];
@@ -332,8 +320,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
               (source is CurrentSource || source is ForwardSource)) {
             _declarationSources[declaration] = importSource;
           }
+          _importer = oldImporter;
         }
-        _importer = oldImporter;
       }
     }
   }
@@ -374,22 +362,21 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
     var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl;
-    if (_moduleScopes.containsKey(canonicalUrl)) return canonicalUrl;
-
-    var oldScope = _scope;
-    _scope = Scope();
-    _moduleScopes[canonicalUrl] = _scope;
-    var oldSources = _declarationSources;
-    _declarationSources = {};
-    _importers[canonicalUrl] = result.item1;
-    _moduleSources[canonicalUrl] = _declarationSources;
-    var oldImporter = _importer;
-    _importer = result.item1;
-    visitStylesheet(stylesheet);
-    _checkUnresolvedReferences(_scope);
-    _importer = oldImporter;
-    _scope = oldScope;
-    _declarationSources = oldSources;
+    if (!_moduleScopes.containsKey(canonicalUrl)) {
+      var oldScope = _scope;
+      _scope = Scope();
+      _moduleScopes[canonicalUrl] = _scope;
+      var oldSources = _declarationSources;
+      _declarationSources = {};
+      _moduleSources[canonicalUrl] = _declarationSources;
+      var oldImporter = _importer;
+      _importer = result.item1;
+      visitStylesheet(stylesheet);
+      _checkUnresolvedReferences(_scope);
+      _importer = oldImporter;
+      _scope = oldScope;
+      _declarationSources = oldSources;
+    }
     return canonicalUrl;
   }
 
