@@ -933,8 +933,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// new `@use` rule if necessary.
   String _namespaceForDeclaration(MemberDeclaration declaration) {
     if (declaration == null) return null;
+
     var url = declaration.sourceUrl;
     if (url == currentUrl) return null;
+
+    // If we can load [declaration] from a library entrypoint URL, do so. Choose
+    // the shortest one if there are multiple options.
+    var libraryUrls = references.libraries[declaration];
+    if (libraryUrls != null) {
+      url = minBy(libraryUrls, (url) => url.pathSegments.length);
+    }
+
     if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
       var simplePath = _absoluteUrlToDependency(url);

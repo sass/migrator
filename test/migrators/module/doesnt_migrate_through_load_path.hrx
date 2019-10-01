@@ -15,9 +15,8 @@ a {
 $variable: green;
 
 <==> output/entrypoint.scss
-@use "other";
 @use "dependency";
 
 a {
-  color: other.$variable;
+  color: dependency.$variable;
 }
