@@ -89,7 +89,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _patches = [];
     _currentUrl = node.span.sourceUrl;
     super.visitStylesheet(node);
-    afterVisitingStylesheet(node);
+    beforePatch(node);
     var results = patches.isNotEmpty
         ? Patch.applyAll(patches.first.selection.file, patches)
         : null;
@@ -109,13 +109,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _currentUrl = oldUrl;
   }
 
-  /// Called after visiting [node], but before [currentUrl] and [patches] are
-  /// reset to their previous values.
+  /// Called after visiting [node], but before patches are applied.
   ///
   /// A migrator should override this if it needs to add any additional patches
   /// after a stylesheet is visited.
   @protected
-  void afterVisitingStylesheet(Stylesheet node) {}
+  void beforePatch(Stylesheet node) {}
 
   /// Visits the stylesheet at [dependency], resolved based on the current
   /// stylesheet's URL and importer.

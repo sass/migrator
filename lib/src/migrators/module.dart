@@ -29,7 +29,6 @@ import 'module/forward_type.dart';
 import 'module/member_declaration.dart';
 import 'module/reference_source.dart';
 import 'module/references.dart';
-import 'module/stylesheet_state.dart';
 import 'module/unreferencable_members.dart';
 import 'module/unreferencable_type.dart';
 
@@ -133,16 +132,48 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// its canonical URL will be added to this, mapped to the patch that
   /// converted it to a `@use` rule.
   ///
-  /// When determining `@forward` rules to add based on --forward, if a URL that
-  /// would have an extra rule is a key in this map, the migrator will instead
-  /// mutate the patch to be a `@forward` rule instead of a `@use` rule.
+  /// When determining `@forward` rules to add based on `--forward`, if a URL
+  /// that would have a `@forward` rule generated is a key in this map, the
+  /// migrator will instead mutate the patch to be a `@forward` rule instead of
+  /// a `@use` rule.
   final _possibleForwardConversions = <Uri, Patch>{};
 
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
 
-  /// Stores state for the migration of the current stylesheet.
-  StylesheetState _state;
+  /// Namespaces of modules used in this stylesheet.
+  Map<Uri, String> _namespaces;
+
+  /// Set of canonical URLs that have a `@forward` rule in the current
+  /// stylesheet.
+  Set<Uri> _forwardedUrls;
+
+  /// Set of canonical URLs that have a `@use` rule in the current stylesheet.
+  ///
+  /// This includes both `@use` rules migrated from `@import` rules and
+  /// additional `@use` rules in the sets below.
+  Set<Uri> _usedUrls;
+
+  /// Set of additional `@use` rules for built-in modules.
+  Set<String> _builtInUseRules;
+
+  /// Set of additional `@use` rules for stylesheets at a load path.
+  Set<String> _additionalLoadPathUseRules;
+
+  /// Set of additional `@use` rules for stylesheets relative to the current
+  /// one.
+  Set<String> _additionalRelativeUseRules;
+
+  /// The first `@import` rule in this stylesheet that was converted to a `@use`
+  /// or `@forward` rule, or null if none has been visited yet.
+  FileLocation _beforeFirstImport;
+
+  /// The last `@import` rule in this stylesheet that was converted to a `@use`
+  /// or `@forward` rule, or null if none has been visited yet.
+  FileLocation _afterLastImport;
+
+  /// Whether @use and @forward are allowed in the current context.
+  var _useAllowed = true;
 
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
@@ -340,33 +371,57 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// visiting it and restores the per-file state afterwards.
   @override
   void visitStylesheet(Stylesheet node) {
-    var oldState = _state;
-    _state = StylesheetState(_determineNamespaces(node.span.sourceUrl));
+    var oldNamespaces = _namespaces;
+    var oldForwardedUrls = _forwardedUrls;
+    var oldUsedUrls = _usedUrls;
+    var oldBuiltInUseRules = _builtInUseRules;
+    var oldLoadPathUseRules = _additionalLoadPathUseRules;
+    var oldRelativeUseRules = _additionalRelativeUseRules;
+    var oldBeforeFirstImport = _beforeFirstImport;
+    var oldAfterLastImport = _afterLastImport;
+    var oldUseAllowed = _useAllowed;
+    _namespaces = _determineNamespaces(node.span.sourceUrl);
+    _forwardedUrls = {};
+    _usedUrls = {};
+    _builtInUseRules = {};
+    _additionalLoadPathUseRules = {};
+    _additionalRelativeUseRules = {};
+    _beforeFirstImport = null;
+    _afterLastImport = null;
+    _useAllowed = true;
     super.visitStylesheet(node);
-    _state = oldState;
+    _namespaces = oldNamespaces;
+    _forwardedUrls = oldForwardedUrls;
+    _usedUrls = oldUsedUrls;
+    _builtInUseRules = oldBuiltInUseRules;
+    _additionalLoadPathUseRules = oldLoadPathUseRules;
+    _additionalRelativeUseRules = oldRelativeUseRules;
+    _beforeFirstImport = oldBeforeFirstImport;
+    _afterLastImport = oldAfterLastImport;
+    _useAllowed = oldUseAllowed;
   }
 
   /// Adds additional patches for extra `@use` and `@forward` rules.
   @override
-  void afterVisitingStylesheet(Stylesheet node) {
+  void beforePatch(Stylesheet node) {
     useRulesToString(Set<String> useRules) => (useRules.toList()..sort())
         .map((use) => '$use$_semicolonIfNotIndented\n')
         .join();
 
-    if (_state.builtInUseRules.isNotEmpty) {
+    if (_builtInUseRules.isNotEmpty) {
       // This is added before existing patches to ensure that this patch is
       // inserted before a patch converting an existing `@import` rule to a
       // `@use` rule.
       addPatch(
-          Patch.insert(_state.beforeFirstImport ?? node.span.start,
-              useRulesToString(_state.builtInUseRules)),
+          Patch.insert(_beforeFirstImport ?? node.span.start,
+              useRulesToString(_builtInUseRules)),
           beforeExisting: true);
     }
-    var extras = useRulesToString(_state.additionalLoadPathUseRules) +
-        useRulesToString(_state.additionalRelativeUseRules) +
+    var extras = useRulesToString(_additionalLoadPathUseRules) +
+        useRulesToString(_additionalRelativeUseRules) +
         _getEntrypointForwards();
     if (extras != '') {
-      var insertionPoint = _state.afterLastImport ?? node.span.start;
+      var insertionPoint = _afterLastImport ?? node.span.start;
       // If there was already a blank line after the insertion point, or the
       // insertion point was at the end of the file, remove the additional line
       // break at the end of the extra rules.
@@ -375,7 +430,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
         extras = extras.substring(0, extras.length - 1);
       }
-      if (insertionPoint == _state.afterLastImport) extras = '\n$extras';
+      if (insertionPoint == _afterLastImport) extras = '\n$extras';
       addPatch(Patch.insert(insertionPoint, extras));
     }
   }
@@ -642,7 +697,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Visits a `@function` rule, renaming if necessary.
   @override
   void visitFunctionRule(FunctionRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitFunctionRule(node);
   }
@@ -671,7 +726,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (staticImports.isNotEmpty) {
       if (dynamicImports.isNotEmpty) addPatch(Patch.insert(start, "\n"));
 
-      _state.useAllowed = false;
+      _useAllowed = false;
       super.visitImportRule(node);
 
       // Delete any dynamic imports intermixed with static imports, as well as
@@ -685,11 +740,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else {
       addPatch(patchDelete(node.span));
     }
-    if (_state.useAllowed) {
-      _state.beforeFirstImport ??= node.span.start;
+    if (_useAllowed) {
+      _beforeFirstImport ??= node.span.start;
       var afterSemicolon =
           extendForward(extendThroughWhitespace(node.span), ';')?.end;
-      _state.afterLastImport = currentUrl.path.endsWith('.sass')
+      _afterLastImport = currentUrl.path.endsWith('.sass')
           ? node.span.end
           : afterSemicolon ?? node.span.end;
     }
@@ -703,7 +758,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
-    if (!_state.useAllowed) {
+    if (!_useAllowed) {
       _unreferencable = UnreferencableMembers(_unreferencable);
       for (var declaration in references.allDeclarations) {
         if (declaration.sourceUrl != currentUrl) continue;
@@ -723,7 +778,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         resolvedUrl, () => Tuple2(import.url, tuple.item1));
 
     var asClause = '';
-    if (!_state.useAllowed) {
+    if (!_useAllowed) {
       _unreferencable = _unreferencable.parent;
       for (var declaration in references.allDeclarations) {
         if (declaration.sourceUrl != resolvedUrl) continue;
@@ -734,9 +789,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // If a member from this dependency is actually referenced, it should
       // already have a namespace from [_determineNamespaces], so we just use
       // a simple number suffix to resolve conflicts at this point.
-      _state.namespaces.putIfAbsent(resolvedUrl,
-          () => _incrementUntilAvailable(defaultNamespace, _state.namespaces));
-      var namespace = _state.namespaces[resolvedUrl];
+      _namespaces.putIfAbsent(resolvedUrl,
+          () => _incrementUntilAvailable(defaultNamespace, _namespaces));
+      var namespace = _namespaces[resolvedUrl];
       if (namespace != defaultNamespace) asClause = ' as $namespace';
     }
 
@@ -758,7 +813,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _configuredVariables = oldConfiguredVariables;
 
     if (externallyConfiguredVariables.isNotEmpty) {
-      if (!_state.useAllowed) {
+      if (!_useAllowed) {
         var firstConfig = externallyConfiguredVariables.values.first;
         throw MigrationSourceSpanException(
             "This declaration attempts to override a default value in an "
@@ -797,7 +852,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var end = start + _semicolonIfNotIndented.length;
         if (span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(span.file.span(start, end)));
-        var nameFormat = _state.useAllowed ? '\$$name' : '"$name"';
+        var nameFormat = _useAllowed ? '\$$name' : '"$name"';
         configured.add("$nameFormat: ${variable.member.expression}");
       }
     }
@@ -808,13 +863,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       configuration =
           " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
     }
-    if (!_state.useAllowed) {
+    if (!_useAllowed) {
       var namespace = _findOrAddBuiltInNamespace('meta');
       configuration = configuration.replaceFirst(' with', r', $with:');
       addPatch(Patch.insert(importStart,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
-      _state.usedUrls.add(resolvedUrl);
+      _usedUrls.add(resolvedUrl);
       var patch = Patch.insert(
           importStart, '@use ${import.span.text}$asClause$configuration');
       addPatch(patch);
@@ -859,7 +914,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitIncludeRule(node);
     if (node.namespace != null) return;
 
@@ -875,7 +930,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Visits a `@mixin` rule, renaming it if necessary.
   @override
   void visitMixinRule(MixinRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitMixinRule(node);
   }
@@ -887,7 +942,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
   void visitUseRule(UseRule node) {
-    if (node.url.scheme == 'sass') _state.usedUrls.add(node.url);
+    if (node.url.scheme == 'sass') _usedUrls.add(node.url);
   }
 
   /// Similar to `@use` rules, don't visit `@forward` rules.
@@ -980,13 +1035,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This adds an additional `@use` rule if [module] has not been loaded yet.
   String _findOrAddBuiltInNamespace(String module) {
     var url = Uri.parse("sass:$module");
-    _state.namespaces.putIfAbsent(
-        url, () => _resolveBuiltInNamespace(module, _state.namespaces));
-    var namespace = _state.namespaces[url];
-    if (!_state.usedUrls.contains(url)) {
-      _state.usedUrls.add(url);
+    _namespaces.putIfAbsent(
+        url, () => _resolveBuiltInNamespace(module, _namespaces));
+    var namespace = _namespaces[url];
+    if (!_usedUrls.contains(url)) {
+      _usedUrls.add(url);
       var asClause = namespace == module ? '' : ' as $namespace';
-      _state.builtInUseRules.add('@use "sass:$module"$asClause');
+      _builtInUseRules.add('@use "sass:$module"$asClause');
     }
     return namespace;
   }
@@ -1006,24 +1061,22 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       url = minBy(libraryUrls, (url) => url.pathSegments.length);
     }
 
-    if (!_state.usedUrls.contains(url)) {
+    if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
       var tuple = _absoluteUrlToDependency(url);
       var defaultNamespace = namespaceForPath(tuple.item1);
       // There are a few edge cases where the reference in [node] wasn't tracked
       // by [references.sources], so we add a namespace with simple conflict
       // resolution if one for this URL doesn't already exist.
-      _state.namespaces.putIfAbsent(url,
-          () => _incrementUntilAvailable(defaultNamespace, _state.namespaces));
-      var namespace = _state.namespaces[url];
+      _namespaces.putIfAbsent(
+          url, () => _incrementUntilAvailable(defaultNamespace, _namespaces));
+      var namespace = _namespaces[url];
       var asClause = defaultNamespace == namespace ? '' : ' as $namespace';
-      _state.usedUrls.add(url);
-      (tuple.item2
-              ? _state.additionalRelativeUseRules
-              : _state.additionalLoadPathUseRules)
+      _usedUrls.add(url);
+      (tuple.item2 ? _additionalRelativeUseRules : _additionalLoadPathUseRules)
           .add('@use "${tuple.item1}"$asClause');
     }
-    return _state.namespaces[url];
+    return _namespaces[url];
   }
 
   /// Converts an absolute URL for a stylesheet into the simplest string that
@@ -1058,84 +1111,84 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Disallows `@use` after `@at-root` rules.
   @override
   void visitAtRootRule(AtRootRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitAtRootRule(node);
   }
 
   /// Disallows `@use` after at-rules.
   @override
   void visitAtRule(AtRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitAtRule(node);
   }
 
   /// Disallows `@use` after `@debug` rules.
   @override
   void visitDebugRule(DebugRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitDebugRule(node);
   }
 
   /// Disallows `@use` after `@each` rules.
   @override
   void visitEachRule(EachRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitEachRule(node);
   }
 
   /// Disallows `@use` after `@error` rules.
   @override
   void visitErrorRule(ErrorRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitErrorRule(node);
   }
 
   /// Disallows `@use` after `@for` rules.
   @override
   void visitForRule(ForRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitForRule(node);
   }
 
   /// Disallows `@use` after `@if` rules.
   @override
   void visitIfRule(IfRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitIfRule(node);
   }
 
   /// Disallows `@use` after `@media` rules.
   @override
   void visitMediaRule(MediaRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitMediaRule(node);
   }
 
   /// Disallows `@use` after style rules.
   @override
   void visitStyleRule(StyleRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitStyleRule(node);
   }
 
   /// Disallows `@use` after `@supports` rules.
   @override
   void visitSupportsRule(SupportsRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitSupportsRule(node);
   }
 
   /// Disallows `@use` after `@warn` rules.
   @override
   void visitWarnRule(WarnRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitWarnRule(node);
   }
 
   /// Disallows `@use` after `@while` rules.
   @override
   void visitWhileRule(WhileRule node) {
-    _state.useAllowed = false;
+    _useAllowed = false;
     super.visitWhileRule(node);
   }
 }
