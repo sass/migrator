@@ -15,7 +15,7 @@ dependencies:
   node_interop: "^1.0.0"
   node_io: "^1.0.0"
   path: "^1.6.0"
-  sass: "^1.23.0-module.beta.1"
+  sass: "^1.23.0"
   source_span: "^1.4.0"
   term_glyph: "^1.1.0"
   tuple: "^1.0.2"
