@@ -51,7 +51,7 @@ jobs:
   - stage: deploy
     name: GitHub
     if: *deploy-if
-    env:
+    env: &github-env
       - GITHUB_USER=sassbot
       # GITHUB_AUTH="..."
       - secure: "tExT08Y/ByXpUPxH1AjsusFmKdqn3Qfjd+gIeK5s3CmxvQD9SfMG/5qzgX7vUKzeysry8bk9t62c+GWi54wiKAf0xzGfpJ3pXm0SX3CURkdN9BipUpJicisaWkwn6zQc2hbHgN7icXZg2xzS14TQntmo1gc8CmZIp+QFFF5hr3bWKe2GAd7ahegO8Gbc9MJbMj8F/0QcPIxdyCIUVM0PPFr0X5x2UladByl7/apHJyNGO10mJ593krh4p5ymA8gA8Q3eiyztIAyeOmJvCuVa5KsuWlhmMSKEmcQ+hjREtIXaUvFkgxs4xTXJtO+i4tKvI3kMivTx0nH3pJDjRZHvVRDCprFB2H2T4JDxmrQboNbsl0OgOtzOwZdzx9+Q4Ar2ePjD+tmypTVvFMrOjkJrPSlHMnSQTweRXa2qvoXyw3ls4pbQSKeh4vKgPuISroCT9E39Mivo9A/xpPV36ouTuBwDbFEEK6MgxciG0I2T/NjLqQz1a67/Or0DX6L7jhtUgjnU2l3dNRZ8z5sjXOXDNyJzxta9vNDQX8yr538Xk+eO+13vm6TjxZLDwXF8MFjm+E4DU8QVkeIHwwlTU5Q5cEemilnRdw368ae8k2DJQaiTmzfhU6864L9kHh7PNRvIN6kqAyTV4rzjlsjRYIMiBbjwbeGjC2oa9rVPcTJfPIY="
