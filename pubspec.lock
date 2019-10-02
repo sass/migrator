@@ -266,7 +266,7 @@ packages:
       name: sass
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "1.23.0-module.beta.1"
+    version: "1.23.0"
   shelf:
     dependency: transitive
     description:
