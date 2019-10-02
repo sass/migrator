@@ -125,7 +125,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// rule that last imported that URL.
   final _originalImports = <Uri, Tuple2<String, Importer>>{};
 
-  /// Tracks `@import` rules within the entrypoint that could potentially be
+  /*/// Tracks `@import` rules within the entrypoint that could potentially be
   /// converted to `@forward` instead of `@use`.
   ///
   /// If an `@import` rule is visited but none of its members are referenced,
@@ -136,7 +136,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// that would have a `@forward` rule generated is a key in this map, the
   /// migrator will instead mutate the patch to be a `@forward` rule instead of
   /// a `@use` rule.
-  final _possibleForwardConversions = <Uri, Patch>{};
+  final _possibleForwardConversions = <Uri, Patch>{};*/
 
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
@@ -313,57 +313,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// If the current stylesheet is the entrypoint, return a string of `@forward`
-  /// rules to forward all members for which [_shouldForward] returns true.
-  String _getEntrypointForwards() {
+  /// If the current stylesheet is the entrypoint, return a string of additional
+  /// `@forward` rules not already added by [_migrateImport].
+  String _getAdditionalForwardRules() {
     if (_upstreamStylesheets.isNotEmpty) return '';
-    var shown = <Uri, Set<String>>{};
-    var hidden = <Uri, Set<String>>{};
 
-    // Divide all global members from dependencies into sets based on whether
-    // they should be forwarded or not.
-    for (var declaration in references.globalDeclarations) {
-      if (declaration.sourceUrl == currentUrl) continue;
-
-      var newName = renamedMembers[declaration] ?? declaration.name;
-      if (declaration.member is VariableDeclaration) newName = "\$$newName";
-
-      if (_shouldForward(declaration.name) &&
-          !declaration.name.startsWith('-')) {
-        shown[declaration.sourceUrl] ??= {};
-        shown[declaration.sourceUrl].add(newName);
-      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
-        hidden[declaration.sourceUrl] ??= {};
-        hidden[declaration.sourceUrl].add(newName);
-      }
-    }
-
-    // Create a `@forward` rule for each dependency that has members that should
-    // be forwarded.
     var loadPathForwards = <String>[];
     var relativeForwards = <String>[];
-    for (var url in shown.keys) {
-      var hiddenCount = hidden[url]?.length ?? 0;
-      var tuple = _absoluteUrlToDependency(url);
-      var forward = '@forward "${tuple.item1}"';
-      var isRelative = tuple.item2;
-
-      // When not all members from a dependency should be forwarded, use a
-      // `hide` clause to hide the ones that shouldn't.
-      if (hiddenCount > 0) {
-        var hiddenMembers = hidden[url].toList()..sort();
-        forward += ' hide ${hiddenMembers.join(", ")}';
-      }
-      if (_possibleForwardConversions.containsKey(url)) {
-        _possibleForwardConversions[url].replacement = forward;
-      } else {
-        forward += '$_semicolonIfNotIndented\n';
-        (isRelative ? relativeForwards : loadPathForwards).add(forward);
-      }
+    for (var url in references.globalDeclarations
+        .map((declaration) => declaration.sourceUrl)
+        .toSet()) {
+      if (url == currentUrl || _forwardedUrls.contains(url)) continue;
+      var tuple = _makeForwardRule(url);
+      if (tuple == null) continue;
+      (tuple.item2 ? relativeForwards : loadPathForwards)
+          .add('${tuple.item1}$_semicolonIfNotIndented\n');
     }
-    loadPathForwards.sort();
-    relativeForwards.sort();
-    var forwards = loadPathForwards.followedBy(relativeForwards);
+    var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
     return forwards.isEmpty ? '' : '\n' + forwards.join('');
   }
 
@@ -419,7 +385,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     var extras = useRulesToString(_additionalLoadPathUseRules) +
         useRulesToString(_additionalRelativeUseRules) +
-        _getEntrypointForwards();
+        _getAdditionalForwardRules();
     if (extras != '') {
       var insertionPoint = _afterLastImport ?? node.span.start;
       // If there was already a blank line after the insertion point, or the
@@ -869,16 +835,55 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(Patch.insert(importStart,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
-      _usedUrls.add(resolvedUrl);
-      var patch = Patch.insert(
-          importStart, '@use ${import.span.text}$asClause$configuration');
-      addPatch(patch);
       if (_upstreamStylesheets.isEmpty &&
           configuration.isEmpty &&
           !_anyMemberReferenced(resolvedUrl)) {
-        _possibleForwardConversions[resolvedUrl] = patch;
+        var tuple = _makeForwardRule(resolvedUrl);
+        if (tuple != null) {
+          _forwardedUrls.add(resolvedUrl);
+          addPatch(Patch.insert(importStart, tuple.item1));
+          return;
+        }
+      }
+      _usedUrls.add(resolvedUrl);
+      addPatch(Patch.insert(
+          importStart, '@use ${import.span.text}$asClause$configuration'));
+    }
+  }
+
+  /// If [url] contains any member declarations that should be forwarded from
+  /// the entrypoint, returns a tuple of the `@forward` rule that should be used
+  /// and a boolean that is true when the URL of this rule is relative.
+  ///
+  /// If nothing from [url] should be forwarded, returns null.
+  Tuple2<String, bool> _makeForwardRule(Uri url) {
+    var shown = <String>{};
+    var hidden = <String>{};
+
+    // Divide all global members from dependencies into sets based on whether
+    // they should be forwarded or not.
+    for (var declaration in references.globalDeclarations) {
+      if (declaration.sourceUrl != url) continue;
+
+      var newName = renamedMembers[declaration] ?? declaration.name;
+      if (declaration.member is VariableDeclaration) newName = "\$$newName";
+
+      if (_shouldForward(declaration.name) &&
+          !declaration.name.startsWith('-')) {
+        shown.add(newName);
+      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
+        hidden.add(newName);
       }
     }
+    if (shown.isEmpty) return null;
+
+    var tuple = _absoluteUrlToDependency(url);
+    var forward = '@forward "${tuple.item1}"';
+    if (hidden.isNotEmpty) {
+      var hiddenMembers = hidden.toList()..sort();
+      forward += ' hide ${hiddenMembers.join(", ")}';
+    }
+    return Tuple2(forward, tuple.item2);
   }
 
   /// Returns true if any member of [url] is referenced within the current
