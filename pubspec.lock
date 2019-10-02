@@ -184,14 +184,14 @@ packages:
     source: hosted
     version: "1.0.2"
   node_interop:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: node_interop
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.0.3"
   node_io:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: node_io
       url: "https://pub.dartlang.org"
