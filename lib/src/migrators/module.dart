@@ -125,19 +125,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// rule that last imported that URL.
   final _originalImports = <Uri, Tuple2<String, Importer>>{};
 
-  /*/// Tracks `@import` rules within the entrypoint that could potentially be
-  /// converted to `@forward` instead of `@use`.
-  ///
-  /// If an `@import` rule is visited but none of its members are referenced,
-  /// its canonical URL will be added to this, mapped to the patch that
-  /// converted it to a `@use` rule.
-  ///
-  /// When determining `@forward` rules to add based on `--forward`, if a URL
-  /// that would have a `@forward` rule generated is a key in this map, the
-  /// migrator will instead mutate the patch to be a `@forward` rule instead of
-  /// a `@use` rule.
-  final _possibleForwardConversions = <Uri, Patch>{};*/
-
   /// Tracks members that are unreferencable in the current scope.
   UnreferencableMembers _unreferencable = UnreferencableMembers();
 
@@ -391,8 +378,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // If there was already a blank line after the insertion point, or the
       // insertion point was at the end of the file, remove the additional line
       // break at the end of the extra rules.
-      var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
       if (insertionPoint == node.span.start) extras = '$extras\n';
+      var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
       if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
         extras = extras.substring(0, extras.length - 1);
       }
@@ -706,13 +693,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else {
       addPatch(patchDelete(node.span));
     }
+
     if (_useAllowed) {
       _beforeFirstImport ??= node.span.start;
-      var afterSemicolon =
-          extendForward(extendThroughWhitespace(node.span), ';')?.end;
-      _afterLastImport = currentUrl.path.endsWith('.sass')
-          ? node.span.end
-          : afterSemicolon ?? node.span.end;
+      if (currentUrl.path.endsWith('.sass')) {
+        _afterLastImport = node.span.end;
+      } else {
+        _afterLastImport =
+            extendForward(extendThroughWhitespace(node.span), ';')?.end ??
+                node.span.end;
+      }
     }
   }
 
@@ -837,7 +827,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else {
       if (_upstreamStylesheets.isEmpty &&
           configuration.isEmpty &&
-          !_anyMemberReferenced(resolvedUrl)) {
+          !references.anyMemberReferenced(resolvedUrl, currentUrl)) {
         var tuple = _makeForwardRule(resolvedUrl);
         if (tuple != null) {
           _forwardedUrls.add(resolvedUrl);
@@ -884,36 +874,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       forward += ' hide ${hiddenMembers.join(", ")}';
     }
     return Tuple2(forward, tuple.item2);
-  }
-
-  /// Returns true if any member of [url] is referenced within the current
-  /// stylesheet.
-  bool _anyMemberReferenced(Uri url) {
-    for (var entry in references.variables.entries) {
-      if (entry.key.span.sourceUrl != currentUrl) continue;
-      var declaration = _reassignedVariables.contains(entry.value)
-          ? references.variableReassignments[entry.value]
-          : entry.value;
-      if (declaration.sourceUrl == url) return true;
-    }
-    for (var entry in references.variableReassignments.entries) {
-      if (entry.key.sourceUrl == currentUrl && entry.value.sourceUrl == url) {
-        return true;
-      }
-    }
-    for (var entry in references.mixins.entries) {
-      if (entry.key.span.sourceUrl == currentUrl &&
-          entry.value.sourceUrl == url) {
-        return true;
-      }
-    }
-    for (var entry in references.functions.entries) {
-      if (entry.key.span.sourceUrl == currentUrl &&
-          entry.value.sourceUrl == url) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /// Adds a namespace to any mixin include that requires it.

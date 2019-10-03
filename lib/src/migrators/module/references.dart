@@ -95,21 +95,34 @@ class References {
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
 
-  /// Returns true if the member declared by [declaration] is referenced within
-  /// another stylesheet.
-  bool referencedOutsideDeclaringStylesheet(MemberDeclaration declaration) {
-    Iterable<SassNode> references;
-    if (declaration is FunctionRule) {
-      references = functions
+  /// Returns all references to [declaration].
+  Iterable<SassNode> referencesTo(MemberDeclaration declaration) {
+    if (declaration.member is FunctionRule) {
+      return functions
           .keysForValue(declaration)
           .followedBy(getFunctionReferences.keysForValue(declaration));
-    } else if (declaration is MixinRule) {
-      references = mixins.keysForValue(declaration);
-    } else {
-      references = variables.keysForValue(declaration);
+    } else if (declaration.member is MixinRule) {
+      return mixins.keysForValue(declaration);
     }
-    return references
-        .any((reference) => reference.span.sourceUrl != declaration.sourceUrl);
+    return variables.keysForValue(declaration);
+  }
+
+  /// Returns true if the member declared by [declaration] is referenced within
+  /// another stylesheet.
+  bool referencedOutsideDeclaringStylesheet(MemberDeclaration declaration) =>
+      referencesTo(declaration).any(
+          (reference) => reference.span.sourceUrl != declaration.sourceUrl);
+
+  /// Returns true if any member of [declaringUrl] is referenced by
+  /// [referencingUrl] and false otherwise.
+  bool anyMemberReferenced(Uri declaringUrl, Uri referencingUrl) {
+    for (var declaration in allDeclarations) {
+      if (declaration.sourceUrl != declaringUrl) continue;
+      for (var reference in referencesTo(declaration)) {
+        if (reference.span.sourceUrl == referencingUrl) return true;
+      }
+    }
+    return false;
   }
 
   /// Finds the original declaration of the variable referenced in [reference].
