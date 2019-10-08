@@ -1,0 +1,16 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "dependency1";
+@import "dependency2";
+
+<==> input/_dependency1.scss
+$configurable: green !default;
+
+<==> input/_dependency2.scss
+$configurable: green !default;
+
+<==> output/entrypoint.scss
+@use "dependency1";
+@use "dependency2";

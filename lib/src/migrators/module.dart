@@ -760,7 +760,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var variable in _configuredVariables) {
       if (variable.sourceUrl == currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
-      } else {
+      } else if (_upstreamStylesheets.contains(variable.sourceUrl)) {
         externallyConfiguredVariables[variable.name] = variable;
         oldConfiguredVariables.add(variable);
       }
