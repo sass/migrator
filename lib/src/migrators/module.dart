@@ -522,8 +522,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    super.visitFunctionExpression(node);
-    if (node.namespace != null) return;
+    if (node.namespace != null) {
+      super.visitFunctionExpression(node);
+      return;
+    }
     if (references.sources.containsKey(node)) {
       var declaration = references.functions[node];
       _unreferencable.check(declaration, node);
@@ -561,6 +563,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             ', \$module: "$namespace"'));
       }, getFunctionCall: true);
     }
+    super.visitFunctionExpression(node);
   }
 
   /// Calls [patchNamespace] when the function [node] requires a namespace.
@@ -635,8 +638,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchRemovedColorFunction(String name, Expression arg,
       {FileSpan existingArgName}) {
     var parameter = removedColorFunctions[name];
-    var needsParens =
-        parameter.endsWith('-') && arg is BinaryOperationExpression;
+    // Surround the argument in parens if negated to avoid `-` being parsed
+    // as part of the namespace.
+    var needsParens = parameter.endsWith('-') &&
+        (arg is BinaryOperationExpression ||
+            arg is FunctionExpression ||
+            (arg is VariableExpression &&
+                references.variables[arg]?.sourceUrl != currentUrl));
     var leftParen = needsParens ? '(' : '';
     if (existingArgName == null) {
       addPatch(patchBefore(arg, '$parameter$leftParen'));
@@ -927,7 +935,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
+      // Surround the variable in parens if negated to avoid `-` being parsed
+      // as part of the namespace.
+      var negated = matchesBeforeSpan(node.span, '-');
+      if (negated) addPatch(patchBefore(node, '('));
       addPatch(patchBefore(node, '$namespace.'));
+      if (negated) addPatch(patchAfter(node, ')'));
     }
   }
 
