@@ -6,6 +6,7 @@
 a {
   b: -$amount;
   color: darken($color, $amount);
+  background: darken($color, fn());
 }
 
 <==> input/_library.scss
@@ -18,4 +19,5 @@ $amount: 10%;
 a {
   b: -(library.$amount);
   color: color.adjust(library.$color, $lightness: -(library.$amount));
+  background: color.adjust(library.$color, $lightness: -(fn()));
 }
