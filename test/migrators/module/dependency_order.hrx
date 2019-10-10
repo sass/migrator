@@ -5,6 +5,16 @@
 This is designed to test the order of `@use` and `@forward` rules from multiple
 sources.
 
+The order should be:
+1. Built-in module `@use` rules
+2. `@use` and `@forward` rules directly migrated from `@import` rules.
+3. Additional `@use` rules from load paths
+4. Additional `@use` rules from relative paths
+5. A blank line
+6. Additional `@forward` rules from load paths
+7. Additional `@forward` rules from relative paths
+8. Another blank line, if there were any additional `@forward` rules.
+
 <==> input/entrypoint.scss
 @import "forwarded";
 @import "library";

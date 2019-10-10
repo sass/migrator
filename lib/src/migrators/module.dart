@@ -373,19 +373,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var extras = useRulesToString(_additionalLoadPathUseRules) +
         useRulesToString(_additionalRelativeUseRules) +
         _getAdditionalForwardRules();
-    if (extras != '') {
-      var insertionPoint = _afterLastImport ?? node.span.start;
-      // If there was already a blank line after the insertion point, or the
-      // insertion point was at the end of the file, remove the additional line
-      // break at the end of the extra rules.
-      if (insertionPoint == node.span.start) extras = '$extras\n';
-      var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
-      if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
-        extras = extras.substring(0, extras.length - 1);
-      }
-      if (insertionPoint == _afterLastImport) extras = '\n$extras';
-      addPatch(Patch.insert(insertionPoint, extras));
+    if (extras == '') return;
+    var insertionPoint = _afterLastImport ?? node.span.start;
+    // If there was already a blank line after the insertion point, or the
+    // insertion point was at the end of the file, remove the additional line
+    // break at the end of the extra rules.
+    if (insertionPoint == node.span.start) extras = '$extras\n';
+    var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
+    if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
+      extras = extras.substring(0, extras.length - 1);
     }
+    if (insertionPoint == _afterLastImport) extras = '\n$extras';
+    addPatch(Patch.insert(insertionPoint, extras));
   }
 
   /// Determines namespaces for all `@use` rules that the stylesheet at [url]
