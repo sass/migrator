@@ -1,0 +1,21 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "library";
+a {
+  b: -$amount;
+  color: darken($color, $amount);
+}
+
+<==> input/_library.scss
+$color: blue;
+$amount: 10%;
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@use "library";
+a {
+  b: -(library.$amount);
+  color: color.adjust(library.$color, $lightness: -(library.$amount));
+}

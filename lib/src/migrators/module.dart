@@ -522,45 +522,46 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
+    if (node.namespace == null) {
+      if (references.sources.containsKey(node)) {
+        var declaration = references.functions[node];
+        _unreferencable.check(declaration, node);
+        _renameReference(nameSpan(node), declaration);
+        _patchNamespaceForFunction(node, declaration, (namespace) {
+          addPatch(patchBefore(node.name, '$namespace.'));
+        });
+      }
+
+      if (node.name.asPlain == "get-function") {
+        var declaration = references.getFunctionReferences[node];
+        _unreferencable.check(declaration, node);
+        _renameReference(getStaticNameForGetFunctionCall(node), declaration);
+
+        // Ignore get-function calls that already have a module argument.
+        var moduleArg = node.arguments.named['module'];
+        if (moduleArg == null && node.arguments.positional.length > 2) {
+          moduleArg = node.arguments.positional[2];
+        }
+        if (moduleArg != null) return;
+
+        // Warn for get-function calls without a static name.
+        var nameArg =
+            node.arguments.named['name'] ?? node.arguments.positional.first;
+        if (nameArg is! StringExpression ||
+            (nameArg as StringExpression).text.asPlain == null) {
+          emitWarning(
+              "get-function call may require \$module parameter", nameArg.span);
+          return;
+        }
+
+        _patchNamespaceForFunction(node, declaration, (namespace) {
+          var beforeParen = node.span.end.offset - 1;
+          addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
+              ', \$module: "$namespace"'));
+        }, getFunctionCall: true);
+      }
+    }
     super.visitFunctionExpression(node);
-    if (node.namespace != null) return;
-    if (references.sources.containsKey(node)) {
-      var declaration = references.functions[node];
-      _unreferencable.check(declaration, node);
-      _renameReference(nameSpan(node), declaration);
-      _patchNamespaceForFunction(node, declaration, (namespace) {
-        addPatch(patchBefore(node.name, '$namespace.'));
-      });
-    }
-
-    if (node.name.asPlain == "get-function") {
-      var declaration = references.getFunctionReferences[node];
-      _unreferencable.check(declaration, node);
-      _renameReference(getStaticNameForGetFunctionCall(node), declaration);
-
-      // Ignore get-function calls that already have a module argument.
-      var moduleArg = node.arguments.named['module'];
-      if (moduleArg == null && node.arguments.positional.length > 2) {
-        moduleArg = node.arguments.positional[2];
-      }
-      if (moduleArg != null) return;
-
-      // Warn for get-function calls without a static name.
-      var nameArg =
-          node.arguments.named['name'] ?? node.arguments.positional.first;
-      if (nameArg is! StringExpression ||
-          (nameArg as StringExpression).text.asPlain == null) {
-        emitWarning(
-            "get-function call may require \$module parameter", nameArg.span);
-        return;
-      }
-
-      _patchNamespaceForFunction(node, declaration, (namespace) {
-        var beforeParen = node.span.end.offset - 1;
-        addPatch(Patch(node.span.file.span(beforeParen, beforeParen),
-            ', \$module: "$namespace"'));
-      }, getFunctionCall: true);
-    }
   }
 
   /// Calls [patchNamespace] when the function [node] requires a namespace.
@@ -635,8 +636,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchRemovedColorFunction(String name, Expression arg,
       {FileSpan existingArgName}) {
     var parameter = removedColorFunctions[name];
-    var needsParens =
-        parameter.endsWith('-') && arg is BinaryOperationExpression;
+    var needsParens = parameter.endsWith('-') &&
+        (arg is BinaryOperationExpression ||
+            (arg is VariableExpression &&
+                references.variables[arg]?.sourceUrl != currentUrl));
     var leftParen = needsParens ? '(' : '';
     if (existingArgName == null) {
       addPatch(patchBefore(arg, '$parameter$leftParen'));
@@ -927,7 +930,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
+      // Surround the variable in parens if negated to avoid `-` being parsed
+      // as part of the namespace.
+      var negated = extendBackward(node.span, '-') != null;
+      if (negated) addPatch(patchBefore(node, '('));
       addPatch(patchBefore(node, '$namespace.'));
+      if (negated) addPatch(patchAfter(node, ')'));
     }
   }
 
