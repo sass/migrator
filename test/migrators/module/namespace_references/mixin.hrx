@@ -2,7 +2,7 @@
 --migrate-deps
 
 <==> README.md
-This test should be kept in sync with namespace_mixin_indented.hrx.
+This test should be kept in sync with mixin_indented.hrx.
 
 <==> input/entrypoint.scss
 @import "library";

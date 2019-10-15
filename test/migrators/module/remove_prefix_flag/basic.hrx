@@ -2,7 +2,7 @@
 --remove-prefix=lib-
 
 <==> README.md
-This test should be kept in sync with unprefix_indented.hrx.
+This test should be kept in sync with basic_indented.hrx.
 
 <==> input/entrypoint.scss
 $lib-a: 5;
