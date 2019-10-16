@@ -3,24 +3,23 @@
 
 <==> input/entrypoint.scss
 @import "direct";
-
 a {
   color: $variable;
 }
 
 <==> input/_direct.scss
-@import "~module/indirect";
+@import "indirect";
 
-<==> input/node_modules/module/_indirect.scss
-$variable: green;
+<==> input/_indirect.scss
+$variable: blue;
 
 <==> output/entrypoint.scss
-@use "~module/indirect";
 @use "direct";
+@use "indirect";
 
 a {
   color: indirect.$variable;
 }
 
 <==> output/_direct.scss
-@use "~module/indirect";
+@use "indirect";

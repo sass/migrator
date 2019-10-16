@@ -14,8 +14,9 @@ $_pseudoprivate: blue;
 $_private: green;
 
 <==> output/entrypoint.scss
-@forward "dependency" hide $pseudoprivate;
 @use "dependency";
+
+@forward "dependency" hide $pseudoprivate;
 
 a {
   color: dependency.$pseudoprivate;

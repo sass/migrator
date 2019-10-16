@@ -85,6 +85,13 @@ FileSpan extendBackward(FileSpan span, String text) {
   return span.file.span(start - text.length, span.end.offset);
 }
 
+/// Returns true if [span] is preceded by exactly [text].
+bool matchesBeforeSpan(FileSpan span, String text) {
+  var start = span.start.offset;
+  if (start - text.length < 0) return false;
+  return span.file.getText(start - text.length, start) == text;
+}
+
 /// Returns whether [character] is whitespace, according to Sass's definition.
 bool isWhitespace(int character) =>
     character == $space ||

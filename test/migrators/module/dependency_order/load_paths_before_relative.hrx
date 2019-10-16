@@ -1,0 +1,37 @@
+<==> arguments
+--migrate-deps --load-path load-path
+
+<==> README
+This test confirms that the URLs of extra `@use` rules from load paths appear
+before those from relative paths.
+
+<==> input/entrypoint.scss
+@import "direct";
+a {
+  color: $relative;
+  background: $load-path;
+}
+
+<==> input/_direct.scss
+@import "a";
+@import "z";
+
+<==> input/_a.scss
+$relative: blue;
+
+<==> input/load-path/_z.scss
+$load-path: green;
+
+<==> output/entrypoint.scss
+@use "direct";
+@use "z";
+@use "a";
+
+a {
+  color: a.$relative;
+  background: z.$load-path;
+}
+
+<==> output/_direct.scss
+@use "a";
+@use "z";

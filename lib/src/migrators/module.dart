@@ -131,25 +131,40 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Namespaces of modules used in this stylesheet.
   Map<Uri, String> _namespaces;
 
+  /// Set of canonical URLs that have a `@forward` rule in the current
+  /// stylesheet.
+  Set<Uri> _forwardedUrls;
+
   /// Set of canonical URLs that have a `@use` rule in the current stylesheet.
   ///
   /// This includes both `@use` rules migrated from `@import` rules and
-  /// additional `@use` rules in the set below.
+  /// additional `@use` rules in the sets below.
   Set<Uri> _usedUrls;
 
-  /// Set of additional `@use` rules necessary for referencing members of
-  /// implicit dependencies / built-in modules.
-  ///
-  /// This set contains the full `@use` rule without a semicolon or line break
-  /// at the end.
-  Set<String> _additionalUseRules;
+  /// Set of additional `@use` rules for built-in modules.
+  Set<String> _builtInUseRules;
+
+  /// Set of additional `@use` rules for stylesheets at a load path.
+  Set<String> _additionalLoadPathUseRules;
+
+  /// Set of additional `@use` rules for stylesheets relative to the current
+  /// one.
+  Set<String> _additionalRelativeUseRules;
+
+  /// The first `@import` rule in this stylesheet that was converted to a `@use`
+  /// or `@forward` rule, or null if none has been visited yet.
+  FileLocation _beforeFirstImport;
+
+  /// The last `@import` rule in this stylesheet that was converted to a `@use`
+  /// or `@forward` rule, or null if none has been visited yet.
+  FileLocation _afterLastImport;
+
+  /// Whether @use and @forward are allowed in the current context.
+  var _useAllowed = true;
 
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
   Set<MemberDeclaration<VariableDeclaration>> _configuredVariables;
-
-  /// Whether @use and @forward are allowed in the current context.
-  var _useAllowed = true;
 
   /// A mapping between member declarations and references.
   ///
@@ -200,8 +215,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (prefixToRemove != null && renamedMembers.isNotEmpty) {
       var url = stylesheet.span.sourceUrl;
       var importOnlyUrl = getImportOnlyUrl(url);
-      var dependency = _absoluteUrlToDependency(url, relativeTo: importOnlyUrl);
-      var results = _generateImportOnly(url, dependency);
+      var tuple = _absoluteUrlToDependency(url, relativeTo: importOnlyUrl);
+      var results = _generateImportOnly(url, tuple.item1);
       if (results != null) migrated[importOnlyUrl] = results;
     }
     return migrated;
@@ -267,19 +282,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   String get _semicolonIfNotIndented =>
       currentUrl.path.endsWith('.sass') ? "" : ";";
 
-  /// Returns the migrated contents of this stylesheet, based on [patches] and
-  /// [_additionalUseRules], or null if the stylesheet does not change.
-  @override
-  String getMigratedContents() {
-    var results = super.getMigratedContents();
-    if (results == null) return null;
-    return _getEntrypointForwards() +
-        _additionalUseRules
-            .map((use) => "$use$_semicolonIfNotIndented\n")
-            .join() +
-        results;
-  }
-
   /// Returns whether the member named [name] should be forwarded in the
   /// entrypoint.
   ///
@@ -298,49 +300,24 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// If the current stylesheet is the entrypoint, return a string of `@forward`
-  /// rules to forward all members for which [_shouldForward] returns true.
-  String _getEntrypointForwards() {
+  /// If the current stylesheet is the entrypoint, return a string of additional
+  /// `@forward` rules not already added by [_migrateImport].
+  String _getAdditionalForwardRules() {
     if (_upstreamStylesheets.isNotEmpty) return '';
-    var shown = <Uri, Set<String>>{};
-    var hidden = <Uri, Set<String>>{};
 
-    // Divide all global members from dependencies into sets based on whether
-    // they should be forwarded or not.
-    for (var declaration in references.globalDeclarations) {
-      if (declaration.sourceUrl == currentUrl) continue;
-
-      var newName = renamedMembers[declaration] ?? declaration.name;
-      if (declaration.member is VariableDeclaration) newName = "\$$newName";
-
-      if (_shouldForward(declaration.name) &&
-          !declaration.name.startsWith('-')) {
-        shown[declaration.sourceUrl] ??= {};
-        shown[declaration.sourceUrl].add(newName);
-      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
-        hidden[declaration.sourceUrl] ??= {};
-        hidden[declaration.sourceUrl].add(newName);
-      }
+    var loadPathForwards = <String>[];
+    var relativeForwards = <String>[];
+    for (var url in references.globalDeclarations
+        .map((declaration) => declaration.sourceUrl)
+        .toSet()) {
+      if (url == currentUrl || _forwardedUrls.contains(url)) continue;
+      var tuple = _makeForwardRule(url);
+      if (tuple == null) continue;
+      (tuple.item2 ? relativeForwards : loadPathForwards)
+          .add('${tuple.item1}$_semicolonIfNotIndented\n');
     }
-
-    // Create a `@forward` rule for each dependency that has members that should
-    // be forwarded.
-    var forwards = <String>[];
-    for (var url in shown.keys) {
-      var hiddenCount = hidden[url]?.length ?? 0;
-      var forward = '@forward "${_absoluteUrlToDependency(url)}"';
-
-      // When not all members from a dependency should be forwarded, use a
-      // `hide` clause to hide the ones that shouldn't.
-      if (hiddenCount > 0) {
-        var hiddenMembers = hidden[url].toList()..sort();
-        forward += ' hide ${hiddenMembers.join(", ")}';
-      }
-      forward += '$_semicolonIfNotIndented\n';
-      forwards.add(forward);
-    }
-    forwards.sort();
-    return forwards.join('');
+    var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
+    return forwards.isEmpty ? '' : '\n' + forwards.join('');
   }
 
   /// Stores per-file state and determines namespaces for this stylesheet before
@@ -348,18 +325,66 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitStylesheet(Stylesheet node) {
     var oldNamespaces = _namespaces;
-    var oldHasUseRule = _usedUrls;
-    var oldAdditionalUseRules = _additionalUseRules;
+    var oldForwardedUrls = _forwardedUrls;
+    var oldUsedUrls = _usedUrls;
+    var oldBuiltInUseRules = _builtInUseRules;
+    var oldLoadPathUseRules = _additionalLoadPathUseRules;
+    var oldRelativeUseRules = _additionalRelativeUseRules;
+    var oldBeforeFirstImport = _beforeFirstImport;
+    var oldAfterLastImport = _afterLastImport;
     var oldUseAllowed = _useAllowed;
-    _usedUrls = {};
-    _additionalUseRules = {};
-    _useAllowed = true;
     _namespaces = _determineNamespaces(node.span.sourceUrl);
+    _forwardedUrls = {};
+    _usedUrls = {};
+    _builtInUseRules = {};
+    _additionalLoadPathUseRules = {};
+    _additionalRelativeUseRules = {};
+    _beforeFirstImport = null;
+    _afterLastImport = null;
+    _useAllowed = true;
     super.visitStylesheet(node);
     _namespaces = oldNamespaces;
-    _usedUrls = oldHasUseRule;
-    _additionalUseRules = oldAdditionalUseRules;
+    _forwardedUrls = oldForwardedUrls;
+    _usedUrls = oldUsedUrls;
+    _builtInUseRules = oldBuiltInUseRules;
+    _additionalLoadPathUseRules = oldLoadPathUseRules;
+    _additionalRelativeUseRules = oldRelativeUseRules;
+    _beforeFirstImport = oldBeforeFirstImport;
+    _afterLastImport = oldAfterLastImport;
     _useAllowed = oldUseAllowed;
+  }
+
+  /// Adds additional patches for extra `@use` and `@forward` rules.
+  @override
+  void beforePatch(Stylesheet node) {
+    useRulesToString(Set<String> useRules) => (useRules.toList()..sort())
+        .map((use) => '$use$_semicolonIfNotIndented\n')
+        .join();
+
+    if (_builtInUseRules.isNotEmpty) {
+      // This is added before existing patches to ensure that this patch is
+      // inserted before a patch converting an existing `@import` rule to a
+      // `@use` rule.
+      addPatch(
+          Patch.insert(_beforeFirstImport ?? node.span.start,
+              useRulesToString(_builtInUseRules)),
+          beforeExisting: true);
+    }
+    var extras = useRulesToString(_additionalLoadPathUseRules) +
+        useRulesToString(_additionalRelativeUseRules) +
+        _getAdditionalForwardRules();
+    if (extras == '') return;
+    var insertionPoint = _afterLastImport ?? node.span.start;
+    // If there was already a blank line after the insertion point, or the
+    // insertion point was at the end of the file, remove the additional line
+    // break at the end of the extra rules.
+    if (insertionPoint == node.span.start) extras = '$extras\n';
+    var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
+    if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
+      extras = extras.substring(0, extras.length - 1);
+    }
+    if (insertionPoint == _afterLastImport) extras = '\n$extras';
+    addPatch(Patch.insert(insertionPoint, extras));
   }
 
   /// Determines namespaces for all `@use` rules that the stylesheet at [url]
@@ -497,8 +522,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    super.visitFunctionExpression(node);
-    if (node.namespace != null) return;
+    if (node.namespace != null) {
+      super.visitFunctionExpression(node);
+      return;
+    }
     if (references.sources.containsKey(node)) {
       var declaration = references.functions[node];
       _unreferencable.check(declaration, node);
@@ -536,6 +563,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             ', \$module: "$namespace"'));
       }, getFunctionCall: true);
     }
+    super.visitFunctionExpression(node);
   }
 
   /// Calls [patchNamespace] when the function [node] requires a namespace.
@@ -610,8 +638,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchRemovedColorFunction(String name, Expression arg,
       {FileSpan existingArgName}) {
     var parameter = removedColorFunctions[name];
-    var needsParens =
-        parameter.endsWith('-') && arg is BinaryOperationExpression;
+    // Surround the argument in parens if negated to avoid `-` being parsed
+    // as part of the namespace.
+    var needsParens = parameter.endsWith('-') &&
+        (arg is BinaryOperationExpression ||
+            arg is FunctionExpression ||
+            (arg is VariableExpression &&
+                references.variables[arg]?.sourceUrl != currentUrl));
     var leftParen = needsParens ? '(' : '';
     if (existingArgName == null) {
       addPatch(patchBefore(arg, '$parameter$leftParen'));
@@ -666,6 +699,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     } else {
       addPatch(patchDelete(node.span));
+    }
+
+    if (_useAllowed) {
+      _beforeFirstImport ??= node.span.start;
+      if (currentUrl.path.endsWith('.sass')) {
+        _afterLastImport = node.span.end;
+      } else {
+        _afterLastImport =
+            extendForward(extendThroughWhitespace(node.span), ';')?.end ??
+                node.span.end;
+      }
     }
   }
 
@@ -724,7 +768,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var variable in _configuredVariables) {
       if (variable.sourceUrl == currentUrl) {
         locallyConfiguredVariables[variable.name] = variable;
-      } else {
+      } else if (_upstreamStylesheets.contains(variable.sourceUrl)) {
         externallyConfiguredVariables[variable.name] = variable;
         oldConfiguredVariables.add(variable);
       }
@@ -788,10 +832,55 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(Patch.insert(importStart,
           '@include $namespace.load-css(${import.span.text}$configuration)'));
     } else {
+      if (_upstreamStylesheets.isEmpty &&
+          configuration.isEmpty &&
+          !references.anyMemberReferenced(resolvedUrl, currentUrl)) {
+        var tuple = _makeForwardRule(resolvedUrl);
+        if (tuple != null) {
+          _forwardedUrls.add(resolvedUrl);
+          addPatch(Patch.insert(importStart, tuple.item1));
+          return;
+        }
+      }
       _usedUrls.add(resolvedUrl);
       addPatch(Patch.insert(
           importStart, '@use ${import.span.text}$asClause$configuration'));
     }
+  }
+
+  /// If [url] contains any member declarations that should be forwarded from
+  /// the entrypoint, returns a tuple of the `@forward` rule that should be used
+  /// and a boolean that is true when the URL of this rule is relative.
+  ///
+  /// If nothing from [url] should be forwarded, returns null.
+  Tuple2<String, bool> _makeForwardRule(Uri url) {
+    var shown = <String>{};
+    var hidden = <String>{};
+
+    // Divide all global members from dependencies into sets based on whether
+    // they should be forwarded or not.
+    for (var declaration in references.globalDeclarations) {
+      if (declaration.sourceUrl != url) continue;
+
+      var newName = renamedMembers[declaration] ?? declaration.name;
+      if (declaration.member is VariableDeclaration) newName = "\$$newName";
+
+      if (_shouldForward(declaration.name) &&
+          !declaration.name.startsWith('-')) {
+        shown.add(newName);
+      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
+        hidden.add(newName);
+      }
+    }
+    if (shown.isEmpty) return null;
+
+    var tuple = _absoluteUrlToDependency(url);
+    var forward = '@forward "${tuple.item1}"';
+    if (hidden.isNotEmpty) {
+      var hiddenMembers = hidden.toList()..sort();
+      forward += ' hide ${hiddenMembers.join(", ")}';
+    }
+    return Tuple2(forward, tuple.item2);
   }
 
   /// Adds a namespace to any mixin include that requires it.
@@ -846,7 +935,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
+      // Surround the variable in parens if negated to avoid `-` being parsed
+      // as part of the namespace.
+      var negated = matchesBeforeSpan(node.span, '-');
+      if (negated) addPatch(patchBefore(node, '('));
       addPatch(patchBefore(node, '$namespace.'));
+      if (negated) addPatch(patchAfter(node, ')'));
     }
   }
 
@@ -924,7 +1018,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (!_usedUrls.contains(url)) {
       _usedUrls.add(url);
       var asClause = namespace == module ? '' : ' as $namespace';
-      _additionalUseRules.add('@use "sass:$module"$asClause');
+      _builtInUseRules.add('@use "sass:$module"$asClause');
     }
     return namespace;
   }
@@ -946,8 +1040,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
-      var simplePath = _absoluteUrlToDependency(url);
-      var defaultNamespace = namespaceForPath(simplePath);
+      var tuple = _absoluteUrlToDependency(url);
+      var defaultNamespace = namespaceForPath(tuple.item1);
       // There are a few edge cases where the reference in [node] wasn't tracked
       // by [references.sources], so we add a namespace with simple conflict
       // resolution if one for this URL doesn't already exist.
@@ -956,7 +1050,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var namespace = _namespaces[url];
       var asClause = defaultNamespace == namespace ? '' : ' as $namespace';
       _usedUrls.add(url);
-      _additionalUseRules.add('@use "$simplePath"$asClause');
+      (tuple.item2 ? _additionalRelativeUseRules : _additionalLoadPathUseRules)
+          .add('@use "${tuple.item1}"$asClause');
     }
     return _namespaces[url];
   }
@@ -964,10 +1059,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Converts an absolute URL for a stylesheet into the simplest string that
   /// could be used to depend on that stylesheet from the current one in a
   /// `@use`, `@forward`, or `@import` rule.
-  String _absoluteUrlToDependency(Uri url, {Uri relativeTo}) {
+  ///
+  /// The first item of the returned tuple is the dependency, the second item
+  /// is true when this dependency is resolved relative to the current URL and
+  /// false when it's resolved relative to a load path.
+  Tuple2<String, bool> _absoluteUrlToDependency(Uri url, {Uri relativeTo}) {
     relativeTo ??= currentUrl;
     var tuple = _originalImports[url];
-    if (tuple?.item2 is NodeModulesImporter) return tuple.item1;
+    if (tuple?.item2 is NodeModulesImporter) return Tuple2(tuple.item1, false);
 
     var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
     var potentialUrls = [
@@ -977,10 +1076,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           p.url.relative(url.path, from: loadPath.path)
     ];
     var relativePath = minBy(potentialUrls, (url) => url.length);
+    var isRelative = relativePath == potentialUrls.first;
 
     var basename = p.url.basenameWithoutExtension(relativePath);
     if (basename.startsWith('_')) basename = basename.substring(1);
-    return p.url.relative(p.url.join(p.url.dirname(relativePath), basename));
+    return Tuple2(
+        p.url.relative(p.url.join(p.url.dirname(relativePath), basename)),
+        isRelative);
   }
 
   /// Disallows `@use` after `@at-root` rules.

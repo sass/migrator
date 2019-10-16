@@ -14,8 +14,9 @@ $lib-public: red;
 $_lib-pseudoprivate: blue;
 
 <==> output/entrypoint.scss
-@forward "dependency" hide $pseudoprivate;
 @use "dependency";
+
+@forward "dependency" hide $pseudoprivate;
 
 a {
   color: dependency.$public;

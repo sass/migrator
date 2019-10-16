@@ -2,7 +2,7 @@
 --remove-prefix=lib-
 
 <==> README.md
-This test should be kept in sync with unprefix.hrx.
+This test should be kept in sync with basic.hrx.
 
 This test is duplicated for the indented syntax since it tests that removing
 prefixes works even for the shorthand mixin syntax and it includes sufficient

@@ -2,7 +2,7 @@
 --migrate-deps
 
 <==> README.md
-This test should be kept in sync with namespace_mixin.hrx.
+This test should be kept in sync with mixin.hrx.
 
 This test is duplicated for the indented syntax since it includes the shorthand
 mixin syntax that's not present in the SCSS syntax.
