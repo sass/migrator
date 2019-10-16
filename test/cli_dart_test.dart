@@ -152,7 +152,8 @@ void main() {
     });
 
     test("an invalid glob", () async {
-      var migrator = await runMigrator(["--no-unicode", "module", "test.s{a,css"]);
+      var migrator =
+          await runMigrator(["--no-unicode", "module", "test.s{a,css"]);
       expect(
           migrator.stderr,
           emitsInOrder([
