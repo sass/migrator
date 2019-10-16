@@ -34,8 +34,5 @@ dev_dependencies:
   xml: ">=2.4.0 <4.0.0"
   yaml: "^2.0.0"
 
-dependency_overrides:
-  glob: {git: git://github.com/dart-lang/glob}
-
 executables:
   sass-migrator: sass_migrator
