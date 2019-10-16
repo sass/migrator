@@ -29,6 +29,18 @@ void main() {
     await migrator.shouldExit(0);
   });
 
+  test("allows glob arguments", () async {
+    await d.file("test-1.scss", "a {b: (1 / 2)}").create();
+    await d.file("test-2.scss", "c {d: (1 / 2)}").create();
+    await d.file("test-3.scss", "e {f: (1 / 2)}").create();
+
+    await (await runMigrator(["division", "test-*.scss"])).shouldExit(0);
+
+    await d.file("test-1.scss", "a {b: divide(1, 2)}").validate();
+    await d.file("test-2.scss", "c {d: divide(1, 2)}").validate();
+    await d.file("test-3.scss", "e {f: divide(1, 2)}").validate();
+  });
+
   group("with --dry-run", () {
     test("prints the name of a file that would be migrated", () async {
       await d.file("test.scss", "a {b: abs(-1)}").create();
@@ -137,6 +149,22 @@ void main() {
       expect(migrator.stderr,
           emitsThrough(contains('for more information about a command.')));
       await migrator.shouldExit(64);
+    });
+
+    test("an invalid glob", () async {
+      var migrator =
+          await runMigrator(["--no-unicode", "module", "test.s{a,css"]);
+      expect(
+          migrator.stderr,
+          emitsInOrder([
+            'Error on line 1, column 13: expected "}".',
+            "  ,",
+            "1 | test.s{a,css",
+            "  |             ^",
+            "  '",
+            "Migration failed!"
+          ]));
+      await migrator.shouldExit(1);
     });
 
     test("a syntax error", () async {
