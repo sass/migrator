@@ -19,11 +19,21 @@ import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {
-  final invocation = "sass_migrator <migrator> [options] <entrypoint.scss...>";
+  String get invocation =>
+      "$executableName <migrator> [options] <entrypoint.scss...>";
+
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator";
 
   MigratorRunner()
       : super("sass_migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
+      ..addMultiOption('load-path',
+          abbr: 'I',
+          valueHelp: 'PATH',
+          help: 'A path to use when resolving imports.\n'
+              'May be passed multiple times.',
+          splitCommas: false)
       ..addFlag('migrate-deps',
           abbr: 'd',
           help: 'Migrate dependencies in addition to entrypoints.',
@@ -96,12 +106,16 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
 
     if (argResults['dry-run']) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
+
       for (var url in migrated.keys) {
-        print(p.prettyUri(url));
         if (argResults['verbose']) {
-          print('=' * 80);
+          // This isn't *strictly* HRX format, since it can produce absolute
+          // URLs rather than those that are relative to the HRX root, but we
+          // just need it to be readable, not to interoperate with other tools.
+          print('<===> ${p.prettyUri(url)}');
           print(migrated[url]);
-          print('-' * 80);
+        } else {
+          print(p.prettyUri(url));
         }
       }
     } else {

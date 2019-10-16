@@ -6,6 +6,10 @@
 
 import 'dart:collection';
 
+import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
+import 'package:source_span/source_span.dart';
+
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
@@ -14,9 +18,7 @@ import 'package:sass/src/importer.dart';
 import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
-import 'package:meta/meta.dart';
-import 'package:source_span/source_span.dart';
-
+import 'exception.dart';
 import 'patch.dart';
 
 /// A visitor that migrates a stylesheet.
@@ -56,10 +58,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   Uri get currentUrl => _currentUrl;
   Uri _currentUrl;
 
-  /// The importer that's currently being used to resolve relative imports.
+  /// The importer that's being used to resolve relative imports.
   ///
   /// If this is `null`, relative imports aren't supported in the current
   /// stylesheet.
+  @protected
+  Importer get importer => _importer;
   Importer _importer;
 
   MigrationVisitor(this.importCache, {this.migrateDependencies = true});
@@ -85,10 +89,20 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     _patches = [];
     _currentUrl = node.span.sourceUrl;
     super.visitStylesheet(node);
+
     var results = getMigratedContents();
     if (results != null) {
-      _migrated[node.span.sourceUrl] = results;
+      var existingResults = _migrated[_currentUrl];
+      if (existingResults != null && existingResults != results) {
+        throw MigrationException(
+            "The migrator has found multiple possible migrations for "
+            "${p.prettyUri(_currentUrl)}, depending on the context in which "
+            "it's loaded.");
+      }
+
+      _migrated[_currentUrl] = results;
     }
+
     _patches = oldPatches;
     _currentUrl = oldUrl;
   }
@@ -99,22 +113,23 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   void visitDependency(Uri dependency, FileSpan context) {
     var result = importCache.import(dependency, _importer, _currentUrl);
     if (result != null) {
+      // If [dependency] comes from a non-relative import, don't migrate it,
+      // because it's likely to be outside the user's repository and may even be
+      // authored by a different person.
+      //
+      // TODO(nweiz): Add a flag to override this behavior for load paths
+      // (#104).
+      if (result.item1 != _importer) return;
+
+      var oldImporter = _importer;
       _importer = result.item1;
       var stylesheet = result.item2;
       visitStylesheet(stylesheet);
+      _importer = oldImporter;
     } else {
-      handleMissingDependency(dependency, context);
+      _missingDependencies.putIfAbsent(
+          context.sourceUrl.resolveUri(dependency), () => context);
     }
-  }
-
-  /// Adds the missing [dependency] within the stylesheet at [source] to the
-  /// missing dependency list to warn after migration completes.
-  ///
-  /// Migrators should override this if they want a different behavior.
-  @protected
-  void handleMissingDependency(Uri dependency, FileSpan context) {
-    _missingDependencies.putIfAbsent(
-        context.sourceUrl.resolveUri(dependency), () => context);
   }
 
   /// Returns the migrated contents of this file, or null if the file does not

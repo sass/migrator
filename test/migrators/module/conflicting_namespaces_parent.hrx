@@ -1,0 +1,32 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "subdirectory/style";
+
+<==> input/subdirectory/style.scss
+@import "variables";
+@import "../variables";
+
+a {
+  color: $sibling;
+  background: $parent;
+}
+
+<==> input/subdirectory/_variables.scss
+$sibling: blue;
+
+<==> input/_variables.scss
+$parent: green;
+
+<==> output/entrypoint.scss
+@use "subdirectory/style";
+
+<==> output/subdirectory/style.scss
+@use "variables";
+@use "../variables" as variables2;
+
+a {
+  color: variables.$sibling;
+  background: variables2.$parent;
+}

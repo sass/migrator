@@ -16,6 +16,7 @@ import 'package:args/command_runner.dart';
 import 'package:glob/glob.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/util/node_modules_importer.dart';
 import 'package:source_span/source_span.dart';
 
 import 'exception.dart';
@@ -36,6 +37,13 @@ import 'utils.dart';
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
 abstract class Migrator extends Command<Map<Uri, String>> {
+  String get invocation => super
+      .invocation
+      .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
+
+  String get usage => "${super.usage}\n\n"
+      "See also https://sass-lang.com/documentation/cli/migrator#$name";
+
   /// If true, dependencies will be migrated in addition to the entrypoints.
   bool get migrateDependencies => globalResults['migrate-deps'] as bool;
 
@@ -65,10 +73,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
   Map<Uri, String> run() {
-    var allMigrated = Map<Uri, String>();
+    var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    // TODO(jathak): Add support for passing loadPaths from command line.
-    var importCache = ImportCache([]);
+    var importCache = ImportCache([NodeModulesImporter()],
+        loadPaths: globalResults['load-path']);
 
     var entrypoints = [
       for (var argument in argResults.rest)
@@ -86,7 +94,8 @@ abstract class Migrator extends Command<Map<Uri, String>> {
         if (allMigrated.containsKey(file) &&
             migrated[file] != allMigrated[file]) {
           throw MigrationException(
-              "$file is migrated in more than one way by these entrypoints.");
+              "The migrator has found multiple possible migrations for $file, "
+              "depending on the context in which it's loaded.");
         }
         allMigrated[file] = migrated[file];
       }

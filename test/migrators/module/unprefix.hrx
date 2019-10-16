@@ -11,13 +11,13 @@ $lib_b: $lib-a + 2;
 @function lib-fn($lib-local) {
   @return $lib-local;
 }
-$result: lib-fn(0);
 
 @mixin lib-mixin {
   lib-property: lib-value;
 }
 
 lib-selector {
+  lib-property: lib-fn(0);
   @include lib-mixin;
 }
 
@@ -28,12 +28,15 @@ $b: $a + 2;
 @function fn($lib-local) {
   @return $lib-local;
 }
-$result: fn(0);
 
 @mixin mixin {
   lib-property: lib-value;
 }
 
 lib-selector {
+  lib-property: fn(0);
   @include mixin;
 }
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;

@@ -1,0 +1,42 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "library";
+
+a {
+  b: shown() + hidden();
+  @include shown;
+  @include hidden; // this will error if compiled
+}
+
+<==> input/_functions.scss
+@function shown() {
+  @return 1;
+}
+
+@function hidden() {
+  @return 2;
+}
+
+<==> input/_mixins.scss
+@mixin shown() {
+  color: red;
+}
+
+@mixin hidden() {
+  background: blue;
+}
+
+<==> input/_library.scss
+@forward "functions" show shown;
+@forward "mixins" hide hidden;
+
+<==> output/entrypoint.scss
+@use "library";
+
+a {
+  b: library.shown() + hidden();
+  @include library.shown;
+  @include hidden; // this will error if compiled
+}

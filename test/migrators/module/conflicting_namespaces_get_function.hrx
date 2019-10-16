@@ -1,0 +1,36 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+get-function references aren't tracked by references.sources, so the conflict
+won't be resolved at the start of the stylesheet, but we still need to make
+sure that the conflict is resolved somehow.
+
+<==> input/entrypoint.scss
+@import "a/variables";
+@import "b/variables";
+
+$fn: get-function(fn);
+
+a {
+  color: $a;
+}
+
+<==> input/a/_variables.scss
+$a: blue;
+
+<==> input/b/_variables.scss
+@function fn() {
+  @return 4;
+}
+
+<==> output/entrypoint.scss
+@use "sass:meta";
+@use "a/variables";
+@use "b/variables" as variables2;
+
+$fn: meta.get-function(fn, $module: "variables2");
+
+a {
+  color: variables.$a;
+}

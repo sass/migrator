@@ -29,6 +29,9 @@ $c: 3;
 @use "lib1";
 @use "lib2";
 
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;
+
 <==> output/_lib1.scss
 @function fn() {
   @return 0;

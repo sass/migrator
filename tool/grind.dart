@@ -7,6 +7,7 @@ import 'package:grinder/grinder.dart';
 export 'grind/chocolatey.dart';
 export 'grind/npm.dart';
 export 'grind/github.dart';
+export 'grind/homebrew.dart';
 export 'grind/sanity_check.dart';
 export 'grind/standalone.dart';
 
