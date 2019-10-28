@@ -11,8 +11,9 @@ import 'package:tuple/tuple.dart';
 // The sass package's API is not necessarily stable. It is being imported with
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/ast/node.dart';
+import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/ast/selector.dart';
 
 import 'io.dart';
 import 'patch.dart';
@@ -200,6 +201,15 @@ Uri getImportOnlyUrl(Uri url) {
   var extension = filename.split('.').last;
   var basename = filename.substring(0, filename.length - extension.length - 1);
   return url.resolve('$basename.import.$extension');
+}
+
+Iterable<SimpleSelector> allSimpleSelectors(String selector) sync* {
+  var selectorList = SelectorList.parse(selector);
+  for (var complex in selectorList.components) {
+    for (var compound in complex.components.whereType<CompoundSelector>()) {
+      yield* compound.components;
+    }
+  }
 }
 
 /// Partitions [iterable] into two lists based on the types of its inputs.

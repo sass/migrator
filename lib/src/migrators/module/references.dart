@@ -9,6 +9,7 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/ast/selector.dart';
 import 'package:sass/src/importer.dart';
 import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
@@ -91,6 +92,10 @@ class References {
   /// map to the [ReferenceSource] for the `sass:meta` module).
   final Map<SassNode, ReferenceSource> sources;
 
+  /// For each stylesheet with at least one `@extend` rule, stores a set of
+  /// stylesheet URLs that contain selectors extended by those rules.
+  final Map<Uri, Set<Uri>> extensionDependencies;
+
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -150,7 +155,8 @@ class References {
           getFunctionReferences,
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
-      Map<SassNode, ReferenceSource> sources)
+      Map<SassNode, ReferenceSource> sources,
+      Map<Uri, Set<Uri>> extensionDependencies)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -163,7 +169,11 @@ class References {
         globalDeclarations = UnmodifiableSetView(globalDeclarations),
         libraries = UnmodifiableMapView(
             mapMap(libraries, value: (_, urls) => UnmodifiableSetView(urls))),
-        sources = UnmodifiableMapView(sources);
+        sources = UnmodifiableMapView(sources),
+        extensionDependencies = Map.unmodifiable({
+          for (var entry in extensionDependencies.entries)
+            entry.key: UnmodifiableSetView(entry.value)
+        });
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -217,6 +227,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   final _unresolvedReferences =
       <SassNode /*VariableExpression|IncludeRule|FunctionExpression*/, Scope>{};
 
+  /// Tracks all `@extend` rules found when visiting stylesheets.
+  ///
+  /// This will be combined with [_selectorUrls] to determine
+  /// `extensionDependencies` for the generated [References] object.
+  final _extensions = <ExtendRule>{};
+
+  /// Tracks the set of stylesheet URLs that each simple selector appears in.
+  final _selectorUrls = <SimpleSelector, Set<Uri>>{};
+
   /// Namespaces present within the current stylesheet.
   ///
   /// Note: Unlike the similar property in _ModuleMigrationVisitor, this only
@@ -257,6 +276,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     visitStylesheet(stylesheet);
     _checkUnresolvedReferences(_scope);
     _resolveBuiltInFunctionReferences();
+    var extensionDependencies = <Uri, Set<Uri>>{};
+    for (var extension in _extensions) {
+      if (extension.selector.asPlain == null) continue;
+      var dependencies =
+          extensionDependencies.putIfAbsent(extension.span.sourceUrl, () => {});
+      for (var selector in allSimpleSelectors(extension.selector.asPlain)) {
+        dependencies.addAll(_selectorUrls[selector]);
+      }
+    }
     return References._(
         _variables,
         _variableReassignments,
@@ -266,7 +294,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _getFunctionReferences,
         _globalDeclarations,
         _libraries,
-        _sources);
+        _sources,
+        extensionDependencies);
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -668,6 +697,23 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _getFunctionReferences[node] = declaration;
     } else if (namespace == null) {
       _unresolvedReferences[node] = _scope;
+    }
+  }
+
+  @override
+  void visitExtendRule(ExtendRule node) {
+    super.visitExtendRule(node);
+    _extensions.add(node);
+  }
+
+  @override
+  void visitStyleRule(StyleRule node) {
+    super.visitStyleRule(node);
+    if (node.selector.asPlain == null) return;
+    for (var simpleSelector in allSimpleSelectors(node.selector.asPlain)) {
+      _selectorUrls
+          .putIfAbsent(simpleSelector, () => {})
+          .add(node.span.sourceUrl);
     }
   }
 
