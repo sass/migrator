@@ -98,8 +98,10 @@ class ModuleMigrator extends Migrator {
             (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
         forward: forward);
     var migrated = visitor.run(stylesheet, importer);
-    _filesWithRenamedDeclarations.addAll(visitor.renamedMembers.keys
-        .map((declaration) => declaration.sourceUrl));
+    _filesWithRenamedDeclarations.addAll({
+      for (var member in visitor.renamedMembers.keys)
+        if (member.forward == null) member.sourceUrl
+    });
     return migrated;
   }
 }
@@ -308,7 +310,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var loadPathForwards = <String>[];
     var relativeForwards = <String>[];
     for (var url in references.globalDeclarations
-        .map((declaration) => declaration.sourceUrl)
+        .map((declaration) => declaration.isImportOnly
+            ? declaration.forwardedUrl
+            : declaration.sourceUrl)
         .toSet()) {
       if (url == currentUrl || _forwardedUrls.contains(url)) continue;
       var tuple = _makeForwardRule(url);
@@ -860,11 +864,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // Divide all global members from dependencies into sets based on whether
     // they should be forwarded or not.
     for (var declaration in references.globalDeclarations) {
-      if (declaration.sourceUrl != url) continue;
+      var expectedUrl = declaration.isImportOnly
+          ? declaration.forwardedUrl
+          : declaration.sourceUrl;
+      if (expectedUrl != url) continue;
 
       var newName = renamedMembers[declaration] ?? declaration.name;
       if (declaration.member is VariableDeclaration) newName = "\$$newName";
-
       if (_shouldForward(declaration.name) &&
           !declaration.name.startsWith('-')) {
         shown.add(newName);
@@ -977,24 +983,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
 
-    if (_isPrefixedImportOnly(declaration)) {
+    if (declaration.isImportOnly && declaration.forward?.prefix != null) {
       addPatch(patchDelete(span, end: declaration.forward.prefix.length));
     }
-  }
-
-  /// Returns true if [declaration] was forwarded from a regular stylesheet by
-  /// an import-only stylesheet of the same name.
-  bool _isPrefixedImportOnly(MemberDeclaration declaration) {
-    if (declaration.forward?.prefix == null) return false;
-    var containing = declaration.sourceUrl.toString();
-    var forwarded = declaration.forwardedUrl.toString();
-    if (!p.url.equals(p.url.dirname(containing), p.url.dirname(forwarded))) {
-      return false;
-    }
-    return p.url.basename(containing) ==
-        p.url.withoutExtension(p.url.basename(forwarded)) +
-            ".import" +
-            p.url.extension(containing);
   }
 
   /// Returns [name] with [prefixToRemove] removed.

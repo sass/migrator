@@ -9,6 +9,8 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
+import '../../utils.dart';
+
 /// A wrapper class for nodes that declare a variable, function, or mixin.
 ///
 /// The member this class wraps will always be a [VariableDeclaration],
@@ -61,6 +63,12 @@ class MemberDeclaration<T extends SassNode> {
       : member = forwarding.member,
         name = '${forward.prefix ?? ""}${forwarding.name}',
         sourceUrl = forward.span.sourceUrl;
+
+  /// Returns true if this declaration is the result of a `@forward` rule within
+  /// an import-only stylesheet.
+  bool get isImportOnly =>
+      forward != null &&
+      forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl);
 
   operator ==(other) =>
       other is MemberDeclaration &&
