@@ -1,0 +1,27 @@
+<==> arguments
+--migrate-deps --remove-prefix=lib- --forward=prefixed
+
+<==> input/entrypoint.scss
+@import "button";
+
+a {
+  color: $lib-button-variable;
+}
+
+<==> input/_button.scss
+$variable: green;
+
+<==> input/_button.import.scss
+@forward "button" as lib-button-*;
+
+<==> output/entrypoint.scss
+@use "button";
+
+@forward "button" as button-*;
+
+a {
+  color: button.$variable;
+}
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;

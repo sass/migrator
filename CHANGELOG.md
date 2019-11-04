@@ -2,6 +2,13 @@
 
 * Add support for glob inputs on the command line.
 
+### Module Migrator
+
+* Make `--remove-prefix=<prefix> --forward=prefixed` forward members that
+  previously started with `<prefix>` and were unprefixed by a previous migrator
+  run. This includes cases where the previously removed prefix is longer than
+  the prefix for the current migrator run.
+
 ## 1.0.1
 
 ### Module Migrator
