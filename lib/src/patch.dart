@@ -4,9 +4,10 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:collection/collection.dart';
 import 'package:source_span/source_span.dart';
 
-class Patch {
+class Patch implements Comparable<Patch> {
   /// Selection to be replaced
   final FileSpan selection;
 
@@ -22,8 +23,12 @@ class Patch {
 
   /// Applies a series of non-overlapping patches to the text of a file.
   static String applyAll(SourceFile file, List<Patch> patches) {
-    var sortedPatches = patches.toList()
-      ..sort((a, b) => a.selection.compareTo(b.selection));
+    // We use mergeSort instead of List.sort here because [patches] can be
+    // order-dependent when there are multiple insertion patches at the same
+    // point, and List.sort is not guaranteed to be stable.
+    var sortedPatches = patches.toList();
+    mergeSort(sortedPatches);
+
     var buffer = StringBuffer();
     int offset = 0;
     Patch lastPatch;
@@ -48,4 +53,7 @@ class Patch {
     buffer.write(file.getText(offset));
     return buffer.toString();
   }
+
+  /// Patches are ordered based on their selection.
+  int compareTo(Patch other) => selection.compareTo(other.selection);
 }
