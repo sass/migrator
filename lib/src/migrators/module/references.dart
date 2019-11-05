@@ -255,6 +255,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _declarationSources = {};
     _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
     visitStylesheet(stylesheet);
+    _globalDeclarations.addAll(_scope.variables.values);
+    _globalDeclarations.addAll(_scope.mixins.values);
+    _globalDeclarations.addAll(_scope.functions.values);
     _checkUnresolvedReferences(_scope);
     _resolveBuiltInFunctionReferences();
     return References._(
@@ -425,30 +428,33 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         throw StateError(
             "Arguments should not be present in a module's global scope");
       }
-      if (_visibleThroughForward(
-          declaration.name, node.shownVariables, node.hiddenVariables)) {
+      if (_visibleThroughForward(declaration.name, node.prefix,
+          node.shownVariables, node.hiddenVariables)) {
         _forwardMember(declaration, node, canonicalUrl, _scope.variables);
       }
     }
     for (var declaration in moduleScope.mixins.values) {
-      if (_visibleThroughForward(declaration.name, node.shownMixinsAndFunctions,
-          node.hiddenMixinsAndFunctions)) {
+      if (_visibleThroughForward(declaration.name, node.prefix,
+          node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
         _forwardMember(declaration, node, canonicalUrl, _scope.mixins);
       }
     }
     for (var declaration in moduleScope.functions.values) {
-      if (_visibleThroughForward(declaration.name, node.shownMixinsAndFunctions,
-          node.hiddenMixinsAndFunctions)) {
+      if (_visibleThroughForward(declaration.name, node.prefix,
+          node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
         _forwardMember(declaration, node, canonicalUrl, _scope.functions);
       }
     }
   }
 
-  /// Returns true if [name] should be shown based on [shown] and [hidden] from
-  /// a `@forward` rule.
+  /// Returns true if [name] should be shown based on [prefix], [shown], and
+  /// [hidden] from a `@forward` rule.
   bool _visibleThroughForward(
-          String name, Set<String> shown, Set<String> hidden) =>
-      (shown?.contains(name) ?? true) && !(hidden?.contains(name) ?? false);
+      String name, String prefix, Set<String> shown, Set<String> hidden) {
+    if (prefix != null) name = '$prefix$name';
+    return (shown?.contains(name) ?? true) &&
+        !(hidden?.contains(name) ?? false);
+  }
 
   /// Forwards [forwarding] into [declarations], adding the forwarded
   /// declaration to [_declarationSources].
@@ -572,7 +578,6 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var previous = scope.variables[node.name];
     if (previous == node) return;
     scope.variables[node.name] = member;
-    if (scope.isGlobal) _globalDeclarations.add(member);
     var original = _variableReassignments[previous] ?? previous;
     if (original != null) _variableReassignments[member] = original;
   }
@@ -601,7 +606,6 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _declarationSources[member] = CurrentSource(_currentUrl);
     _registerLibraryUrl(member);
     _scope.mixins[node.name] = member;
-    if (_scope.isGlobal) _globalDeclarations.add(member);
   }
 
   /// Visits an `@include` rule, storing the mixin reference.
@@ -629,7 +633,6 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _declarationSources[member] = CurrentSource(_currentUrl);
     _registerLibraryUrl(member);
     _scope.functions[node.name] = member;
-    if (_scope.isGlobal) _globalDeclarations.add(member);
   }
 
   /// Visits a function call, storing it if it is a user-defined function.

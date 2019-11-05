@@ -98,8 +98,8 @@ class ModuleMigrator extends Migrator {
             (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
         forward: forward);
     var migrated = visitor.run(stylesheet, importer);
-    _filesWithRenamedDeclarations.addAll(visitor.renamedMembers.keys
-        .map((declaration) => declaration.sourceUrl));
+    _filesWithRenamedDeclarations.addAll(
+        {for (var member in visitor.renamedMembers.keys) member.sourceUrl});
     return migrated;
   }
 }
@@ -162,6 +162,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Whether @use and @forward are allowed in the current context.
   var _useAllowed = true;
 
+  /// Whether an import-only stylesheet should be generated.
+  ///
+  /// This will be set to true if [prefixToRemove] is removed from any member
+  /// visible at the entrypoint.
+  var _needsImportOnly = false;
+
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
   Set<MemberDeclaration<VariableDeclaration>> _configuredVariables;
@@ -210,9 +216,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
 
-    // If a prefix was removed from any members, add an import-only stylesheet
-    // that forwards the entrypoint with that prefix.
-    if (prefixToRemove != null && renamedMembers.isNotEmpty) {
+    if (prefixToRemove != null && _needsImportOnly) {
       var url = stylesheet.span.sourceUrl;
       var importOnlyUrl = getImportOnlyUrl(url);
       var tuple = _absoluteUrlToDependency(url, relativeTo: importOnlyUrl);
@@ -266,6 +270,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// with `-` or `_` and are referenced outside the stylesheet they were
   /// declared in.
   void _renameDeclaration(MemberDeclaration declaration) {
+    if (declaration.forward != null) return;
+
     var name = declaration.name;
     if (name.startsWith('-') &&
         references.referencedOutsideDeclaringStylesheet(declaration)) {
@@ -274,7 +280,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       name = name.substring(1);
     }
     name = _unprefix(name);
-    if (name != declaration.name) renamedMembers[declaration] = name;
+    if (name != declaration.name) {
+      renamedMembers[declaration] = name;
+      if (_upstreamStylesheets.isEmpty) _needsImportOnly = true;
+    }
   }
 
   /// Returns a semicolon unless the current stylesheet uses the indented
@@ -308,13 +317,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var loadPathForwards = <String>[];
     var relativeForwards = <String>[];
     for (var url in references.globalDeclarations
-        .map((declaration) => declaration.sourceUrl)
+        .map((declaration) => declaration.isImportOnly
+            ? declaration.forwardedUrl
+            : declaration.sourceUrl)
         .toSet()) {
       if (url == currentUrl || _forwardedUrls.contains(url)) continue;
       var tuple = _makeForwardRule(url);
       if (tuple == null) continue;
-      (tuple.item2 ? relativeForwards : loadPathForwards)
-          .add('${tuple.item1}$_semicolonIfNotIndented\n');
+      (tuple.item2 ? relativeForwards : loadPathForwards).addAll(
+          [for (var rule in tuple.item1) '$rule$_semicolonIfNotIndented\n']);
     }
     var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
     return forwards.isEmpty ? '' : '\n' + forwards.join('');
@@ -838,7 +849,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var tuple = _makeForwardRule(resolvedUrl);
         if (tuple != null) {
           _forwardedUrls.add(resolvedUrl);
-          addPatch(Patch.insert(importStart, tuple.item1));
+          addPatch(Patch.insert(
+              importStart, tuple.item1.join('$_semicolonIfNotIndented\n')));
           return;
         }
       }
@@ -849,38 +861,69 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   }
 
   /// If [url] contains any member declarations that should be forwarded from
-  /// the entrypoint, returns a tuple of the `@forward` rule that should be used
-  /// and a boolean that is true when the URL of this rule is relative.
+  /// the entrypoint, returns a tuple of the `@forward` rule(s) that should be
+  /// used and a boolean that is true when the URL of these rules is relative.
   ///
   /// If nothing from [url] should be forwarded, returns null.
-  Tuple2<String, bool> _makeForwardRule(Uri url) {
-    var shown = <String>{};
+  Tuple2<List<String>, bool> _makeForwardRule(Uri url) {
+    var shownByPrefix = <String, Set<String>>{};
     var hidden = <String>{};
 
-    // Divide all global members from dependencies into sets based on whether
-    // they should be forwarded or not.
+    // Divide all global members from dependencies into sets based on their
+    // subprefix (if any) and whether they should be forwarded or not.
     for (var declaration in references.globalDeclarations) {
-      if (declaration.sourceUrl != url) continue;
+      var expectedUrl = declaration.isImportOnly
+          ? declaration.forwardedUrl
+          : declaration.sourceUrl;
+      if (expectedUrl != url) continue;
 
       var newName = renamedMembers[declaration] ?? declaration.name;
-      if (declaration.member is VariableDeclaration) newName = "\$$newName";
-
+      String importOnlyPrefix;
+      if (declaration.isImportOnly && declaration.forward.prefix != null) {
+        importOnlyPrefix = declaration.forward.prefix;
+        newName = declaration.name.substring(importOnlyPrefix.length);
+      }
+      var formattedNewName =
+          declaration.member is VariableDeclaration ? '\$$newName' : newName;
       if (_shouldForward(declaration.name) &&
           !declaration.name.startsWith('-')) {
-        shown.add(newName);
-      } else if (!newName.startsWith('-') && !newName.startsWith(r'$-')) {
-        hidden.add(newName);
+        var subprefix = "";
+        if (prefixToRemove != null &&
+            declaration.name.startsWith(prefixToRemove) &&
+            importOnlyPrefix != null) {
+          subprefix = importOnlyPrefix.substring(prefixToRemove.length);
+        }
+        if (declaration.name != newName) _needsImportOnly = true;
+        shownByPrefix.putIfAbsent(subprefix, () => {}).add(formattedNewName);
+      } else if (!newName.startsWith('-')) {
+        hidden.add(formattedNewName);
       }
     }
-    if (shown.isEmpty) return null;
-
+    if (shownByPrefix.isEmpty) return null;
     var tuple = _absoluteUrlToDependency(url);
-    var forward = '@forward "${tuple.item1}"';
-    if (hidden.isNotEmpty) {
-      var hiddenMembers = hidden.toList()..sort();
-      forward += ' hide ${hiddenMembers.join(", ")}';
+    var forwardBase = '@forward "${tuple.item1}"';
+    var forwards = <String>[];
+    for (var subprefix in shownByPrefix.keys.toList()..sort()) {
+      var allHidden = {
+        ...hidden,
+        for (var other in shownByPrefix.keys)
+          if (other != subprefix) ...shownByPrefix[other]
+      }.toList()
+        ..sort();
+      var forward = forwardBase;
+      if (subprefix.isNotEmpty) {
+        forward += ' as $subprefix*';
+        allHidden = [
+          for (var item in allHidden)
+            item.startsWith(r'$')
+                ? '\$$subprefix${item.substring(1)}'
+                : '$subprefix$item'
+        ];
+      }
+      if (allHidden.isNotEmpty) forward += ' hide ${allHidden.join(", ")}';
+      forwards.add(forward);
     }
-    return Tuple2(forward, tuple.item2);
+    return Tuple2(forwards, tuple.item2);
   }
 
   /// Adds a namespace to any mixin include that requires it.
@@ -977,24 +1020,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
 
-    if (_isPrefixedImportOnly(declaration)) {
+    if (declaration.isImportOnly && declaration.forward?.prefix != null) {
       addPatch(patchDelete(span, end: declaration.forward.prefix.length));
     }
-  }
-
-  /// Returns true if [declaration] was forwarded from a regular stylesheet by
-  /// an import-only stylesheet of the same name.
-  bool _isPrefixedImportOnly(MemberDeclaration declaration) {
-    if (declaration.forward?.prefix == null) return false;
-    var containing = declaration.sourceUrl.toString();
-    var forwarded = declaration.forwardedUrl.toString();
-    if (!p.url.equals(p.url.dirname(containing), p.url.dirname(forwarded))) {
-      return false;
-    }
-    return p.url.basename(containing) ==
-        p.url.withoutExtension(p.url.basename(forwarded)) +
-            ".import" +
-            p.url.extension(containing);
   }
 
   /// Returns [name] with [prefixToRemove] removed.
