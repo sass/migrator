@@ -428,30 +428,33 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         throw StateError(
             "Arguments should not be present in a module's global scope");
       }
-      if (_visibleThroughForward(
-          declaration.name, node.shownVariables, node.hiddenVariables)) {
+      if (_visibleThroughForward(declaration.name, node.prefix,
+          node.shownVariables, node.hiddenVariables)) {
         _forwardMember(declaration, node, canonicalUrl, _scope.variables);
       }
     }
     for (var declaration in moduleScope.mixins.values) {
-      if (_visibleThroughForward(declaration.name, node.shownMixinsAndFunctions,
-          node.hiddenMixinsAndFunctions)) {
+      if (_visibleThroughForward(declaration.name, node.prefix,
+          node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
         _forwardMember(declaration, node, canonicalUrl, _scope.mixins);
       }
     }
     for (var declaration in moduleScope.functions.values) {
-      if (_visibleThroughForward(declaration.name, node.shownMixinsAndFunctions,
-          node.hiddenMixinsAndFunctions)) {
+      if (_visibleThroughForward(declaration.name, node.prefix,
+          node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
         _forwardMember(declaration, node, canonicalUrl, _scope.functions);
       }
     }
   }
 
-  /// Returns true if [name] should be shown based on [shown] and [hidden] from
-  /// a `@forward` rule.
+  /// Returns true if [name] should be shown based on [prefix], [shown], and
+  /// [hidden] from a `@forward` rule.
   bool _visibleThroughForward(
-          String name, Set<String> shown, Set<String> hidden) =>
-      (shown?.contains(name) ?? true) && !(hidden?.contains(name) ?? false);
+      String name, String prefix, Set<String> shown, Set<String> hidden) {
+    if (prefix != null) name = '$prefix$name';
+    return (shown?.contains(name) ?? true) &&
+        !(hidden?.contains(name) ?? false);
+  }
 
   /// Forwards [forwarding] into [declarations], adding the forwarded
   /// declaration to [_declarationSources].

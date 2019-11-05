@@ -869,8 +869,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var shownByPrefix = <String, Set<String>>{};
     var hidden = <String>{};
 
-    // Divide all global members from dependencies into sets based on whether
-    // they should be forwarded or not.
+    // Divide all global members from dependencies into sets based on their
+    // subprefix (if any) and whether they should be forwarded or not.
     for (var declaration in references.globalDeclarations) {
       var expectedUrl = declaration.isImportOnly
           ? declaration.forwardedUrl
@@ -893,7 +893,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             importOnlyPrefix != null) {
           subprefix = importOnlyPrefix.substring(prefixToRemove.length);
         }
-        if (declaration.name.length != newName.length) _needsImportOnly = true;
+        if (declaration.name != newName) _needsImportOnly = true;
         shownByPrefix.putIfAbsent(subprefix, () => {}).add(formattedNewName);
       } else if (!newName.startsWith('-')) {
         hidden.add(formattedNewName);

@@ -1,0 +1,32 @@
+<==> arguments
+--migrate-deps --remove-prefix=lib- --forward=prefixed
+
+<==> input/entrypoint.scss
+@import "dependency";
+
+a {
+  color: $lib-a-var1;
+  background: $lib-b-var2;
+}
+
+<==> input/_dependency.scss
+$var1: green;
+$var2: blue;
+
+<==> input/_dependency.import.scss
+@forward "dependency" as lib-a-* show $lib-a-var1;
+@forward "dependency" as lib-b-* show $lib-b-var2;
+
+<==> output/entrypoint.scss
+@use "dependency";
+
+@forward "dependency" as a-* hide $a-var2;
+@forward "dependency" as b-* hide $b-var1;
+
+a {
+  color: dependency.$var1;
+  background: dependency.$var2;
+}
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;
