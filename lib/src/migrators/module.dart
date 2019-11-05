@@ -1016,7 +1016,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _renameReference(FileSpan span, MemberDeclaration declaration) {
     if (declaration == null) return;
     if (renamedMembers.containsKey(declaration)) {
-      addPatch(Patch(span, renamedMembers[declaration]));
+      var newName = renamedMembers[declaration];
+      if (declaration.name.endsWith(newName)) {
+        addPatch(
+            patchDelete(span, end: declaration.name.length - newName.length));
+      } else {
+        addPatch(Patch(span, newName));
+      }
       return;
     }
 
