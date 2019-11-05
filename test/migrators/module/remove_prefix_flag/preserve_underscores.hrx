@@ -1,0 +1,10 @@
+<==> arguments
+--remove-prefix=lib-
+<==> input/entrypoint.scss
+$lib_variable_with_underscores: green;
+
+<==> output/entrypoint.scss
+$variable_with_underscores: green;
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;
