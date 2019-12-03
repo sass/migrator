@@ -20,11 +20,17 @@ abstract class ReferenceSource {
   String get defaultNamespace;
 }
 
-/// A source for references to members loaded by an `@import` rule.
+/// A source for references that should be migrated like an `@import` rule.
+///
+/// This includes both sources that directly come from an `@import` rule and
+/// those from a `@forward` rule within an import-only file.
 class ImportSource extends ReferenceSource {
   final Uri url;
 
-  /// The import that loaded the member being referenced.
+  /// The URL within the `@import` or `@forward` rule that loaded this member.
+  String ruleUrl;
+
+  /// Creates an [ImportSource] for [url] from [import].
   ///
   /// Note: This is the import that directly loaded the stylesheet defining
   /// the referenced member, not the immediate import within the referencing
@@ -33,15 +39,18 @@ class ImportSource extends ReferenceSource {
   /// For example, if A imports B and B imports C, and a member of C is
   /// referenced in A, than that reference's source should be the import in B
   /// that imports C, not the import in A that imports B.
-  final DynamicImport import;
+  ImportSource(this.url, DynamicImport import) : ruleUrl = import.url;
 
-  ImportSource(this.url, this.import);
+  /// Creates an [ImportSource] from an [ImportOnlySource].
+  ImportSource.fromImportOnlyForward(ImportOnlySource source)
+      : url = source.realSourceUrl,
+        ruleUrl = source.ruleUrl;
 
-  String get defaultNamespace => namespaceForPath(import.url);
+  String get defaultNamespace => namespaceForPath(ruleUrl);
 
   operator ==(other) =>
-      other is ImportSource && url == other.url && import == other.import;
-  int get hashCode => import.hashCode;
+      other is ImportSource && url == other.url && ruleUrl == other.ruleUrl;
+  int get hashCode => url.hashCode;
 }
 
 /// A source for references to members loaded by a `@use` rule.
@@ -101,6 +110,9 @@ class CurrentSource extends ReferenceSource {
 /// since forwarded members cannot be referenced in the stylesheet that forwards
 /// them, and this will be replaced by an [ImportSource] or [UseSource] in any
 /// context where a forwarded member can be referenced.
+///
+/// Members forwarded from an import-only file should use [ImportOnlySource]
+/// instead of this.
 class ForwardSource extends ReferenceSource {
   final Uri url;
 
@@ -114,4 +126,30 @@ class ForwardSource extends ReferenceSource {
   operator ==(other) =>
       other is ForwardSource && url == other.url && forward == other.forward;
   int get hashCode => forward.hashCode;
+}
+
+/// A source for members forwarded through an import-only file.
+///
+/// This source is similar to [ForwardSource] in that it is only used by
+/// [_ReferenceVisitor] to track sources internally, and should not be present
+/// in the final [sources] property of [References].
+class ImportOnlySource extends ReferenceSource {
+  final Uri url;
+
+  final Uri realSourceUrl;
+
+  final String ruleUrl;
+
+  ImportOnlySource(this.realSourceUrl, ForwardRule forward)
+      : url = forward.span.sourceUrl,
+        ruleUrl = forward.url.toString();
+
+  String get defaultNamespace => null;
+
+  operator ==(other) =>
+      other is ImportOnlySource &&
+      url == other.url &&
+      realSourceUrl == other.realSourceUrl &&
+      ruleUrl == other.ruleUrl;
+  int get hashCode => realSourceUrl.hashCode;
 }

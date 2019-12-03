@@ -9,8 +9,6 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
-import '../../utils.dart';
-
 /// A wrapper class for nodes that declare a variable, function, or mixin.
 ///
 /// The member this class wraps will always be a [VariableDeclaration],
@@ -32,13 +30,19 @@ class MemberDeclaration<T extends SassNode> {
   /// The URL this member came from.
   ///
   /// For un-forwarded members, this is the URL the member was declared in.
-  /// For forwarded members, this is the URL of the `@forward` rule.
+  /// For members forwarded through an import-only file, this is the [sourceUrl]
+  /// of the member prior to that forward.
+  /// For other forwarded members, this is the URL of the `@forward` rule.
   final Uri sourceUrl;
 
   /// The canonical URL forwarded by [forward].
   ///
   /// This is `null` when [forward] is.
   final Uri forwardedUrl;
+
+  /// True if this declaration is the result of a `@forward` rule within an
+  /// import-only stylesheet.
+  final bool isImportOnly;
 
   /// Constructs a MemberDefinition for [member], which must be a
   /// [VariableDeclaration], [Argument], [MixinRule], or [FunctionRule].
@@ -54,7 +58,8 @@ class MemberDeclaration<T extends SassNode> {
         })(),
         sourceUrl = member.span.sourceUrl,
         forward = null,
-        forwardedUrl = null;
+        forwardedUrl = null,
+        isImportOnly = false;
 
   /// Constructs a forwarded MemberDefinition of [forwarding] based on
   /// [forward].
@@ -62,13 +67,10 @@ class MemberDeclaration<T extends SassNode> {
       MemberDeclaration forwarding, this.forward, this.forwardedUrl)
       : member = forwarding.member,
         name = '${forward.prefix ?? ""}${forwarding.name}',
-        sourceUrl = forward.span.sourceUrl;
-
-  /// Returns true if this declaration is the result of a `@forward` rule within
-  /// an import-only stylesheet.
-  bool get isImportOnly =>
-      forward != null &&
-      forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl);
+        isImportOnly = _isImportOnly(forward),
+        sourceUrl = _isImportOnly(forward)
+            ? forwarding.sourceUrl
+            : forward.span.sourceUrl;
 
   operator ==(other) =>
       other is MemberDeclaration &&
@@ -77,3 +79,9 @@ class MemberDeclaration<T extends SassNode> {
 
   int get hashCode => member.hashCode;
 }
+
+/// Returns true if [forward] is non-null and inside an import-only file.
+bool _isImportOnly(ForwardRule forward) =>
+    forward != null &&
+    (forward.span.sourceUrl.path.endsWith('.import.scss') ||
+        forward.span.sourceUrl.path.endsWith('.import.sass'));

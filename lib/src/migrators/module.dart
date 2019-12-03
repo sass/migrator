@@ -9,6 +9,7 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
+import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
 
 import 'package:args/args.dart';
@@ -451,7 +452,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // namespace.
       var paths = {
         for (var source in sources)
-          source: Uri.parse(source.import.url).pathSegments.toList()
+          source: Uri.parse(source.ruleUrl).pathSegments.toList()
             ..removeLast()
             ..removeWhere((segment) => segment.contains('.'))
       };
@@ -512,7 +513,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   List<Set<ImportSource>> _orderSources(Iterable<ImportSource> sources) {
     var byPathLength = <int, Set<ImportSource>>{};
     for (var source in sources) {
-      var pathSegments = Uri.parse(source.import.url).pathSegments;
+      var pathSegments = Uri.parse(source.ruleUrl).pathSegments;
       byPathLength.putIfAbsent(pathSegments.length, () => {}).add(source);
     }
     return [
@@ -746,7 +747,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Associate the importer for this URL with the resolved URL so that we can
     // re-use this import URL later on.
-    var tuple = importCache.canonicalize(parsedUrl, importer, currentUrl);
+
+    var tuple = inUseRule(
+        () => importCache.canonicalize(parsedUrl, importer, currentUrl));
     var resolvedUrl = tuple.item2;
     _originalImports.putIfAbsent(
         resolvedUrl, () => Tuple2(import.url, tuple.item1));

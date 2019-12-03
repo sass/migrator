@@ -346,9 +346,13 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         var importSource = ImportSource(url, import);
         for (var declaration in _declarationSources.keys.toList()) {
           var source = _declarationSources[declaration];
-          if (source.url == url &&
-              (source is CurrentSource || source is ForwardSource)) {
-            _declarationSources[declaration] = importSource;
+          if (source.url == url) {
+            if (source is CurrentSource || source is ForwardSource) {
+              _declarationSources[declaration] = importSource;
+            } else if (source is ImportOnlySource) {
+              _declarationSources[declaration] =
+                  ImportSource.fromImportOnlyForward(source);
+            }
           }
           _importer = oldImporter;
         }
@@ -468,8 +472,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _registerLibraryUrl(declaration);
     var prefix = forward.prefix ?? '';
     declarations['$prefix${forwarding.name}'] = declaration;
-    _declarationSources[declaration] =
-        ForwardSource(forward.span.sourceUrl, forward);
+
+    if (forward.span.sourceUrl.path.endsWith('.import.scss') ||
+        forward.span.sourceUrl.path.endsWith('.import.sass')) {
+      _declarationSources[declaration] =
+          ImportOnlySource(forwardedUrl, forward);
+    } else {
+      _declarationSources[declaration] =
+          ForwardSource(forward.span.sourceUrl, forward);
+    }
   }
 
   /// Visits each of [node]'s expressions and children.
