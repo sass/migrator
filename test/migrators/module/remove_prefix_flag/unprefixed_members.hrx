@@ -14,5 +14,5 @@ $c: 3;
 $d: 4;
 
 <==> output/entrypoint.import.scss
+@forward "entrypoint" hide $a, $b;
 @forward "entrypoint" as lib-* hide $lib-c, $lib-d;
-@forward "entrypoint" show $c, $d;

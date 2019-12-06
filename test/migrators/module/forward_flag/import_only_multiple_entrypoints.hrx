@@ -1,0 +1,25 @@
+<==> arguments
+--migrate-deps --remove-prefix=lib- --forward=import-only
+
+<==> input/entrypoint1.scss
+@import "entrypoint2";
+
+$lib-variable1: 1 + $lib-variable2;
+
+<==> input/entrypoint2.scss
+$lib-variable2: 1;
+
+<==> output/entrypoint1.scss
+@use "entrypoint2";
+
+$variable1: 1 + entrypoint2.$variable2;
+
+<==> output/entrypoint1.import.scss
+@forward "entrypoint1" as lib-*;
+@forward "entrypoint2" as lib-*;
+
+<==> output/entrypoint2.scss
+$variable2: 1;
+
+<==> output/entrypoint2.import.scss
+@forward "entrypoint2" as lib-*;
