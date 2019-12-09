@@ -417,7 +417,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
       }
     }
-
     // First assign namespaces to module URLs without conflicts.
     var conflictingNamespaces = <String, Set<ReferenceSource>>{};
     sourcesByNamespace.forEach((namespace, sources) {
@@ -430,7 +429,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Then resolve conflicts where they exist.
     conflictingNamespaces.forEach((namespace, sources) {
-      _resolveNamespaceConflict(namespace, sources, namespaces);
+      _resolveNamespaceConflict(namespace, sources, namespaces, url);
     });
     return namespaces;
   }
@@ -438,7 +437,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Resolves a conflict between a set of sources with the same default
   /// namespace, adding namespaces for all of them to [namespaces].
   void _resolveNamespaceConflict(String namespace, Set<ReferenceSource> sources,
-      Map<Uri, String> namespaces) {
+      Map<Uri, String> namespaces, Uri currentUrl) {
     // Give first priority to a built-in module.
     var builtIns = sources.whereType<BuiltInSource>();
     if (builtIns.isNotEmpty) {
@@ -452,9 +451,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // namespace.
       var paths = {
         for (var source in sources)
-          source: Uri.parse(source.ruleUrl).pathSegments.toList()
-            ..removeLast()
-            ..removeWhere((segment) => segment.contains('.'))
+          source: _absoluteUrlToDependency(source.url, relativeTo: currentUrl)
+              .item1
+              .split('/')
+                ..removeLast()
+                ..removeWhere((segment) => segment.contains('.'))
       };
       // Start each rule's namespace at the default.
       var aliases = {for (var source in sources) source: namespace};
