@@ -340,7 +340,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _importer = result.item1;
         var oldLibraryUrl = _libraryUrl;
         var url = result.item2.span.sourceUrl;
-        if (_importer != oldImporter) _libraryUrl ??= url;
+        if (_importer != oldImporter &&
+            !url.toString().endsWith('.import.scss') &&
+            !url.toString().endsWith('.import.sass')) {
+          _libraryUrl ??= url;
+        }
 
         visitStylesheet(result.item2);
         var importSource = ImportSource(url, import);

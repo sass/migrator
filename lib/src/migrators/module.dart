@@ -459,7 +459,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       };
       // Start each rule's namespace at the default.
       var aliases = {for (var source in sources) source: namespace};
-
+      
       // While multiple rules have the same namespace or any rule's
       // namespace is already present, add the next path segment to all
       // namespaces at once.
@@ -746,11 +746,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
 
-    // Associate the importer for this URL with the resolved URL so that we can
-    // re-use this import URL later on.
-
+    // Clear the cache for this URL and re-canonicalize it for a `@use` rule.
+    importCache.clearCanonicalize(parsedUrl);
     var tuple = inUseRule(
         () => importCache.canonicalize(parsedUrl, importer, currentUrl));
+
+    // Associate the importer for this URL with the resolved URL so that we can
+    // re-use this import URL later on.
     var resolvedUrl = tuple.item2;
     _originalImports.putIfAbsent(
         resolvedUrl, () => Tuple2(import.url, tuple.item1));
