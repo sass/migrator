@@ -286,16 +286,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         ? _forwardRulesForShown(
             entrypoint, dependency, forwardsByUrl.remove(entrypoint), {})
         : ['@forward "$dependency"'];
-
-    var forwardLines = [
-      ...entrypointForwards,
+    var tuples = [
       for (var entry in forwardsByUrl.entries)
-        ..._forwardRulesForShown(
+        Tuple3(
             entry.key,
             _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl)
                 .item1,
-            entry.value,
-            hiddenByUrl[entry.key] ?? {})
+            entry.value)
+    ]..sort((a, b) => a.item2.compareTo(b.item2));
+    var forwardLines = [
+      ...entrypointForwards,
+      for (var tuple in tuples)
+        ..._forwardRulesForShown(tuple.item1, tuple.item2, tuple.item3,
+            hiddenByUrl[tuple.item1] ?? {})
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
     return forwardLines.join('$semicolon\n') + '$semicolon\n';
