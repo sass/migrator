@@ -232,8 +232,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// importer than the entrypoint's.
   Uri _libraryUrl;
 
-  /// The URL of the stylesheet currently being migrated.
+  /// The canonical URL of the stylesheet currently being migrated.
   Uri _currentUrl;
+
+  /// The URL of the rule used to load the current stylesheet.
+  String _currentRuleUrl;
 
   /// The importer that's currently being used to resolve relative imports.
   ///
@@ -345,7 +348,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
             !url.toString().endsWith('.import.sass')) {
           _libraryUrl ??= url;
         }
-
+        var oldRuleUrl = _currentRuleUrl;
+        _currentRuleUrl = import.url;
         visitStylesheet(result.item2);
         var importSource = ImportSource(url, import);
         for (var declaration in _declarationSources.keys.toList()) {
@@ -363,6 +367,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
         _libraryUrl = oldLibraryUrl;
         _importer = oldImporter;
+        _currentRuleUrl = oldRuleUrl;
       }
     }
   }
@@ -415,12 +420,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _importer = result.item1;
     var oldLibraryUrl = _libraryUrl;
     _libraryUrl = null;
+    var oldRuleUrl = _currentRuleUrl;
+    _currentRuleUrl = ruleUrl.toString();
     visitStylesheet(stylesheet);
     _checkUnresolvedReferences(_scope);
     _libraryUrl = oldLibraryUrl;
     _importer = oldImporter;
     _scope = oldScope;
     _declarationSources = oldSources;
+    _currentRuleUrl = oldRuleUrl;
     return canonicalUrl;
   }
 
@@ -479,8 +487,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
     if (forward.span.sourceUrl.path.endsWith('.import.scss') ||
         forward.span.sourceUrl.path.endsWith('.import.sass')) {
-      _declarationSources[declaration] =
-          ImportOnlySource(forwardedUrl, forward);
+      _declarationSources[declaration] = ImportOnlySource(
+          forward.span.sourceUrl,
+          forwardedUrl,
+          forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl)
+              ? _currentRuleUrl
+              : null);
     } else {
       _declarationSources[declaration] =
           ForwardSource(forward.span.sourceUrl, forward);

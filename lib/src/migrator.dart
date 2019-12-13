@@ -75,8 +75,6 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    var importCache = ImportCache([NodeModulesImporter()],
-        loadPaths: globalResults['load-path']);
 
     var entrypoints = [
       for (var argument in argResults.rest)
@@ -84,6 +82,8 @@ abstract class Migrator extends Command<Map<Uri, String>> {
           if (entry is File) entry.path
     ];
     for (var entrypoint in entrypoints) {
+      var importCache = ImportCache([NodeModulesImporter()],
+          loadPaths: globalResults['load-path']);
       var tuple = importCache.import(Uri.parse(entrypoint), importer);
       if (tuple == null) {
         throw MigrationException("Could not find Sass file at '$entrypoint'.");

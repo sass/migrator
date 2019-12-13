@@ -27,8 +27,17 @@ abstract class ReferenceSource {
 class ImportSource extends ReferenceSource {
   final Uri url;
 
-  /// The URL within the `@import` or `@forward` rule that loaded this member.
-  String ruleUrl;
+  /// The URL within the `@import` rule that loaded this member, or null if it
+  /// is not yet known.
+  String get ruleUrl => _ruleUrl;
+  String _ruleUrl;
+
+  /// Initializes [ruleUrl] if it is currently null.
+  ///
+  /// If [ruleUrl] has already been initialized, this has no effect.
+  void set ruleUrl(String url) {
+    _ruleUrl ??= url;
+  }
 
   /// Creates an [ImportSource] for [url] from [import].
   ///
@@ -39,13 +48,15 @@ class ImportSource extends ReferenceSource {
   /// For example, if A imports B and B imports C, and a member of C is
   /// referenced in A, than that reference's source should be the import in B
   /// that imports C, not the import in A that imports B.
-  ImportSource(this.url, DynamicImport import) : ruleUrl = import.url;
+  ImportSource(this.url, DynamicImport import) : _ruleUrl = import.url;
 
   /// Creates an [ImportSource] from an [ImportOnlySource].
   ImportSource.fromImportOnlyForward(ImportOnlySource source)
       : url = source.realSourceUrl,
-        ruleUrl = source.ruleUrl;
+        _ruleUrl = source.ruleUrl;
 
+  /// Returns the default namespace based on [ruleUrl], which must be
+  /// initialized before referencing this member.
   String get defaultNamespace => namespaceForPath(ruleUrl);
 
   operator ==(other) =>
@@ -134,15 +145,19 @@ class ForwardSource extends ReferenceSource {
 /// [_ReferenceVisitor] to track sources internally, and should not be present
 /// in the final [sources] property of [References].
 class ImportOnlySource extends ReferenceSource {
+  /// The canonical URL of the import-only file.
   final Uri url;
 
+  /// The canonical URL of the file forwarded from the import-only file.
   final Uri realSourceUrl;
 
+  /// If [url] is the import-only file for [realSourceUrl], this should be the
+  /// rule URL from the `@import` rule that loaded the import-only file.
+  ///
+  /// Otherwise, this will be null.
   final String ruleUrl;
 
-  ImportOnlySource(this.realSourceUrl, ForwardRule forward)
-      : url = forward.span.sourceUrl,
-        ruleUrl = forward.url.toString();
+  ImportOnlySource(this.url, this.realSourceUrl, this.ruleUrl);
 
   String get defaultNamespace => null;
 

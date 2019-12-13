@@ -407,6 +407,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var reference in references.sources.keys) {
       if (reference.span.sourceUrl != url) continue;
       var source = references.sources[reference];
+      if (source is ImportSource) {
+        if (source.ruleUrl == null) {
+          source.ruleUrl =
+              _absoluteUrlToDependency(source.url, relativeTo: url).item1;
+        }
+      }
       var namespace = source.defaultNamespace;
       if (namespace == null) continue;
 
@@ -451,15 +457,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // namespace.
       var paths = {
         for (var source in sources)
-          source: _absoluteUrlToDependency(source.url, relativeTo: currentUrl)
-              .item1
-              .split('/')
-                ..removeLast()
-                ..removeWhere((segment) => segment.contains('.'))
+          source: source.ruleUrl.split('/')
+            ..removeLast()
+            ..removeWhere((segment) => segment.contains('.'))
       };
       // Start each rule's namespace at the default.
       var aliases = {for (var source in sources) source: namespace};
-      
+
       // While multiple rules have the same namespace or any rule's
       // namespace is already present, add the next path segment to all
       // namespaces at once.
