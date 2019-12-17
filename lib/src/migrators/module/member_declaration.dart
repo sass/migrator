@@ -9,6 +9,8 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
+import '../../utils.dart';
+
 /// A wrapper class for nodes that declare a variable, function, or mixin.
 ///
 /// The member this class wraps will always be a [VariableDeclaration],
@@ -67,8 +69,8 @@ class MemberDeclaration<T extends SassNode> {
       MemberDeclaration forwarding, this.forward, this.forwardedUrl)
       : member = forwarding.member,
         name = '${forward.prefix ?? ""}${forwarding.name}',
-        isImportOnly = _isImportOnly(forward),
-        sourceUrl = _isImportOnly(forward)
+        isImportOnly = isImportOnlyFile(forward.span.sourceUrl),
+        sourceUrl = isImportOnlyFile(forward.span.sourceUrl)
             ? forwarding.sourceUrl
             : forward.span.sourceUrl;
 
@@ -79,9 +81,3 @@ class MemberDeclaration<T extends SassNode> {
 
   int get hashCode => member.hashCode;
 }
-
-/// Returns true if [forward] is non-null and inside an import-only file.
-bool _isImportOnly(ForwardRule forward) =>
-    forward != null &&
-    (forward.span.sourceUrl.path.endsWith('.import.scss') ||
-        forward.span.sourceUrl.path.endsWith('.import.sass'));

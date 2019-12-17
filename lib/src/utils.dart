@@ -202,6 +202,10 @@ Uri getImportOnlyUrl(Uri url) {
   return url.resolve('$basename.import.$extension');
 }
 
+/// Returns true if [url] is an import-only file.
+bool isImportOnlyFile(Uri url) =>
+    url.path.endsWith('.import.scss') || url.path.endsWith('.import.sass');
+
 /// Partitions [iterable] into two lists based on the types of its inputs.
 ///
 /// This asserts that every element in [iterable] is either an `F` or a `G`, and

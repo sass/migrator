@@ -407,11 +407,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var reference in references.sources.keys) {
       if (reference.span.sourceUrl != url) continue;
       var source = references.sources[reference];
-      if (source is ImportSource) {
-        if (source.ruleUrl == null) {
-          source.ruleUrl =
-              _absoluteUrlToDependency(source.url, relativeTo: url).item1;
-        }
+      if (source is ImportSource && source.ruleUrl == null) {
+        source.ruleUrl =
+            _absoluteUrlToDependency(source.url, relativeTo: url).item1;
       }
       var namespace = source.defaultNamespace;
       if (namespace == null) continue;
