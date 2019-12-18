@@ -407,10 +407,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var reference in references.sources.keys) {
       if (reference.span.sourceUrl != url) continue;
       var source = references.sources[reference];
-      if (source is ImportSource && source.ruleUrl == null) {
-        source.ruleUrl =
-            _absoluteUrlToDependency(source.url, relativeTo: url).item1;
-      }
       var namespace = source.defaultNamespace;
       if (namespace == null) continue;
 
@@ -448,14 +444,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       namespaces[builtIns.first.url] =
           _resolveBuiltInNamespace(namespace, namespaces);
     }
+    var ruleUrlsForSources = {
+      for (var source in sources.whereType<ImportSource>())
+        source: source.originalRuleUrl ??
+            _absoluteUrlToDependency(source.url, relativeTo: currentUrl).item1
+    };
     // Then handle `@import` rules, in order of path segment count.
-    for (var sources in _orderSources(sources.whereType<ImportSource>())) {
+    for (var sources in _orderSources(ruleUrlsForSources)) {
       // We remove the last segment since it's already present in the
       // namespace and any segments with dots since they're not valid in a
       // namespace.
       var paths = {
         for (var source in sources)
-          source: source.ruleUrl.split('/')
+          source: ruleUrlsForSources[source].split('/')
             ..removeLast()
             ..removeWhere((segment) => segment.contains('.'))
       };
@@ -513,11 +514,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Given a set of import sources, groups them by the number of path segments
   /// and sorts those groups from fewer to more segments.
-  List<Set<ImportSource>> _orderSources(Iterable<ImportSource> sources) {
+  List<Set<ImportSource>> _orderSources(
+      Map<ImportSource, String> ruleUrlsForSources) {
     var byPathLength = <int, Set<ImportSource>>{};
-    for (var source in sources) {
-      var pathSegments = Uri.parse(source.ruleUrl).pathSegments;
-      byPathLength.putIfAbsent(pathSegments.length, () => {}).add(source);
+    for (var entry in ruleUrlsForSources.entries) {
+      var pathSegments = Uri.parse(entry.value).pathSegments;
+      byPathLength.putIfAbsent(pathSegments.length, () => {}).add(entry.key);
     }
     return [
       for (var length in byPathLength.keys.toList()..sort())

@@ -27,17 +27,9 @@ abstract class ReferenceSource {
 class ImportSource extends ReferenceSource {
   final Uri url;
 
-  /// The URL within the `@import` rule that loaded this member, or null if it
-  /// is not yet known.
-  String get ruleUrl => _ruleUrl;
-  String _ruleUrl;
-
-  /// Initializes [ruleUrl] if it is currently null.
-  ///
-  /// If [ruleUrl] has already been initialized, this has no effect.
-  void set ruleUrl(String url) {
-    _ruleUrl ??= url;
-  }
+  /// The URL within the `@import` rule that loaded this member, or null if this
+  /// is for an indirect dependency forwarded in an import-only file.
+  final String originalRuleUrl;
 
   /// Creates an [ImportSource] for [url] from [import].
   ///
@@ -48,19 +40,21 @@ class ImportSource extends ReferenceSource {
   /// For example, if A imports B and B imports C, and a member of C is
   /// referenced in A, than that reference's source should be the import in B
   /// that imports C, not the import in A that imports B.
-  ImportSource(this.url, DynamicImport import) : _ruleUrl = import.url;
+  ImportSource(this.url, DynamicImport import) : originalRuleUrl = import.url;
 
   /// Creates an [ImportSource] from an [ImportOnlySource].
   ImportSource.fromImportOnlyForward(ImportOnlySource source)
       : url = source.realSourceUrl,
-        _ruleUrl = source.ruleUrl;
+        originalRuleUrl = source.originalRuleUrl;
 
   /// Returns the default namespace based on [ruleUrl], which must be
   /// initialized before referencing this member.
-  String get defaultNamespace => namespaceForPath(ruleUrl);
+  String get defaultNamespace => namespaceForPath(url.path);
 
   operator ==(other) =>
-      other is ImportSource && url == other.url && ruleUrl == other.ruleUrl;
+      other is ImportSource &&
+      url == other.url &&
+      originalRuleUrl == other.originalRuleUrl;
   int get hashCode => url.hashCode;
 }
 
@@ -155,9 +149,9 @@ class ImportOnlySource extends ReferenceSource {
   /// rule URL from the `@import` rule that loaded the import-only file.
   ///
   /// Otherwise, this will be null.
-  final String ruleUrl;
+  final String originalRuleUrl;
 
-  ImportOnlySource(this.url, this.realSourceUrl, this.ruleUrl);
+  ImportOnlySource(this.url, this.realSourceUrl, this.originalRuleUrl);
 
   String get defaultNamespace => null;
 
@@ -165,6 +159,6 @@ class ImportOnlySource extends ReferenceSource {
       other is ImportOnlySource &&
       url == other.url &&
       realSourceUrl == other.realSourceUrl &&
-      ruleUrl == other.ruleUrl;
+      originalRuleUrl == other.originalRuleUrl;
   int get hashCode => realSourceUrl.hashCode;
 }
