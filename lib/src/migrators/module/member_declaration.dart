@@ -31,10 +31,10 @@ class MemberDeclaration<T extends SassNode> {
 
   /// The URL this member came from.
   ///
-  /// For un-forwarded members, this is the URL the member was declared in.
-  /// For members forwarded through an import-only file, this is the [sourceUrl]
-  /// of the member prior to that forward.
-  /// For other forwarded members, this is the URL of the `@forward` rule.
+  /// For un-forwarded members, this is the URL the member was declared in. For
+  /// members forwarded through an import-only file, this is the [sourceUrl] of
+  /// the member prior to that forward. For other forwarded members, this is the
+  /// URL of the `@forward` rule.
   final Uri sourceUrl;
 
   /// The canonical URL forwarded by [forward].

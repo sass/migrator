@@ -27,7 +27,7 @@ abstract class ReferenceSource {
 class ImportSource extends ReferenceSource {
   final Uri url;
 
-  /// The URL within the `@import` rule that loaded this member, or null if this
+  /// The URL of the `@import` rule that loaded this member, or null if this
   /// is for an indirect dependency forwarded in an import-only file.
   final String originalRuleUrl;
 

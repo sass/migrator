@@ -436,6 +436,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Resolves a conflict between a set of sources with the same default
   /// namespace, adding namespaces for all of them to [namespaces].
+  ///
+  /// [currentUrl] is the canonical URL of the file that contains all of the
+  /// references in [sources].
   void _resolveNamespaceConflict(String namespace, Set<ReferenceSource> sources,
       Map<Uri, String> namespaces, Uri currentUrl) {
     // Give first priority to a built-in module.
@@ -750,7 +753,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
 
-    // Clear the cache for this URL and re-canonicalize it for a `@use` rule.
+    // Clear the cache for this URL and re-canonicalize it for a `@use` rule,
+    // since it was previously canonicalized for an `@import` rule.
+    // TODO(jathak): Remove this once dart-sass#899 is fixed
     importCache.clearCanonicalize(parsedUrl);
     var tuple = inUseRule(
         () => importCache.canonicalize(parsedUrl, importer, currentUrl));
