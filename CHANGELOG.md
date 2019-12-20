@@ -2,10 +2,10 @@
 
 * Add support for glob inputs on the command line.
 
+### Module Migrator
+
 * Better handling when migrating files whose dependencies have complex
   import-only files.
-
-### Module Migrator
 
 * Make `--remove-prefix=<prefix> --forward=prefixed` forward members that
   previously started with `<prefix>` and were unprefixed by a previous migrator
