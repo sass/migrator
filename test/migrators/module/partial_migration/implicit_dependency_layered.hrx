@@ -1,0 +1,39 @@
+<==> arguments
+--migrate-deps
+
+<==> README.md
+This test ensures that `@forward` rules in an import-only file is bypassed,
+but that `@forward` rules in regular files are still respected (so `$upstream`
+is part of the `indirect` module from the entrypoint's perspective).
+
+<==> input/entrypoint.scss
+@import "direct";
+
+a {
+  b: $direct;
+  c: $upstream;
+}
+
+<==> input/_direct.scss
+@use "indirect";
+
+$direct: indirect.$upstream + 1;
+
+<==> input/_direct.import.scss
+@forward "direct";
+@forward "indirect";
+
+<==> input/_indirect.scss
+@forward "upstream";
+
+<==> input/_upstream.scss
+$upstream: 2;
+
+<==> output/entrypoint.scss
+@use "direct";
+@use "indirect";
+
+a {
+  b: direct.$direct;
+  c: indirect.$upstream;
+}

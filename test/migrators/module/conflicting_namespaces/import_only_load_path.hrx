@@ -1,0 +1,32 @@
+<==> arguments
+--migrate-deps --load-path load-path
+
+<==> input/entrypoint.scss
+@import "a/variables";
+@import "b/variables";
+
+a {
+  color: $a;
+  background: $b;
+}
+
+<==> input/load-path/a/_variables.scss
+$a: blue;
+
+<==> input/load-path/a/_variables.import.scss
+@forward "variables";
+
+<==> input/load-path/b/_variables.scss
+$b: green;
+
+<==> input/load-path/b/_variables.import.scss
+@forward "variables";
+
+<==> output/entrypoint.scss
+@use "a/variables" as a-variables;
+@use "b/variables" as b-variables;
+
+a {
+  color: a-variables.$a;
+  background: b-variables.$b;
+}

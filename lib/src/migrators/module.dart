@@ -9,6 +9,7 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
+import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
 
 import 'package:args/args.dart';
@@ -416,7 +417,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
       }
     }
-
     // First assign namespaces to module URLs without conflicts.
     var conflictingNamespaces = <String, Set<ReferenceSource>>{};
     sourcesByNamespace.forEach((namespace, sources) {
@@ -429,29 +429,37 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Then resolve conflicts where they exist.
     conflictingNamespaces.forEach((namespace, sources) {
-      _resolveNamespaceConflict(namespace, sources, namespaces);
+      _resolveNamespaceConflict(namespace, sources, namespaces, url);
     });
     return namespaces;
   }
 
   /// Resolves a conflict between a set of sources with the same default
   /// namespace, adding namespaces for all of them to [namespaces].
+  ///
+  /// [currentUrl] is the canonical URL of the file that contains all of the
+  /// references in [sources].
   void _resolveNamespaceConflict(String namespace, Set<ReferenceSource> sources,
-      Map<Uri, String> namespaces) {
+      Map<Uri, String> namespaces, Uri currentUrl) {
     // Give first priority to a built-in module.
     var builtIns = sources.whereType<BuiltInSource>();
     if (builtIns.isNotEmpty) {
       namespaces[builtIns.first.url] =
           _resolveBuiltInNamespace(namespace, namespaces);
     }
+    var ruleUrlsForSources = {
+      for (var source in sources.whereType<ImportSource>())
+        source: source.originalRuleUrl ??
+            _absoluteUrlToDependency(source.url, relativeTo: currentUrl).item1
+    };
     // Then handle `@import` rules, in order of path segment count.
-    for (var sources in _orderSources(sources.whereType<ImportSource>())) {
+    for (var sources in _orderSources(ruleUrlsForSources)) {
       // We remove the last segment since it's already present in the
       // namespace and any segments with dots since they're not valid in a
       // namespace.
       var paths = {
         for (var source in sources)
-          source: Uri.parse(source.import.url).pathSegments.toList()
+          source: ruleUrlsForSources[source].split('/')
             ..removeLast()
             ..removeWhere((segment) => segment.contains('.'))
       };
@@ -509,11 +517,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Given a set of import sources, groups them by the number of path segments
   /// and sorts those groups from fewer to more segments.
-  List<Set<ImportSource>> _orderSources(Iterable<ImportSource> sources) {
+  List<Set<ImportSource>> _orderSources(
+      Map<ImportSource, String> ruleUrlsForSources) {
     var byPathLength = <int, Set<ImportSource>>{};
-    for (var source in sources) {
-      var pathSegments = Uri.parse(source.import.url).pathSegments;
-      byPathLength.putIfAbsent(pathSegments.length, () => {}).add(source);
+    for (var entry in ruleUrlsForSources.entries) {
+      var pathSegments = Uri.parse(entry.value).pathSegments;
+      byPathLength.putIfAbsent(pathSegments.length, () => {}).add(entry.key);
     }
     return [
       for (var length in byPathLength.keys.toList()..sort())
@@ -744,9 +753,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
 
+    // Clear the cache for this URL and re-canonicalize it for a `@use` rule,
+    // since it was previously canonicalized for an `@import` rule.
+    // TODO(jathak): Remove this once dart-sass#899 is fixed
+    importCache.clearCanonicalize(parsedUrl);
+    var tuple = inUseRule(
+        () => importCache.canonicalize(parsedUrl, importer, currentUrl));
+
     // Associate the importer for this URL with the resolved URL so that we can
     // re-use this import URL later on.
-    var tuple = importCache.canonicalize(parsedUrl, importer, currentUrl);
     var resolvedUrl = tuple.item2;
     _originalImports.putIfAbsent(
         resolvedUrl, () => Tuple2(import.url, tuple.item1));

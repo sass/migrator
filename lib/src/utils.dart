@@ -20,7 +20,8 @@ import 'patch.dart';
 /// Returns the default namespace for a use rule with [path].
 String namespaceForPath(String path) {
   // TODO(jathak): Confirm that this is a valid Sass identifier
-  return path.split('/').last.split('.').first;
+  var basename = path.split('/').last.split('.').first;
+  return basename.startsWith('_') ? basename.substring(1) : basename;
 }
 
 /// Creates a patch that adds [text] immediately before [node].
@@ -201,6 +202,10 @@ Uri getImportOnlyUrl(Uri url) {
   var basename = filename.substring(0, filename.length - extension.length - 1);
   return url.resolve('$basename.import.$extension');
 }
+
+/// Returns true if [url] is an import-only file.
+bool isImportOnlyFile(Uri url) =>
+    url.path.endsWith('.import.scss') || url.path.endsWith('.import.sass');
 
 /// Partitions [iterable] into two lists based on the types of its inputs.
 ///

@@ -232,8 +232,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// importer than the entrypoint's.
   Uri _libraryUrl;
 
-  /// The URL of the stylesheet currently being migrated.
+  /// The canonical URL of the stylesheet currently being migrated.
   Uri _currentUrl;
+
+  /// The URL of the rule used to load the current stylesheet.
+  String _currentRuleUrl;
 
   /// The importer that's currently being used to resolve relative imports.
   ///
@@ -321,41 +324,45 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _currentUrl = oldUrl;
   }
 
-  /// Visits the stylesheet this `@import` rule points to using the existing global
-  /// scope.
+  /// Visits the stylesheet this `@import` rule points to using the existing
+  /// global scope.
   @override
   void visitImportRule(ImportRule node) {
     super.visitImportRule(node);
-    for (var import in node.imports) {
-      if (import is DynamicImport) {
-        var result =
-            importCache.import(Uri.parse(import.url), _importer, _currentUrl);
-        if (result == null) {
-          throw MigrationSourceSpanException(
-              "Could not find Sass file at '${p.prettyUri(import.url)}'.",
-              import.span);
-        }
-
-        var oldImporter = _importer;
-        _importer = result.item1;
-        var oldLibraryUrl = _libraryUrl;
-        var url = result.item2.span.sourceUrl;
-        if (_importer != oldImporter) _libraryUrl ??= url;
-
-        visitStylesheet(result.item2);
-        var importSource = ImportSource(url, import);
-        for (var declaration in _declarationSources.keys.toList()) {
-          var source = _declarationSources[declaration];
-          if (source.url == url &&
-              (source is CurrentSource || source is ForwardSource)) {
-            _declarationSources[declaration] = importSource;
-          }
-          _importer = oldImporter;
-        }
-
-        _libraryUrl = oldLibraryUrl;
-        _importer = oldImporter;
+    for (var import in node.imports.whereType<DynamicImport>()) {
+      var result =
+          importCache.import(Uri.parse(import.url), _importer, _currentUrl);
+      if (result == null) {
+        throw MigrationSourceSpanException(
+            "Could not find Sass file at '${p.prettyUri(import.url)}'.",
+            import.span);
       }
+
+      var oldImporter = _importer;
+      _importer = result.item1;
+      var oldLibraryUrl = _libraryUrl;
+      var url = result.item2.span.sourceUrl;
+      if (_importer != oldImporter && !isImportOnlyFile(url)) {
+        _libraryUrl ??= url;
+      }
+      var oldRuleUrl = _currentRuleUrl;
+      _currentRuleUrl = import.url;
+      visitStylesheet(result.item2);
+      var importSource = ImportSource(url, import);
+      for (var declaration in _declarationSources.keys.toList()) {
+        var source = _declarationSources[declaration];
+        if (source.url != url) continue;
+        if (source is CurrentSource || source is ForwardSource) {
+          _declarationSources[declaration] = importSource;
+        } else if (source is ImportOnlySource) {
+          _declarationSources[declaration] =
+              ImportSource.fromImportOnlyForward(source);
+        }
+      }
+
+      _libraryUrl = oldLibraryUrl;
+      _importer = oldImporter;
+      _currentRuleUrl = oldRuleUrl;
     }
   }
 
@@ -407,12 +414,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _importer = result.item1;
     var oldLibraryUrl = _libraryUrl;
     _libraryUrl = null;
+    var oldRuleUrl = _currentRuleUrl;
+    _currentRuleUrl = ruleUrl.toString();
     visitStylesheet(stylesheet);
     _checkUnresolvedReferences(_scope);
     _libraryUrl = oldLibraryUrl;
     _importer = oldImporter;
     _scope = oldScope;
     _declarationSources = oldSources;
+    _currentRuleUrl = oldRuleUrl;
     return canonicalUrl;
   }
 
@@ -468,8 +478,19 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _registerLibraryUrl(declaration);
     var prefix = forward.prefix ?? '';
     declarations['$prefix${forwarding.name}'] = declaration;
-    _declarationSources[declaration] =
-        ForwardSource(forward.span.sourceUrl, forward);
+
+    if (forward.span.sourceUrl.path.endsWith('.import.scss') ||
+        forward.span.sourceUrl.path.endsWith('.import.sass')) {
+      _declarationSources[declaration] = ImportOnlySource(
+          forward.span.sourceUrl,
+          forwardedUrl,
+          forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl)
+              ? _currentRuleUrl
+              : null);
+    } else {
+      _declarationSources[declaration] =
+          ForwardSource(forward.span.sourceUrl, forward);
+    }
   }
 
   /// Visits each of [node]'s expressions and children.
