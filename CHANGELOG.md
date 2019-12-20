@@ -2,15 +2,21 @@
 
 * Add support for glob inputs on the command line.
 
-* Better handling when migrating files whose dependencies have complex
-  import-only files.
-
 ### Module Migrator
+
+* Add `--forward=import-only` option, which will not forward any members through
+  the regular entrypoint, but it will forward all members through the
+  entrypoint's import-only file. `--forward=prefixed,import-only` is also
+  supported, which will forward prefixed members through the regular entrypoint
+  and all members through the import-only file.
 
 * Make `--remove-prefix=<prefix> --forward=prefixed` forward members that
   previously started with `<prefix>` and were unprefixed by a previous migrator
   run. This includes cases where the previously removed prefix is longer than
   the prefix for the current migrator run.
+
+* Better handling when migrating files whose dependencies have complex
+  import-only files.
 
 ## 1.0.1
 

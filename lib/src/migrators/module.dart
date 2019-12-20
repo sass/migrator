@@ -44,16 +44,16 @@ class ModuleMigrator extends Migrator {
         abbr: 'p',
         help: 'Removes PREFIX from all migrated member names.',
         valueHelp: 'PREFIX')
-    ..addOption('forward',
-        allowed: ['all', 'none', 'prefixed'],
+    ..addMultiOption('forward',
+        allowed: ['all', 'import-only', 'prefixed'],
         allowedHelp: {
-          'none': "Doesn't forward any members.",
           'prefixed':
               'Forwards members that start with the prefix specified for '
                   '--remove-prefix.',
-          'all': 'Forwards all members.'
+          'all': 'Forwards all members.',
+          'import-only':
+              'Forwards all members, but only through an import-only file.'
         },
-        defaultsTo: 'none',
         help: 'Specifies which members from dependencies to forward from the '
             'entrypoint.');
 
@@ -83,8 +83,8 @@ class ModuleMigrator extends Migrator {
   /// a map of migrated contents.
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var forward = ForwardType(argResults['forward']);
-    if (forward == ForwardType.prefixed &&
+    var forwards = {for (var arg in argResults['forward']) ForwardType(arg)};
+    if (forwards.contains(ForwardType.prefixed) &&
         argResults['remove-prefix'] == null) {
       throw MigrationException(
           'You must provide --remove-prefix with --forward=prefixed so we know '
@@ -97,7 +97,7 @@ class ModuleMigrator extends Migrator {
         migrateDependencies: migrateDependencies,
         prefixToRemove:
             (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
-        forward: forward);
+        forwards: forwards);
     var migrated = visitor.run(stylesheet, importer);
     _filesWithRenamedDeclarations.addAll(
         {for (var member in visitor.renamedMembers.keys) member.sourceUrl});
@@ -189,8 +189,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// should be removed.
   final String prefixToRemove;
 
-  /// The value of the --forward flag.
-  final ForwardType forward;
+  /// The values of the --forward flag.
+  final Set<ForwardType> forwards;
 
   /// Constructs a new module migration visitor.
   ///
@@ -205,7 +205,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
   _ModuleMigrationVisitor(
       this.importCache, this.references, List<String> loadPaths,
-      {bool migrateDependencies, this.prefixToRemove, this.forward})
+      {bool migrateDependencies, this.prefixToRemove, this.forwards})
       : loadPaths =
             loadPaths.map((path) => p.toUri(p.absolute(path)).path).toList(),
         super(importCache, migrateDependencies: migrateDependencies);
@@ -217,52 +217,94 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
 
-    if (prefixToRemove != null && _needsImportOnly) {
+    if (forwards.contains(ForwardType.importOnly) ||
+        (prefixToRemove != null && _needsImportOnly)) {
       var url = stylesheet.span.sourceUrl;
       var importOnlyUrl = getImportOnlyUrl(url);
-      var tuple = _absoluteUrlToDependency(url, relativeTo: importOnlyUrl);
-      var results = _generateImportOnly(url, tuple.item1);
+      var results = _generateImportOnly(url, importOnlyUrl);
       if (results != null) migrated[importOnlyUrl] = results;
     }
     return migrated;
   }
 
-  /// Generates an import-only stylesheet for [entrypoint] that forwards any
-  /// members that used to have a prefix with that prefix, but forwards other
-  /// members as-is.
+  /// Generates an import-only file for [entrypoint].
   ///
-  /// If there are no previously-prefixed members to forward, this returns null.
-  String _generateImportOnly(Uri entrypoint, String dependency) {
-    var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
-    var forwardWithPrefix = <MemberDeclaration>{};
-    var forwardWithoutPrefix = <MemberDeclaration>{};
+  /// If a prefix was removed from any members, this will add that prefix back
+  /// for the import-only file. If `--forward=import-only` was passed, this will
+  /// also add `@forward` rules for members in dependencies that aren't already
+  /// forwarded through the entrypoint itself.
+  ///
+  /// If there are no previously-prefixed members or members from dependencies
+  /// to forward, this returns null.
+  String _generateImportOnly(Uri entrypoint, Uri importOnlyUrl) {
+    // Sort all members based on the URL they should be forwarded from and the
+    // prefix they require (if any).
+    var forwardsByUrl = <Uri, Map<String, Set<MemberDeclaration>>>{};
+    var hiddenByUrl = <Uri, Set<MemberDeclaration>>{};
     for (var declaration in references.globalDeclarations) {
+      var private = declaration.name.startsWith('-');
+      // Whether this member will be exposed by the regular entrypoint.
       var visibleAtEntrypoint = declaration.sourceUrl == entrypoint ||
-          (_shouldForward(declaration.name) &&
-              !declaration.name.startsWith('-'));
-      if (!visibleAtEntrypoint) continue;
+          (_shouldForward(declaration.name) && !private);
+      // Whether this member should be exposed by the import-only file for the
+      // entrypoint.
+      var shouldBeVisible =
+          _shouldForward(declaration.name, forImportOnly: true) && !private;
+      if (!visibleAtEntrypoint && !shouldBeVisible) continue;
 
-      if (declaration.name.startsWith(prefixToRemove)) {
-        forwardWithPrefix.add(declaration);
-      } else {
-        forwardWithoutPrefix.add(declaration);
+      var url = visibleAtEntrypoint ? entrypoint : declaration.sourceUrl;
+      var prefix = renamedMembers.containsKey(declaration) ||
+              (visibleAtEntrypoint &&
+                  declaration.name.startsWith(prefixToRemove))
+          ? prefixToRemove
+          : declaration.forward?.prefix ?? '';
+      forwardsByUrl
+          .putIfAbsent(url, () => {})
+          .putIfAbsent(prefix, () => {})
+          .add(declaration);
+
+      // Ensures that members already forwarded through the entrypoint aren't
+      // also forwarded directly from their source.
+      if (visibleAtEntrypoint && declaration.sourceUrl != entrypoint) {
+        hiddenByUrl
+            .putIfAbsent(declaration.sourceUrl, () => {})
+            .add(declaration);
       }
     }
-    if (forwardWithPrefix.isEmpty) return null;
-    if (forwardWithoutPrefix.isEmpty) {
-      return '@forward "$dependency" as $prefixToRemove*$semicolon\n';
+
+    // If there are no members to forward, or if the only members are forwarded
+    // through the entrypoint and don't require a prefix, return null, as no
+    // import-only file is necessary.
+    if (forwardsByUrl.isEmpty ||
+        (forwardsByUrl.length == 1 &&
+            forwardsByUrl[entrypoint]?.keys == {''})) {
+      return null;
     }
-    var hidden = forwardWithoutPrefix.map((declaration) {
-      var name = '$prefixToRemove${declaration.name}';
-      return declaration.member is VariableDeclaration ? '\$$name' : name;
-    }).join(', ');
-    var shown = forwardWithoutPrefix
-        .map((declaration) => declaration.member is VariableDeclaration
-            ? '\$${declaration.name}'
-            : declaration.name)
-        .join(', ');
-    return '@forward "$dependency" as $prefixToRemove* hide $hidden$semicolon\n'
-        '@forward "$dependency" show $shown$semicolon\n';
+
+    // If entrypoint exposes no members, it should still be forwarded to ensure
+    // that the import-only file still includes its CSS.
+    var dependency =
+        _absoluteUrlToDependency(entrypoint, relativeTo: importOnlyUrl).item1;
+    var entrypointForwards = forwardsByUrl.containsKey(entrypoint)
+        ? _forwardRulesForShown(
+            entrypoint, dependency, forwardsByUrl.remove(entrypoint), {})
+        : ['@forward "$dependency"'];
+    var tuples = [
+      for (var entry in forwardsByUrl.entries)
+        Tuple3(
+            entry.key,
+            _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl)
+                .item1,
+            entry.value)
+    ]..sort((a, b) => a.item2.compareTo(b.item2));
+    var forwardLines = [
+      ...entrypointForwards,
+      for (var tuple in tuples)
+        ..._forwardRulesForShown(tuple.item1, tuple.item2, tuple.item3,
+            hiddenByUrl[tuple.item1] ?? {})
+    ];
+    var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
+    return forwardLines.join('$semicolon\n') + '$semicolon\n';
   }
 
   /// If [declaration] should be renamed, adds it to [renamedMembers].
@@ -297,17 +339,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// [name] should be the original name of that member, even if it started with
   /// [prefixToRemove].
-  bool _shouldForward(String name) {
-    switch (forward) {
-      case ForwardType.all:
-        return true;
-      case ForwardType.none:
-        return false;
-      case ForwardType.prefixed:
-        return name.startsWith(prefixToRemove);
-      default:
-        throw StateError('--forward should not allow invalid values');
-    }
+  bool _shouldForward(String name, {bool forImportOnly = false}) {
+    if (forwards.contains(ForwardType.all)) return true;
+    if (forImportOnly && forwards.contains(ForwardType.importOnly)) return true;
+    return forwards.contains(ForwardType.prefixed) &&
+        name.startsWith(prefixToRemove);
   }
 
   /// If the current stylesheet is the entrypoint, return a string of additional
@@ -318,15 +354,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var loadPathForwards = <String>[];
     var relativeForwards = <String>[];
     for (var url in references.globalDeclarations
-        .map((declaration) => declaration.isImportOnly
-            ? declaration.forwardedUrl
-            : declaration.sourceUrl)
+        .map((declaration) => declaration.sourceUrl)
         .toSet()) {
       if (url == currentUrl || _forwardedUrls.contains(url)) continue;
-      var tuple = _makeForwardRule(url);
-      if (tuple == null) continue;
-      (tuple.item2 ? relativeForwards : loadPathForwards).addAll(
-          [for (var rule in tuple.item1) '$rule$_semicolonIfNotIndented\n']);
+      var forwards = _makeForwardRules(url);
+      if (forwards == null) continue;
+      var isRelative = _absoluteUrlToDependency(url).item2;
+      (isRelative ? relativeForwards : loadPathForwards).addAll(
+          [for (var rule in forwards) '$rule$_semicolonIfNotIndented\n']);
     }
     var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
     return forwards.isEmpty ? '' : '\n' + forwards.join('');
@@ -861,11 +896,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (_upstreamStylesheets.isEmpty &&
           configuration.isEmpty &&
           !references.anyMemberReferenced(resolvedUrl, currentUrl)) {
-        var tuple = _makeForwardRule(resolvedUrl);
-        if (tuple != null) {
+        var forwards = _makeForwardRules(resolvedUrl);
+        if (forwards != null) {
           _forwardedUrls.add(resolvedUrl);
           addPatch(Patch.insert(
-              importStart, tuple.item1.join('$_semicolonIfNotIndented\n')));
+              importStart, forwards.join('$_semicolonIfNotIndented\n')));
           return;
         }
       }
@@ -876,21 +911,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   }
 
   /// If [url] contains any member declarations that should be forwarded from
-  /// the entrypoint, returns a tuple of the `@forward` rule(s) that should be
-  /// used and a boolean that is true when the URL of these rules is relative.
+  /// the entrypoint, returns a list of `@forward` rule(s) to do so.
   ///
   /// If nothing from [url] should be forwarded, returns null.
-  Tuple2<List<String>, bool> _makeForwardRule(Uri url) {
-    var shownByPrefix = <String, Set<String>>{};
-    var hidden = <String>{};
+  List<String> _makeForwardRules(Uri url) {
+    var shownByPrefix = <String, Set<MemberDeclaration>>{};
+    var hidden = <MemberDeclaration>{};
 
     // Divide all global members from dependencies into sets based on their
     // subprefix (if any) and whether they should be forwarded or not.
     for (var declaration in references.globalDeclarations) {
-      var expectedUrl = declaration.isImportOnly
-          ? declaration.forwardedUrl
-          : declaration.sourceUrl;
-      if (expectedUrl != url) continue;
+      if (declaration.sourceUrl != url) continue;
 
       var newName = renamedMembers[declaration] ?? declaration.name;
       String importOnlyPrefix;
@@ -898,8 +929,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         importOnlyPrefix = declaration.forward.prefix;
         newName = declaration.name.substring(importOnlyPrefix.length);
       }
-      var formattedNewName =
-          declaration.member is VariableDeclaration ? '\$$newName' : newName;
       if (_shouldForward(declaration.name) &&
           !declaration.name.startsWith('-')) {
         var subprefix = "";
@@ -909,36 +938,60 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           subprefix = importOnlyPrefix.substring(prefixToRemove.length);
         }
         if (declaration.name != newName) _needsImportOnly = true;
-        shownByPrefix.putIfAbsent(subprefix, () => {}).add(formattedNewName);
+        shownByPrefix.putIfAbsent(subprefix, () => {}).add(declaration);
       } else if (!newName.startsWith('-')) {
-        hidden.add(formattedNewName);
+        hidden.add(declaration);
       }
     }
     if (shownByPrefix.isEmpty) return null;
-    var tuple = _absoluteUrlToDependency(url);
-    var forwardBase = '@forward "${tuple.item1}"';
+    return _forwardRulesForShown(
+        url, _absoluteUrlToDependency(url).item1, shownByPrefix, hidden);
+  }
+
+  /// Returns a list of `@forward` rules for [url].
+  ///
+  /// [ruleUrl] is the form of [url] that should actually be used in the
+  /// generated `@forward` rules.
+  ///
+  /// [shownByPrefix] contains all members that should be forwarded, categorized
+  /// based on the prefix they should be forwarded with (this will be an empty
+  /// string for members without a prefix).
+  ///
+  /// [hidden] contains members that need to be explicitly hidden from all
+  /// `@forward` rules. Members that are already private should not be included
+  /// in this set.
+  List<String> _forwardRulesForShown(
+      Uri url,
+      String ruleUrl,
+      Map<String, Set<MemberDeclaration>> shownByPrefix,
+      Set<MemberDeclaration> hidden) {
     var forwards = <String>[];
+    var forwardBase = '@forward "$ruleUrl"';
     for (var subprefix in shownByPrefix.keys.toList()..sort()) {
-      var allHidden = {
+      var hiddenMembers = {
         ...hidden,
         for (var other in shownByPrefix.keys)
           if (other != subprefix) ...shownByPrefix[other]
-      }.toList()
-        ..sort();
-      var forward = forwardBase;
-      if (subprefix.isNotEmpty) {
-        forward += ' as $subprefix*';
-        allHidden = [
-          for (var item in allHidden)
-            item.startsWith(r'$')
-                ? '\$$subprefix${item.substring(1)}'
-                : '$subprefix$item'
-        ];
+      };
+      var allHidden = <String>{};
+      for (var declaration in hiddenMembers) {
+        var name = declaration.name;
+        if (declaration.isImportOnly && declaration.forward.prefix != null) {
+          name = name.substring(declaration.forward.prefix.length);
+        }
+        if (name.startsWith('-')) name = name.substring(1);
+        if (prefixToRemove != null && name.startsWith(prefixToRemove)) {
+          name = name.substring(prefixToRemove.length);
+        }
+        if (subprefix.isNotEmpty) name = '$subprefix$name';
+        if (declaration.member is VariableDeclaration) name = '\$$name';
+        allHidden.add(name);
       }
+      var forward = forwardBase + (subprefix.isEmpty ? '' : ' as $subprefix*');
       if (allHidden.isNotEmpty) forward += ' hide ${allHidden.join(", ")}';
       forwards.add(forward);
     }
-    return Tuple2(forwards, tuple.item2);
+    return forwards;
   }
 
   /// Adds a namespace to any mixin include that requires it.

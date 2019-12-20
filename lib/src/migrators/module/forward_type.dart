@@ -9,14 +9,14 @@ import 'package:meta/meta.dart';
 /// An enum of values for the --forward option.
 @sealed
 class ForwardType {
-  /// Forward all members from the entrypoint
+  /// Forward all members through the entrypoint
   static const all = ForwardType._('all');
 
-  /// Forward all members from the entrypoint
-  static const none = ForwardType._('none');
-
-  /// Forward all members from the entrypoint
+  /// Forward formerly prefixed members through the entrypoint
   static const prefixed = ForwardType._('prefixed');
+
+  /// Forward all members through the entrypoint's import-only file.
+  static const importOnly = ForwardType._('import-only');
 
   /// Identifier for this value.
   final String id;
@@ -27,8 +27,8 @@ class ForwardType {
     switch (option) {
       case 'all':
         return ForwardType.all;
-      case 'none':
-        return ForwardType.none;
+      case 'import-only':
+        return ForwardType.importOnly;
       case 'prefixed':
         return ForwardType.prefixed;
       default:
