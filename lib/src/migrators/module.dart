@@ -243,8 +243,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var hiddenByUrl = <Uri, Set<MemberDeclaration>>{};
     for (var declaration in references.globalDeclarations) {
       var private = declaration.name.startsWith('-');
+      // Whether this member will be exposed by the regular entrypoint.
       var visibleAtEntrypoint = declaration.sourceUrl == entrypoint ||
           (_shouldForward(declaration.name) && !private);
+      // Whether this member should be exposed by the import-only file for the
+      // entrypoint.
       var shouldBeVisible =
           _shouldForward(declaration.name, forImportOnly: true) && !private;
       if (!visibleAtEntrypoint && !shouldBeVisible) continue;
