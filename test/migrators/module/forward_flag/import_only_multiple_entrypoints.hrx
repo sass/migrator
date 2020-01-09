@@ -15,8 +15,8 @@ $lib-variable2: 1;
 $variable1: 1 + entrypoint2.$variable2;
 
 <==> output/entrypoint1.import.scss
-@forward "entrypoint1" as lib-*;
 @forward "entrypoint2" as lib-*;
+@forward "entrypoint1" as lib-*;
 
 <==> output/entrypoint2.scss
 $variable2: 1;

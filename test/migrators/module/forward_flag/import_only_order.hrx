@@ -1,0 +1,37 @@
+<==> arguments
+--migrate-deps --forward=import-only
+
+<==> input/entrypoint.scss
+@import "c";
+@import "b";
+
+a {
+  b: $b-variable;
+  c: $c-variable;
+}
+
+<==> input/_b.scss
+$variable: blue !default;
+
+<==> input/_b.import.scss
+@forward "b" as b-*;
+
+<==> input/_c.scss
+$variable: gold !default;
+
+<==> input/_c.import.scss
+@forward "c" as c-*;
+
+<==> output/entrypoint.scss
+@use "c";
+@use "b";
+
+a {
+  b: b.$variable;
+  c: c.$variable;
+}
+
+<==> output/entrypoint.import.scss
+@forward "c" as c-*;
+@forward "b" as b-*;
+@forward "entrypoint";

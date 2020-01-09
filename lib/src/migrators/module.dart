@@ -296,12 +296,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl)
                 .item1,
             entry.value)
-    ]..sort((a, b) => a.item2.compareTo(b.item2));
+    ];//..sort((a, b) => a.item2.compareTo(b.item2));
     var forwardLines = [
-      ...entrypointForwards,
       for (var tuple in tuples)
         ..._forwardRulesForShown(tuple.item1, tuple.item2, tuple.item3,
-            hiddenByUrl[tuple.item1] ?? {})
+            hiddenByUrl[tuple.item1] ?? {}),
+      ...entrypointForwards
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
     return forwardLines.join('$semicolon\n') + '$semicolon\n';
