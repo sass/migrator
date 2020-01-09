@@ -119,8 +119,10 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// Visits the stylesheet at [dependency], resolved based on the current
   /// stylesheet's URL and importer.
   @protected
-  void visitDependency(Uri dependency, FileSpan context) {
-    var result = importCache.import(dependency, _importer, _currentUrl);
+  void visitDependency(Uri dependency, FileSpan context,
+      {bool forImport = false}) {
+    var result = importCache.import(dependency,
+        baseImporter: _importer, baseUrl: _currentUrl, forImport: forImport);
     if (result != null) {
       // If [dependency] comes from a non-relative import, don't migrate it,
       // because it's likely to be outside the user's repository and may even be
@@ -163,7 +165,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          visitDependency(Uri.parse(import.url), import.span);
+          visitDependency(Uri.parse(import.url), import.span, forImport: true);
         }
       }
     }
