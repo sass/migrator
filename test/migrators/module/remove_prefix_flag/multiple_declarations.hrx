@@ -1,0 +1,15 @@
+<==> arguments
+--remove-prefix=lib-
+
+<==> input/entrypoint.scss
+$lib-variable: 1;
+$lib-variable: $lib-variable + 2;
+$lib-variable: $lib-variable + 3;
+
+<==> output/entrypoint.scss
+$variable: 1;
+$variable: $variable + 2;
+$variable: $variable + 3;
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as lib-*;

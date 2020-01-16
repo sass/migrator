@@ -19,5 +19,5 @@ a {
 }
 
 <==> output/entrypoint.import.scss
-@forward "entrypoint";
 @forward "library";
+@forward "entrypoint";

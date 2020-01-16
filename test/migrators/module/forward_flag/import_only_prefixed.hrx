@@ -16,5 +16,5 @@ $variable: blue;
 $unprefixed: gold;
 
 <==> output/entrypoint.import.scss
-@forward "entrypoint" as lib-*;
 @forward "library" hide $variable;
+@forward "entrypoint" as lib-*;

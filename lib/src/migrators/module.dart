@@ -296,12 +296,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl)
                 .item1,
             entry.value)
-    ]..sort((a, b) => a.item2.compareTo(b.item2));
+    ];
     var forwardLines = [
-      ...entrypointForwards,
       for (var tuple in tuples)
         ..._forwardRulesForShown(tuple.item1, tuple.item2, tuple.item3,
-            hiddenByUrl[tuple.item1] ?? {})
+            hiddenByUrl[tuple.item1] ?? {}),
+      ...entrypointForwards
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
     return forwardLines.join('$semicolon\n') + '$semicolon\n';
@@ -788,12 +788,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (migrateDependencies) visitDependency(parsedUrl, import.span);
     _upstreamStylesheets.remove(currentUrl);
 
-    // Clear the cache for this URL and re-canonicalize it for a `@use` rule,
-    // since it was previously canonicalized for an `@import` rule.
-    // TODO(jathak): Remove this once dart-sass#899 is fixed
-    importCache.clearCanonicalize(parsedUrl);
-    var tuple = inUseRule(
-        () => importCache.canonicalize(parsedUrl, importer, currentUrl));
+    var tuple = importCache.canonicalize(parsedUrl,
+        baseImporter: importer, baseUrl: currentUrl);
 
     // Associate the importer for this URL with the resolved URL so that we can
     // re-use this import URL later on.
@@ -988,7 +984,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         allHidden.add(name);
       }
       var forward = forwardBase + (subprefix.isEmpty ? '' : ' as $subprefix*');
-      if (allHidden.isNotEmpty) forward += ' hide ${allHidden.join(", ")}';
+      if (allHidden.isNotEmpty) {
+        var sorted = allHidden.toList()..sort();
+        forward += ' hide ${sorted.join(", ")}';
+      }
       forwards.add(forward);
     }
     return forwards;

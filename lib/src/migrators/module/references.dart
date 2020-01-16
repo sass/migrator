@@ -10,7 +10,6 @@
 import 'package:sass/src/ast/node.dart';
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
-import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
 import 'package:sass/src/visitor/recursive_ast.dart';
 
@@ -258,7 +257,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _declarationSources = {};
     _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
     visitStylesheet(stylesheet);
-    _globalDeclarations.addAll(_scope.variables.values);
+
+    for (var variable in _scope.variables.values) {
+      var original = _variableReassignments[variable] ?? variable;
+      _globalDeclarations.add(original);
+      _globalDeclarations.addAll(_variableReassignments.keysForValue(original));
+    }
     _globalDeclarations.addAll(_scope.mixins.values);
     _globalDeclarations.addAll(_scope.functions.values);
     _checkUnresolvedReferences(_scope);
@@ -330,8 +334,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitImportRule(ImportRule node) {
     super.visitImportRule(node);
     for (var import in node.imports.whereType<DynamicImport>()) {
-      var result =
-          importCache.import(Uri.parse(import.url), _importer, _currentUrl);
+      var result = importCache.import(Uri.parse(import.url),
+          baseImporter: _importer, baseUrl: _currentUrl, forImport: true);
       if (result == null) {
         throw MigrationSourceSpanException(
             "Could not find Sass file at '${p.prettyUri(import.url)}'.",
@@ -392,8 +396,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Given a URL from a `@use` or `@forward` rule, loads and visits the
   /// stylesheet it points to and returns its canonical URL.
   Uri _loadUseOrForward(Uri ruleUrl, AstNode nodeForSpan) {
-    var result =
-        inUseRule(() => importCache.import(ruleUrl, _importer, _currentUrl));
+    var result = importCache.import(ruleUrl,
+        baseImporter: _importer, baseUrl: _currentUrl);
     if (result == null) {
       throw MigrationSourceSpanException(
           "Could not find Sass file at '${p.prettyUri(ruleUrl)}'.",
