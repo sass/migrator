@@ -1,3 +1,14 @@
+## 1.1.1
+
+### Module Migrator
+
+* When using `--forward=import-only`, `@forward` rules in an import-only file
+  are now sorted with the regular file last, allowing variables in indirect
+  dependencies to be configured.
+
+* Fixes a bug where some references weren't renamed if a variable is declared
+  twice when using `--remove-prefix`.
+
 ## 1.1.0
 
 * Add support for glob inputs on the command line.

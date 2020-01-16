@@ -296,7 +296,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl)
                 .item1,
             entry.value)
-    ];//..sort((a, b) => a.item2.compareTo(b.item2));
+    ];
     var forwardLines = [
       for (var tuple in tuples)
         ..._forwardRulesForShown(tuple.item1, tuple.item2, tuple.item3,
