@@ -83,6 +83,9 @@ class References {
   /// members can be loaded from.
   final Map<MemberDeclaration, Set<Uri>> libraries;
 
+  /// A map from canonical URLs to members defined by the modules at those URLs.
+  final Map<Uri, Set<MemberDeclaration>> moduleMembers;
+
   /// A mapping from member references to their source.
   ///
   /// This includes references to built-in functions, but it does not include
@@ -149,6 +152,7 @@ class References {
           getFunctionReferences,
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
+      Map<Uri, Set<MemberDeclaration>> moduleMembers,
       Map<SassNode, ReferenceSource> sources)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
@@ -162,6 +166,8 @@ class References {
         globalDeclarations = UnmodifiableSetView(globalDeclarations),
         libraries = UnmodifiableMapView(
             mapMap(libraries, value: (_, urls) => UnmodifiableSetView(urls))),
+        moduleMembers = UnmodifiableMapView(mapMap(moduleMembers,
+            value: (_, members) => UnmodifiableSetView(members))),
         sources = UnmodifiableMapView(sources);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
@@ -187,6 +193,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
   final _globalDeclarations = <MemberDeclaration>{};
   final _libraries = <MemberDeclaration, Set<Uri>>{};
+  final _moduleMembers = <Uri, Set<MemberDeclaration>>{};
   final _sources = <SassNode, ReferenceSource>{};
 
   /// The current global scope.
@@ -258,6 +265,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
     visitStylesheet(stylesheet);
 
+    _loadUseOrForward(
+        Uri.parse("@material/linear-progress/mixins"), stylesheet);
+    _loadUseOrForward(
+        Uri.parse("@material/theme/mixins"), stylesheet);
+
+
     for (var variable in _scope.variables.values) {
       var original = _variableReassignments[variable] ?? variable;
       _globalDeclarations.add(original);
@@ -276,6 +289,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _getFunctionReferences,
         _globalDeclarations,
         _libraries,
+        _moduleMembers,
         _sources);
   }
 
@@ -291,7 +305,6 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       if (module != null) _sources[function] = BuiltInSource(module);
     }
   }
-
   /// Returns true if [node] is a function overload that exists to provide
   /// compatiblity with plain CSS function calls, and should therefore not be
   /// migrated to the module version.
@@ -323,7 +336,25 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var oldUrl = _currentUrl;
     _namespaces = {};
     _currentUrl = node.span.sourceUrl;
+
+    var basename = p.url.basename(_currentUrl.path);
+    if ({
+      "_mixins.scss",
+      "_variables.scss",
+      "_constants.scss",
+      "_color-palette.scss",
+      "_keyframes.scss",
+      "_functions.scss"
+    }.contains(basename)) {
+      _loadUseOrForward(
+          _currentUrl.replace(path: p.url.dirname(_currentUrl.path)), node);
+    }
+
     super.visitStylesheet(node);
+    _moduleMembers[_currentUrl] = _declarationSources.entries
+        .where((entry) => entry.value.url == _currentUrl)
+        .map((entry) => entry.key)
+        .toSet();
     _namespaces = oldNamespaces;
     _currentUrl = oldUrl;
   }
