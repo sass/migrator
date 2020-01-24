@@ -10,14 +10,16 @@
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass_migrator/src/utils.dart';
 
+import 'package:path/path.dart' as p;
+
 /// A [ReferenceSource] is used to track where a referenced member came from.
 abstract class ReferenceSource {
   /// The canonical URL that contains the declaration being referenced.
   Uri get url;
 
-  /// Returns the default namespace for this source, or null if the source
+  /// Returns the ideal namespace to use for this source, or null if the source
   /// doesn't have a namespace.
-  String get defaultNamespace;
+  String get preferredNamespace;
 }
 
 /// A source for references that should be migrated like an `@import` rule.
@@ -47,9 +49,14 @@ class ImportSource extends ReferenceSource {
       : url = source.realSourceUrl,
         originalRuleUrl = source.originalRuleUrl;
 
-  /// Returns the default namespace based on [ruleUrl], which must be
-  /// initialized before referencing this member.
-  String get defaultNamespace => namespaceForPath(url.path);
+  /// Returns the preferred namespace to use for this module, based on
+  /// [originalRuleUrl].
+  String get preferredNamespace {
+    var path = url.path;
+    var basename = p.url.basenameWithoutExtension(url.path);
+    if (basename == 'index' || basename == '_index') path = p.url.dirname(path);
+    return namespaceForPath(path);
+  }
 
   operator ==(other) =>
       other is ImportSource &&
@@ -73,7 +80,7 @@ class UseSource extends ReferenceSource {
 
   UseSource(this.url, this.use);
 
-  String get defaultNamespace => use.namespace;
+  String get preferredNamespace => use.namespace;
 
   operator ==(other) =>
       other is UseSource && url == other.url && use == other.use;
@@ -88,7 +95,7 @@ class BuiltInSource extends ReferenceSource {
   /// Constructs a [BuiltInSource] for a [module].
   BuiltInSource(String module) : url = Uri.parse("sass:$module");
 
-  String get defaultNamespace => url.path;
+  String get preferredNamespace => url.path;
 
   operator ==(other) => other is BuiltInSource && url == other.url;
   int get hashCode => url.hashCode;
@@ -99,7 +106,7 @@ class CurrentSource extends ReferenceSource {
   final Uri url;
   CurrentSource(this.url);
 
-  String get defaultNamespace => null;
+  String get preferredNamespace => null;
 
   operator ==(other) => other is CurrentSource && url == other.url;
   int get hashCode => url.hashCode;
@@ -126,7 +133,7 @@ class ForwardSource extends ReferenceSource {
 
   ForwardSource(this.url, this.forward);
 
-  String get defaultNamespace => null;
+  String get preferredNamespace => null;
 
   operator ==(other) =>
       other is ForwardSource && url == other.url && forward == other.forward;
@@ -153,7 +160,7 @@ class ImportOnlySource extends ReferenceSource {
 
   ImportOnlySource(this.url, this.realSourceUrl, this.originalRuleUrl);
 
-  String get defaultNamespace => null;
+  String get preferredNamespace => null;
 
   operator ==(other) =>
       other is ImportOnlySource &&

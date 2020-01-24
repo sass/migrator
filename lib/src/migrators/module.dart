@@ -442,7 +442,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var reference in references.sources.keys) {
       if (reference.span.sourceUrl != url) continue;
       var source = references.sources[reference];
-      var namespace = source.defaultNamespace;
+      var namespace = source.preferredNamespace;
       if (namespace == null) continue;
 
       // Existing `@use` rules should always keep their namespaces.
@@ -1143,9 +1143,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // Add new `@use` rule for indirect dependency
       var tuple = _absoluteUrlToDependency(url);
       var defaultNamespace = namespaceForPath(tuple.item1);
-      // There are a few edge cases where the reference in [node] wasn't tracked
-      // by [references.sources], so we add a namespace with simple conflict
-      // resolution if one for this URL doesn't already exist.
+      // There are a few edge cases where the reference in [declaration] wasn't
+      // tracked by [references.sources], so we add a namespace with simple
+      // conflict resolution if one for this URL doesn't already exist.
       _namespaces.putIfAbsent(
           url, () => _incrementUntilAvailable(defaultNamespace, _namespaces));
       var namespace = _namespaces[url];
@@ -1169,6 +1169,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var tuple = _originalImports[url];
     if (tuple?.item2 is NodeModulesImporter) return Tuple2(tuple.item1, false);
 
+    var basename = p.url.basenameWithoutExtension(url.path);
+    if (basename == 'index' || basename == '_index') {
+      // Don't directly depend on an index file, since it won't produce a good
+      // namespace.
+      url = url.replace(path: p.url.dirname(url.path));
+      basename = p.url.basename(url.path);
+    } else if (basename.startsWith('_')) {
+      basename = basename.substring(1);
+    }
+
     var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
     var potentialUrls = [
       p.url.relative(url.path, from: p.url.dirname(relativeTo.path)),
@@ -1179,8 +1189,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var relativePath = minBy(potentialUrls, (url) => url.length);
     var isRelative = relativePath == potentialUrls.first;
 
-    var basename = p.url.basenameWithoutExtension(relativePath);
-    if (basename.startsWith('_')) basename = basename.substring(1);
     return Tuple2(
         p.url.relative(p.url.join(p.url.dirname(relativePath), basename)),
         isRelative);
