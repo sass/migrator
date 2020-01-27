@@ -26,7 +26,9 @@ $d: 4;
 @use "dir2/index" as dir2;
 @use "dir3";
 @use "dir4";
+
 $result: dir1.$a + dir2.$b + dir3.$b + dir4.$b;
+
 
 <==> output/dir1/_index.scss
 @use "../dir3";
