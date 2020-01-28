@@ -31,6 +31,6 @@ $result: dir1.$a + dir2.$b + dir3.$c + dir4.$d;
 
 <==> output/dir1/_index.scss
 @use "../dir3";
-@use "../dir4";
+@use "../dir4/index";
 
 $a: 1;
