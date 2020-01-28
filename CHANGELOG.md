@@ -1,3 +1,9 @@
+## 1.1.2
+
+### Module Migrator
+
+* Generate better `@use` rules for index files.
+
 ## 1.1.1
 
 ### Module Migrator

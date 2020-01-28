@@ -1,0 +1,36 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "dir1";
+@import "dir2/index";
+$result: $a + $b + $c + $d;
+
+<==> input/dir1/_index.scss
+@import "../dir3";
+@import "../dir4/index";
+
+$a: 1;
+
+<==> input/dir2/_index.scss
+$b: 2;
+
+<==> input/dir3/_index.scss
+$c: 3;
+
+<==> input/dir4/_index.scss
+$d: 4;
+
+<==> output/entrypoint.scss
+@use "dir1";
+@use "dir2/index" as dir2;
+@use "dir3";
+@use "dir4";
+
+$result: dir1.$a + dir2.$b + dir3.$c + dir4.$d;
+
+<==> output/dir1/_index.scss
+@use "../dir3";
+@use "../dir4/index";
+
+$a: 1;
