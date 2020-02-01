@@ -11,6 +11,7 @@ import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
 import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
+import 'package:sass/src/parse/parser.dart';
 
 import 'package:args/args.dart';
 import 'package:collection/collection.dart';
@@ -254,8 +255,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
       var url = visibleAtEntrypoint ? entrypoint : declaration.sourceUrl;
       var prefix = renamedMembers.containsKey(declaration) ||
-              (visibleAtEntrypoint &&
-                  declaration.name.startsWith(prefixToRemove))
+              (visibleAtEntrypoint && _startsWithPrefix(declaration.name))
           ? prefixToRemove
           : declaration.forward?.prefix ?? '';
       forwardsByUrl
@@ -342,8 +342,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   bool _shouldForward(String name, {bool forImportOnly = false}) {
     if (forwards.contains(ForwardType.all)) return true;
     if (forImportOnly && forwards.contains(ForwardType.importOnly)) return true;
-    return forwards.contains(ForwardType.prefixed) &&
-        name.startsWith(prefixToRemove);
+    return forwards.contains(ForwardType.prefixed) && _startsWithPrefix(name);
   }
 
   /// If the current stylesheet is the entrypoint, return a string of additional
@@ -929,7 +928,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           !declaration.name.startsWith('-')) {
         var subprefix = "";
         if (prefixToRemove != null &&
-            declaration.name.startsWith(prefixToRemove) &&
+            _startsWithPrefix(declaration.name) &&
             importOnlyPrefix != null) {
           subprefix = importOnlyPrefix.substring(prefixToRemove.length);
         }
@@ -976,7 +975,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           name = name.substring(declaration.forward.prefix.length);
         }
         if (name.startsWith('-')) name = name.substring(1);
-        if (prefixToRemove != null && name.startsWith(prefixToRemove)) {
+        if (prefixToRemove != null && _startsWithPrefix(name)) {
           name = name.substring(prefixToRemove.length);
         }
         if (subprefix.isNotEmpty) name = '$subprefix$name';
@@ -1105,7 +1104,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     var startOfName = name.substring(0, prefixToRemove.length);
     if (prefixToRemove != startOfName) return name;
-    return name.substring(prefixToRemove.length);
+    var remainder = name.substring(prefixToRemove.length);
+    if (!Parser.isIdentifier(remainder)) return name;
+    return remainder;
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.
@@ -1192,6 +1193,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     return Tuple2(
         p.url.relative(p.url.join(p.url.dirname(relativePath), basename)),
         isRelative);
+  }
+
+  /// Returns whether [identifier] starts with [prefixToRemove], and if so,
+  /// whether the remainder is a valid Sass identifier.
+  bool _startsWithPrefix(String identifier) {
+    if (!identifier.startsWith(prefixToRemove)) return false;
+    return Parser.isIdentifier(identifier.substring(prefixToRemove.length));
   }
 
   /// Disallows `@use` after `@at-root` rules.
