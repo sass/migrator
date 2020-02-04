@@ -1198,6 +1198,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Returns whether [identifier] starts with [prefixToRemove], and if so,
   /// whether the remainder is a valid Sass identifier.
   bool _startsWithPrefix(String identifier) {
+    if (prefixToRemove == null) return false;
     if (!identifier.startsWith(prefixToRemove)) return false;
     return Parser.isIdentifier(identifier.substring(prefixToRemove.length));
   }
