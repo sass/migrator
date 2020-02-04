@@ -9,7 +9,6 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 import 'package:sass/src/importer.dart';
-import 'package:sass/src/importer/utils.dart';
 import 'package:sass/src/import_cache.dart';
 
 import 'package:args/args.dart';
