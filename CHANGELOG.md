@@ -1,3 +1,10 @@
+## 1.1.3
+
+### Module Migrator
+
+* Don't remove prefixes from members that would become invalid identifiers
+  afterwards.
+
 ## 1.1.2
 
 ### Module Migrator

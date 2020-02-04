@@ -1,0 +1,40 @@
+<==> arguments
+--remove-prefix=lib-
+
+<==> input/entrypoint.scss
+$lib-a: a;
+$lib-1: 1;
+
+@function lib-2() {
+  @return $lib-1;
+}
+
+@mixin lib-3 {
+  x: y;
+}
+
+lib-selector {
+  lib-property: lib-2(0);
+  @include lib-3;
+}
+
+<==> output/entrypoint.scss
+$a: a;
+$lib-1: 1;
+
+@function lib-2() {
+  @return $lib-1;
+}
+
+@mixin lib-3 {
+  x: y;
+}
+
+lib-selector {
+  lib-property: lib-2(0);
+  @include lib-3;
+}
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" hide $a;
+@forward "entrypoint" as lib-* hide $lib-lib-1, lib-lib-2, lib-lib-3;
