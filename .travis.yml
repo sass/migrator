@@ -36,7 +36,7 @@ jobs:
     dart_task: {test: -t node}
 
   # Static checks
-  - dart_task: {dartanalyzer: --fatal-warnings ./}
+  - dart_task: {dartanalyzer: --fatal-warnings --fatal-hints ./}
   - dart_task: dartfmt
 
   ## Deployment
