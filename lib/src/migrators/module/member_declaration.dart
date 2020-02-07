@@ -9,6 +9,8 @@
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
 
+import 'package:path/path.dart' as p;
+
 import '../../utils.dart';
 
 /// A wrapper class for nodes that declare a variable, function, or mixin.
@@ -80,4 +82,23 @@ class MemberDeclaration<T extends SassNode> {
       forward == other.forward;
 
   int get hashCode => member.hashCode;
+
+  String toString() {
+    var buffer = StringBuffer();
+    if (member is MixinRule) {
+      buffer.write("@mixin ");
+    } else if (member is FunctionRule) {
+      buffer.write("@function ");
+    } else {
+      buffer.write("\$");
+    }
+    buffer.write("$name from ${p.prettyUri(sourceUrl)}");
+
+    if (forwardedUrl != null) {
+      buffer.write(" forwarded from ${p.prettyUri(forwardedUrl)}");
+    } else if (isImportOnly) {
+      buffer.write(" forwarded in import-only");
+    }
+    return buffer.toString();
+  }
 }
