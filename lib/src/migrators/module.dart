@@ -253,10 +253,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (!visibleAtEntrypoint && !shouldBeVisible) continue;
 
       var url = visibleAtEntrypoint ? entrypoint : declaration.sourceUrl;
-      var prefix = renamedMembers.containsKey(declaration) ||
-              (visibleAtEntrypoint && _startsWithPrefix(declaration.name))
-          ? prefixToRemove
-          : declaration.forward?.prefix ?? '';
+      var prefix = '';
+      if (renamedMembers.containsKey(declaration) ||
+          (visibleAtEntrypoint && _startsWithPrefix(declaration.name))) {
+        prefix = prefixToRemove;
+      } else if (declaration.forward?.prefix != null &&
+          url == declaration.forwardedUrl) {
+        prefix = declaration.forward.prefix;
+      }
       forwardsByUrl
           .putIfAbsent(url, () => {})
           .putIfAbsent(prefix, () => {})

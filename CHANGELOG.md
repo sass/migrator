@@ -1,3 +1,9 @@
+## 1.1.4
+
+### Module Migrator
+
+* Don't double-prefix members imported from a prefixed `@forward` rule.
+
 ## 1.1.3
 
 ### Module Migrator

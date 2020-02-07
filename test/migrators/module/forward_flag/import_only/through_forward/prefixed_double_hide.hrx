@@ -1,0 +1,20 @@
+<==> arguments
+--migrate-deps --forward=import-only
+
+<==> input/entrypoint.scss
+@import "midstream";
+
+<==> input/_midstream.scss
+@forward "upstream" as p1-* hide $a;
+@forward "upstream" as p2-* hide $b;
+
+<==> input/_upstream.scss
+$a: a;
+$b: b;
+
+<==> output/entrypoint.scss
+@use "midstream";
+
+<==> output/entrypoint.import.scss
+@forward "midstream";
+@forward "entrypoint";
