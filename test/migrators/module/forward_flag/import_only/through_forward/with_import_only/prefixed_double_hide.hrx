@@ -1,0 +1,20 @@
+<==> arguments
+--migrate-deps --forward=import-only
+
+<==> input/entrypoint.scss
+@import "other";
+
+<==> input/_other.scss
+$a: a;
+$b: b;
+
+<==> input/_other.import.scss
+@forward "other" as p1-* hide $a;
+@forward "other" as p2-* hide $b;
+
+<==> output/entrypoint.scss
+@use "other";
+
+<==> output/entrypoint.import.scss
+@forward "other.import";
+@forward "entrypoint";

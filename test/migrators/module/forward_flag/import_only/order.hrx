@@ -32,6 +32,6 @@ a {
 }
 
 <==> output/entrypoint.import.scss
-@forward "c" as c-*;
-@forward "b" as b-*;
+@forward "c.import";
+@forward "b.import";
 @forward "entrypoint";
