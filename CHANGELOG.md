@@ -1,3 +1,12 @@
+## 1.1.4
+
+### Module Migrator
+
+* When generating import-only files that for files that used to import
+  import-only files, forward the upstream import-only files.
+
+* Don't double-prefix members imported from a prefixed `@forward` rule.
+
 ## 1.1.3
 
 ### Module Migrator

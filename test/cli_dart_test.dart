@@ -214,7 +214,7 @@ void main() {
               "Error: Expected expression.",
               "\u001b[34m  ,\u001b[0m",
               "\u001b[34m1 |\u001b[0m a {b: \u001b[31m\u001b[0m}",
-              "\u001b[34m  |\u001b[0m       \u001b[31m^\u001b[0m",
+              "\u001b[34m  |\u001b[0m \u001b[31m      ^\u001b[0m",
               "\u001b[34m  '\u001b[0m",
               "  test.scss 1:7  root stylesheet",
             ]));
@@ -232,7 +232,7 @@ void main() {
               "Error: Could not find Sass file at 'nonexistent'.",
               "\u001b[34m  ,\u001b[0m",
               "\u001b[34m1 |\u001b[0m @import \u001b[31m'nonexistent'\u001b[0m;",
-              "\u001b[34m  |\u001b[0m         \u001b[31m^^^^^^^^^^^^^\u001b[0m",
+              "\u001b[34m  |\u001b[0m \u001b[31m        ^^^^^^^^^^^^^\u001b[0m",
               "\u001b[34m  '\u001b[0m",
               "  test.scss 1:9  root stylesheet",
               "Migration failed!"
