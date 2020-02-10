@@ -255,7 +255,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       Uri url;
       if (visibleAtEntrypoint) {
         url = entrypoint;
-      } else if (declaration.isImportOnly) {
+      } else if (declaration is ImportOnlyMemberDeclaration) {
         url = declaration.importOnlyUrl;
       } else {
         url = declaration.sourceUrl;
@@ -265,9 +265,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (renamedMembers.containsKey(declaration) ||
           (visibleAtEntrypoint && _startsWithPrefix(declaration.name))) {
         prefix = prefixToRemove;
-      } else if (declaration.forward?.prefix != null &&
-          url == declaration.forwardedUrl) {
-        prefix = declaration.forward.prefix;
+      } else if (declaration is ImportOnlyMemberDeclaration &&
+          declaration.importOnlyPrefix != null &&
+                 url == declaration.sourceUrl) {
+        prefix = declaration.importOnlyPrefix;
       }
       forwardsByUrl
           .putIfAbsent(url, () => {})
@@ -324,7 +325,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// with `-` or `_` and are referenced outside the stylesheet they were
   /// declared in.
   void _renameDeclaration(MemberDeclaration declaration) {
-    if (declaration.forward != null) return;
+    if (declaration.isForwarded) return;
 
     var name = declaration.name;
     if (name.startsWith('-') &&
@@ -931,8 +932,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
       var newName = renamedMembers[declaration] ?? declaration.name;
       String importOnlyPrefix;
-      if (declaration.isImportOnly && declaration.forward.prefix != null) {
-        importOnlyPrefix = declaration.forward.prefix;
+      if (declaration is ImportOnlyMemberDeclaration &&
+          declaration.importOnlyPrefix != null) {
+        importOnlyPrefix = declaration.importOnlyPrefix;
         newName = declaration.name.substring(importOnlyPrefix.length);
       }
       if (_shouldForward(declaration.name) &&
@@ -982,8 +984,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var allHidden = <String>{};
       for (var declaration in hiddenMembers) {
         var name = declaration.name;
-        if (declaration.isImportOnly && declaration.forward.prefix != null) {
-          name = name.substring(declaration.forward.prefix.length);
+        if (declaration is ImportOnlyMemberDeclaration &&
+            declaration.importOnlyPrefix != null) {
+          name = name.substring(declaration.importOnlyPrefix.length);
         }
         if (name.startsWith('-')) name = name.substring(1);
         if (prefixToRemove != null && _startsWithPrefix(name)) {
@@ -1103,8 +1106,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       return;
     }
 
-    if (declaration.isImportOnly && declaration.forward?.prefix != null) {
-      addPatch(patchDelete(span, end: declaration.forward.prefix.length));
+    if (declaration is ImportOnlyMemberDeclaration &&
+        declaration.importOnlyPrefix != null) {
+      addPatch(patchDelete(span, end: declaration.importOnlyPrefix.length));
     }
   }
 
