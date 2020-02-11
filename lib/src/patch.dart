@@ -43,7 +43,7 @@ class Patch implements Comparable<Patch> {
         continue;
       }
       if (patch.selection.start.offset < offset) {
-        throw new ArgumentError("Can't apply overlapping patches.");
+        throw ArgumentError("Can't apply overlapping patches.");
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));
       buffer.write(patch.replacement);

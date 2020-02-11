@@ -267,7 +267,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         prefix = prefixToRemove;
       } else if (declaration is ImportOnlyMemberDeclaration &&
           declaration.importOnlyPrefix != null &&
-                 url == declaration.sourceUrl) {
+          url == declaration.sourceUrl) {
         prefix = declaration.importOnlyPrefix;
       }
       forwardsByUrl
