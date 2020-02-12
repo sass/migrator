@@ -146,14 +146,16 @@ class ForwardSource extends ReferenceSource {
 /// [_ReferenceVisitor] to track sources internally, and should not be present
 /// in the final [sources] property of [References].
 class ImportOnlySource extends ReferenceSource {
-  /// The canonical URL of the import-only file.
+  /// The canonical URL of the outermost import-only file in the member's
+  /// forward chain.
   final Uri url;
 
-  /// The canonical URL of the file forwarded from the import-only file.
+  /// The canonical URL of the outermost non-import-only file in the member's
+  /// forward chain.
   final Uri realSourceUrl;
 
-  /// If [url] is the import-only file for [realSourceUrl], this should be the
-  /// rule URL from the `@import` rule that loaded the import-only file.
+  /// If [url] is the import-only file for [realSourceUrl], this is the text of
+  /// the URL of the `@import` rule that loaded that import-only file.
   ///
   /// Otherwise, this will be null.
   final String originalRuleUrl;

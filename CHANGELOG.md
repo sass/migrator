@@ -1,3 +1,10 @@
+## 1.1.5
+
+### Module Migrator
+
+* Fix a few bugs when migrating files that imported members through multiple
+  layers of import-only files.
+
 ## 1.1.4
 
 ### Module Migrator

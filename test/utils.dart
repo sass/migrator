@@ -89,7 +89,8 @@ void ensureExecutableUpToDate() {
 ///
 /// If [ifExists] is `true`, this won't throw an error if the file in question
 /// doesn't exist.
-void _ensureUpToDate(String path, String commandToRun, {bool ifExists: false}) {
+void _ensureUpToDate(String path, String commandToRun,
+    {bool ifExists = false}) {
   // Ensure path is relative so the error messages are more readable.
   path = p.relative(path);
   if (!File(path).existsSync()) {

@@ -1,0 +1,61 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "downstream";
+
+a {
+  color: $down-downvar;
+  background: down-downfn();
+  @include down-downmix;
+
+  color: $mid-up-upvar;
+  background: mid-up-upfn();
+  @include mid-up-upmix;
+}
+
+<==> input/_downstream.scss
+$downvar: green;
+
+@function downfn() {
+  @return blue;
+}
+
+@mixin downmix {
+  display: block;
+}
+
+<==> input/_downstream.import.scss
+@forward "midstream.import";
+@forward "downstream" as down-*;
+
+<==> input/_midstream.scss
+@forward "upstream" as up-*;
+
+<==> input/_midstream.import.scss
+@forward "midstream" as mid-*;
+
+<==> input/_upstream.scss
+$upvar: green;
+
+@function upfn() {
+  @return blue;
+}
+
+@mixin upmix {
+  display: block;
+}
+
+<==> output/entrypoint.scss
+@use "downstream";
+@use "midstream";
+
+a {
+  color: downstream.$downvar;
+  background: downstream.downfn();
+  @include downstream.downmix;
+
+  color: midstream.$up-upvar;
+  background: midstream.up-upfn();
+  @include midstream.up-upmix;
+}

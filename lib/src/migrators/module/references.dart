@@ -477,17 +477,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       ForwardRule forward,
       Uri forwardedUrl,
       Map<String, MemberDeclaration<T>> declarations) {
-    var declaration =
-        MemberDeclaration<T>.forward(forwarding, forward, forwardedUrl);
+    var declaration = MemberDeclaration<T>.forward(forwarding, forward);
     _registerLibraryUrl(declaration);
     var prefix = forward.prefix ?? '';
     declarations['$prefix${forwarding.name}'] = declaration;
 
-    if (forward.span.sourceUrl.path.endsWith('.import.scss') ||
-        forward.span.sourceUrl.path.endsWith('.import.sass')) {
+    if (declaration is ImportOnlyMemberDeclaration<T>) {
       _declarationSources[declaration] = ImportOnlySource(
-          forward.span.sourceUrl,
-          forwardedUrl,
+          declaration.importOnlyUrl,
+          declaration.sourceUrl,
           forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl)
               ? _currentRuleUrl
               : null);
@@ -709,5 +707,5 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Returns true if [declaration] is from a `@forward` rule in the current
   /// stylesheet.
   bool _fromForwardRuleInCurrent(MemberDeclaration declaration) =>
-      declaration.forward != null && declaration.sourceUrl != _currentUrl;
+      declaration.isForwarded && declaration.sourceUrl != _currentUrl;
 }

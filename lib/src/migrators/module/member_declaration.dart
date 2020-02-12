@@ -22,43 +22,35 @@ class MemberDeclaration<T extends SassNode> {
   /// been resolved.
   final T member;
 
-  /// The outermost `@forward` rule through which this member was loaded, or
-  /// `null` if it wasn't forwarded.
-  final ForwardRule forward;
-
   /// The name of this member, including all prefixes from `@forward` rules.
   ///
   /// For variables, this does not include the `$`.
   final String name;
 
-  /// The URL this member came from.
+  /// The canonical URL of the nearest non-import-only module from which this
+  /// member was loaded.
   ///
-  /// For un-forwarded members, this is the URL the member was declared in. For
-  /// members forwarded through an import-only file, this is the [sourceUrl] of
-  /// the member prior to that forward. For other forwarded members, this is the
-  /// URL of the `@forward` rule.
+  /// * For a member that wasn't forwarded, this is the URL the member was
+  ///   declared in.
+  ///
+  /// * For a member forwarded from a non-import-only module, this is that
+  ///   module's URL.
+  ///
+  /// * For a member loaded from an import-only module, this is the URL of the
+  ///   first non-import-only module in its chain of forwards.
   final Uri sourceUrl;
 
-  /// The canonical URL forwarded by [forward].
+  /// Whether this member declaration was loaded through a `@forward` rule,
+  /// including via an import-only file.
+  bool get isForwarded => sourceUrl != member.span.sourceUrl;
+
+  /// Creates a MemberDefinition for a [member] that was loaded from the same
+  /// module it was defined.
   ///
-  /// This is `null` when [forward] is.
-  final Uri forwardedUrl;
-
-  /// The canonical URL of the import-only stylesheet in which this member was
-  /// forwarded.
-  ///
-  /// This is `null` when this member wasn't loaded through an import-only
-  /// stylesheet.
-  final Uri importOnlyUrl;
-
-  /// True if this declaration is the result of a `@forward` rule within an
-  /// import-only stylesheet.
-  bool get isImportOnly => importOnlyUrl != null;
-
-  /// Constructs a MemberDefinition for [member], which must be a
-  /// [VariableDeclaration], [Argument], [MixinRule], or [FunctionRule].
-  MemberDeclaration(this.member)
-      : name = (() {
+  /// The [member] must be a [VariableDeclaration], [Argument], [MixinRule], or
+  /// [FunctionRule].
+  MemberDeclaration(T member)
+      : this._(member, () {
           if (member is VariableDeclaration) return member.name;
           if (member is Argument) return member.name;
           if (member is MixinRule) return member.name;
@@ -66,31 +58,36 @@ class MemberDeclaration<T extends SassNode> {
           throw ArgumentError(
               "MemberDefinition must contain a VariableDeclaration, Argument, "
               "MixinRule, or FunctionRule");
-        })(),
-        sourceUrl = member.span.sourceUrl,
-        forward = null,
-        forwardedUrl = null,
-        importOnlyUrl = null;
+        }(), member.span.sourceUrl);
 
-  /// Constructs a forwarded MemberDefinition of [forwarding] based on
-  /// [forward].
-  MemberDeclaration.forward(
-      MemberDeclaration forwarding, this.forward, this.forwardedUrl)
-      : member = forwarding.member,
-        name = '${forward.prefix ?? ""}${forwarding.name}',
-        sourceUrl = isImportOnlyFile(forward.span.sourceUrl)
-            ? forwarding.sourceUrl
-            : forward.span.sourceUrl,
-        importOnlyUrl = isImportOnlyFile(forward.span.sourceUrl)
-            ? forward.span.sourceUrl
-            : null;
+  /// Creates a MemberDefinition for a member that was forwarded through at
+  /// least one non-import-only module.
+  ///
+  /// The [forwarded] member is the member loaded by [forward].
+  ///
+  /// The [member] must be a [VariableDeclaration], [Argument], [MixinRule], or
+  /// [FunctionRule].
+  ///
+  /// If [forward] comes from an import-only file, this returns an
+  /// [ImportOnlyMemberDeclaration].
+  factory MemberDeclaration.forward(
+          MemberDeclaration<T> forwarded, ForwardRule forward) =>
+      isImportOnlyFile(forward.span.sourceUrl)
+          ? ImportOnlyMemberDeclaration._(forwarded, forward)
+          : MemberDeclaration._(
+              forwarded.member,
+              '${forward.prefix ?? ""}${forwarded.name}',
+              forward.span.sourceUrl);
+
+  MemberDeclaration._(this.member, this.name, this.sourceUrl);
 
   operator ==(other) =>
       other is MemberDeclaration &&
       member == other.member &&
-      forward == other.forward;
+      name == other.name &&
+      sourceUrl == other.sourceUrl;
 
-  int get hashCode => member.hashCode;
+  int get hashCode => member.hashCode ^ name.hashCode ^ sourceUrl.hashCode;
 
   String toString() {
     var buffer = StringBuffer();
@@ -102,12 +99,36 @@ class MemberDeclaration<T extends SassNode> {
       buffer.write("\$");
     }
     buffer.write("$name from ${p.prettyUri(sourceUrl)}");
-
-    if (forwardedUrl != null) {
-      buffer.write(" forwarded from ${p.prettyUri(forwardedUrl)}");
-    } else if (isImportOnly) {
-      buffer.write(" forwarded in import-only");
-    }
     return buffer.toString();
   }
+}
+
+/// A declaration for a member forwarded through an import-only file.
+class ImportOnlyMemberDeclaration<T extends SassNode>
+    extends MemberDeclaration<T> {
+  /// The prefix added to [name] by forwards through import-only files.
+  final String importOnlyPrefix;
+
+  /// The canonical URL of the outermost import-only module that forwarded this
+  /// member.
+  final Uri importOnlyUrl;
+
+  bool get isForwarded => true;
+
+  /// Constructs a forwarded MemberDefinition of [forwarding] based on
+  /// [forward].
+  ImportOnlyMemberDeclaration._(
+      MemberDeclaration<T> forwarded, ForwardRule forward)
+      : importOnlyPrefix = (forward.prefix ?? "") +
+            (forwarded is ImportOnlyMemberDeclaration<T>
+                ? forwarded.importOnlyPrefix
+                : ""),
+        importOnlyUrl = forward.span.sourceUrl,
+        super._(forwarded.member, '${forward.prefix ?? ""}${forwarded.name}',
+            forwarded.sourceUrl) {
+    assert(isImportOnlyFile(forward.span.sourceUrl));
+  }
+
+  String toString() =>
+      "${super.toString()} through ${p.prettyUri(importOnlyUrl)}";
 }
