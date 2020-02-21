@@ -40,15 +40,16 @@ class ModuleMigrator extends Migrator {
 
   @override
   final argParser = ArgParser()
-    ..addOption('remove-prefix',
+    ..addMultiOption('remove-prefix',
         abbr: 'p',
-        help: 'Removes PREFIX from all migrated member names.',
+        help: 'Removes PREFIX from all migrated member names.\n'
+            'May be set multiple times.',
         valueHelp: 'PREFIX')
     ..addMultiOption('forward',
         allowed: ['all', 'import-only', 'prefixed'],
         allowedHelp: {
           'prefixed':
-              'Forwards members that start with the prefix specified for '
+              'Forwards members that start with the prefix(es) specified for '
                   '--remove-prefix.',
           'all': 'Forwards all members.',
           'import-only':
@@ -85,7 +86,7 @@ class ModuleMigrator extends Migrator {
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forwards = {for (var arg in argResults['forward']) ForwardType(arg)};
     if (forwards.contains(ForwardType.prefixed) &&
-        argResults['remove-prefix'] == null) {
+        !argResults.wasParsed('remove-prefix')) {
       throw MigrationException(
           'You must provide --remove-prefix with --forward=prefixed so we know '
           'which prefixed members to forward.');
@@ -95,8 +96,8 @@ class ModuleMigrator extends Migrator {
     var visitor = _ModuleMigrationVisitor(
         importCache, references, globalResults['load-path'] as List<String>,
         migrateDependencies: migrateDependencies,
-        prefixToRemove:
-            (argResults['remove-prefix'] as String)?.replaceAll('_', '-'),
+        prefixesToRemove: (argResults['remove-prefix'] as List<String>)
+            ?.map((prefix) => prefix.replaceAll('_', '-')),
         forwards: forwards);
     var migrated = visitor.run(stylesheet, importer);
     _filesWithRenamedDeclarations.addAll(
@@ -165,8 +166,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Whether an import-only stylesheet should be generated.
   ///
-  /// This will be set to true if [prefixToRemove] is removed from any member
-  /// visible at the entrypoint.
+  /// This will be set to true if one or more [prefixesToRemove] are removed
+  /// from any member visible at the entrypoint.
   var _needsImportOnly = false;
 
   /// Set of variables declared outside the current stylesheet that overrode
@@ -185,9 +186,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// List of paths that stylesheets can be loaded from.
   final List<String> loadPaths;
 
-  /// The prefix to be removed from any members with it, or null if no prefix
+  /// Prefixes to be removed from any members with them, or empty if no prefixes
   /// should be removed.
-  final String prefixToRemove;
+  final Set<String> prefixesToRemove;
 
   /// The values of the --forward flag.
   final Set<ForwardType> forwards;
@@ -205,9 +206,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
   _ModuleMigrationVisitor(
       this.importCache, this.references, List<String> loadPaths,
-      {bool migrateDependencies, this.prefixToRemove, this.forwards})
-      : loadPaths =
-            loadPaths.map((path) => p.toUri(p.absolute(path)).path).toList(),
+      {bool migrateDependencies,
+      Iterable<String> prefixesToRemove,
+      this.forwards})
+      : loadPaths = List.unmodifiable(
+            loadPaths.map((path) => p.toUri(p.absolute(path)).path)),
+        prefixesToRemove = prefixesToRemove == null
+            ? const {}
+            : UnmodifiableSetView(prefixesToRemove.toSet()),
         super(importCache, migrateDependencies: migrateDependencies);
 
   /// Checks which global declarations need to be renamed, then runs the
@@ -217,8 +223,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
 
-    if (forwards.contains(ForwardType.importOnly) ||
-        (prefixToRemove != null && _needsImportOnly)) {
+    if (forwards.contains(ForwardType.importOnly) || _needsImportOnly) {
       var url = stylesheet.span.sourceUrl;
       var importOnlyUrl = getImportOnlyUrl(url);
       var results = _generateImportOnly(url, importOnlyUrl);
@@ -262,13 +267,19 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
 
       var prefix = '';
-      if (renamedMembers.containsKey(declaration) ||
-          (visibleAtEntrypoint && _startsWithPrefix(declaration.name))) {
-        prefix = prefixToRemove;
-      } else if (declaration is ImportOnlyMemberDeclaration &&
+      if (declaration is ImportOnlyMemberDeclaration &&
           declaration.importOnlyPrefix != null &&
           url == declaration.sourceUrl) {
         prefix = declaration.importOnlyPrefix;
+      } else {
+        var newName = renamedMembers[declaration];
+        if (newName != null) {
+          assert(declaration.name.endsWith(newName));
+          prefix = declaration.name
+              .substring(0, declaration.name.length - newName.length);
+        } else if (visibleAtEntrypoint) {
+          prefix = _prefixFor(declaration.name) ?? '';
+        }
       }
       forwardsByUrl
           .putIfAbsent(url, () => {})
@@ -321,7 +332,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// If [declaration] should be renamed, adds it to [renamedMembers].
   ///
-  /// Members are renamed if they start with [prefixToRemove] or if they start
+  /// Members are renamed if they start with [prefixesToRemove] or if they start
   /// with `-` or `_` and are referenced outside the stylesheet they were
   /// declared in.
   void _renameDeclaration(MemberDeclaration declaration) {
@@ -350,11 +361,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// entrypoint.
   ///
   /// [name] should be the original name of that member, even if it started with
-  /// [prefixToRemove].
+  /// [prefixesToRemove].
   bool _shouldForward(String name, {bool forImportOnly = false}) {
     if (forwards.contains(ForwardType.all)) return true;
     if (forImportOnly && forwards.contains(ForwardType.importOnly)) return true;
-    return forwards.contains(ForwardType.prefixed) && _startsWithPrefix(name);
+    return forwards.contains(ForwardType.prefixed) && _prefixFor(name) != null;
   }
 
   /// If the current stylesheet is the entrypoint, return a string of additional
@@ -937,13 +948,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         importOnlyPrefix = declaration.importOnlyPrefix;
         newName = declaration.name.substring(importOnlyPrefix.length);
       }
+
       if (_shouldForward(declaration.name) &&
           !declaration.name.startsWith('-')) {
         var subprefix = "";
-        if (prefixToRemove != null &&
-            _startsWithPrefix(declaration.name) &&
-            importOnlyPrefix != null) {
-          subprefix = importOnlyPrefix.substring(prefixToRemove.length);
+        if (importOnlyPrefix != null) {
+          var prefix = _prefixFor(declaration.name);
+          if (prefix != null) {
+            subprefix = importOnlyPrefix.substring(prefix.length);
+          }
         }
         if (declaration.name != newName) _needsImportOnly = true;
         shownByPrefix.putIfAbsent(subprefix, () => {}).add(declaration);
@@ -989,9 +1002,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
         if (name.startsWith('-')) name = name.substring(1);
-        if (prefixToRemove != null && _startsWithPrefix(name)) {
-          name = name.substring(prefixToRemove.length);
-        }
+        name = _unprefix(name);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
         allHidden.add(name);
@@ -1113,16 +1124,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Returns [name] with [prefixToRemove] removed.
+  /// If [name] starts with any of [prefixesToRemove], returns it with the
+  /// longest matching prefix removed.
+  ///
+  /// Otherwise, returns [name] unaltered.
   String _unprefix(String name) {
-    if (prefixToRemove == null || prefixToRemove.length > name.length) {
-      return name;
-    }
-    var startOfName = name.substring(0, prefixToRemove.length);
-    if (prefixToRemove != startOfName) return name;
-    var remainder = name.substring(prefixToRemove.length);
-    if (!Parser.isIdentifier(remainder)) return name;
-    return remainder;
+    var prefix = _prefixFor(name);
+    return prefix == null ? name : name.substring(prefix.length);
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.
@@ -1211,13 +1219,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         isRelative);
   }
 
-  /// Returns whether [identifier] starts with [prefixToRemove], and if so,
-  /// whether the remainder is a valid Sass identifier.
-  bool _startsWithPrefix(String identifier) {
-    if (prefixToRemove == null) return false;
-    if (!identifier.startsWith(prefixToRemove)) return false;
-    return Parser.isIdentifier(identifier.substring(prefixToRemove.length));
-  }
+  /// Returns the longest prefix in [prefixesToRemove] such that [identifier]
+  /// starts with it and the remainder is a valid Sass identifier.
+  ///
+  /// If there is no such prefix, returns `null`.
+  String _prefixFor(String identifier) => maxBy(
+      prefixesToRemove.where((prefix) =>
+          prefix.length < identifier.length &&
+          identifier.startsWith(prefix) &&
+          Parser.isIdentifier(identifier.substring(prefix.length))),
+      (prefix) => prefix.length);
 
   /// Disallows `@use` after `@at-root` rules.
   @override

@@ -1,0 +1,17 @@
+<==> arguments
+--remove-prefix=foo-,bar-,foo-bar-
+
+<==> input/entrypoint.scss
+$foo-var: 1;
+@function bar-fn() {@return 2}
+@mixin foo-bar-mixin() {}
+
+<==> output/entrypoint.scss
+$var: 1;
+@function fn() {@return 2}
+@mixin mixin() {}
+
+<==> output/entrypoint.import.scss
+@forward "entrypoint" as bar-* hide $bar-var, bar-mixin;
+@forward "entrypoint" as foo-* hide foo-fn, foo-mixin;
+@forward "entrypoint" as foo-bar-* hide $foo-bar-var, foo-bar-fn;
