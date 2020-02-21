@@ -1076,9 +1076,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _configuredVariables
           .add(references.defaultVariableDeclarations[declaration]);
     }
-    _renameReference(nameSpan(node), declaration);
 
     var existingNode = references.variableReassignments[declaration];
+    _renameReference(nameSpan(node), existingNode ?? declaration);
+
     var originalUrl = existingNode?.sourceUrl;
     if (existingNode != null &&
         originalUrl != currentUrl &&

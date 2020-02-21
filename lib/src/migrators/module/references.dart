@@ -598,9 +598,15 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _defaultVariableDeclarations[member] = existing;
       }
     }
+
+    // Mark the variable's last assignment as its canonical source, unless it
+    // came from an already-migrated module in which case that's already its
+    // canonical source.
     var previous = scope.variables[node.name];
-    if (previous == node) return;
-    scope.variables[node.name] = member;
+    if (previous == null || !previous.isForwarded) {
+      scope.variables[node.name] = member;
+    }
+
     var original = _variableReassignments[previous] ?? previous;
     if (original != null) _variableReassignments[member] = original;
   }
