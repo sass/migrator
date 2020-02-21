@@ -1,3 +1,9 @@
+## 1.2.0
+
+### Module Migrator
+
+* The `--remove-prefix` flag can now take multiple prefixes.
+
 ## 1.1.5
 
 ### Module Migrator
