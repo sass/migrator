@@ -1,3 +1,9 @@
+## 1.1.6
+
+### Module Migrator
+
+* Correctly migrate assignments to members in already-migrated modules.
+
 ## 1.1.5
 
 ### Module Migrator

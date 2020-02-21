@@ -1,0 +1,18 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "other";
+
+$other-var: new value;
+
+<==> input/_other.scss
+$var: old value;
+
+<==> input/_other.import.scss
+@forward "other" as other-*;
+
+<==> output/entrypoint.scss
+@use "other";
+
+other.$var: new value;

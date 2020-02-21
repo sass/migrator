@@ -1,0 +1,25 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "other";
+
+$other-direct: $other-direct;
+
+$tmp: $other-indirect;
+$other-indirect: $tmp;
+
+<==> input/_other.scss
+$direct: 1;
+$indirect: 1;
+
+<==> input/_other.import.scss
+@forward "other" as other-*;
+
+<==> output/entrypoint.scss
+@use "other";
+
+other.$direct: other.$direct;
+
+$tmp: other.$indirect;
+other.$indirect: $tmp;
