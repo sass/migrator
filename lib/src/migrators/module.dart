@@ -754,14 +754,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (first) {
         first = false;
       } else {
-        addPatch(Patch.insert(start, "\n"));
+        addPatch(Patch.insert(start, "$_semicolonIfNotIndented\n"));
       }
 
       _migrateImport(import, start);
     }
 
     if (staticImports.isNotEmpty) {
-      if (dynamicImports.isNotEmpty) addPatch(Patch.insert(start, "\n"));
+      if (dynamicImports.isNotEmpty) {
+        addPatch(Patch.insert(start, "$_semicolonIfNotIndented\n"));
+      }
 
       _useAllowed = false;
       super.visitImportRule(node);

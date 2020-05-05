@@ -1,5 +1,5 @@
-<==> input/entrypoint.sass
-@import "one", "two", "three"
+<==> input/entrypoint.scss
+@import "one", "two", "three";
 
 <==> input/_one.scss
 a {b: c}
@@ -10,7 +10,7 @@ a {b: c}
 <==> input/_three.scss
 a {b: c}
 
-<==> output/entrypoint.sass
-@use "one"
-@use "two"
-@use "three"
+<==> output/entrypoint.scss
+@use "one";
+@use "two";
+@use "three";

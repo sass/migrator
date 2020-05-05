@@ -1,5 +1,5 @@
-<==> input/entrypoint.sass
-@import "one", "two.css", "three", "http://four"
+<==> input/entrypoint.scss
+@import "one", "two.css", "three", "http://four";
 
 <==> input/_one.scss
 a {b: c}
@@ -7,7 +7,7 @@ a {b: c}
 <==> input/_three.scss
 a {b: c}
 
-<==> output/entrypoint.sass
-@use "one"
-@use "three"
-@import "two.css", "http://four"
+<==> output/entrypoint.scss
+@use "one";
+@use "three";
+@import "two.css", "http://four";

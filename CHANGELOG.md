@@ -1,3 +1,10 @@
+## 1.2.1
+
+### Module Migrator
+
+* Fixes a bug where semicolons would be missing when migrating an `@import` rule
+  with multiple imports.
+
 ## 1.2.0
 
 ### Module Migrator
