@@ -51,7 +51,7 @@ package() async {
   var client = http.Client();
   await Future.wait(["linux", "macos", "windows"].expand((os) => [
         _buildPackage(client, os, x64: true),
-        _buildPackage(client, os, x64: false)
+        if (os != "macos") _buildPackage(client, os, x64: false)
       ]));
   client.close();
 }
