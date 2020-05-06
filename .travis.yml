@@ -29,10 +29,14 @@ jobs:
 
   # Testing on Node.js
   - env: NODE_VERSION=stable
+    # Remove once pulyaevskiy/node-interop#74 is fixed.
+    dart: &node-compatible-dart
+      2.7.2
     dart_task: {test: -t node}
   # Keep these up-to-date with the latest LTS Node releases. They next need to
   # be rotated April 2020. See https://github.com/nodejs/Release.
   - env: NODE_VERSION=lts/dubnium
+    dart: *node-compatible-dart
     dart_task: {test: -t node}
 
   # Static checks
@@ -79,6 +83,7 @@ jobs:
     env:
       # NPM_RC="..."
       - secure: "L1wC7SpeG+9s6XznmyGJBb9cD/wuXqGg4drwgYEesKhwPfWOSbxNT2b+o0MAUAidYQA0Et9J4twY/ou7vhGxZEbdi2tSDZ7D7gk2v2is+bcnt3rNKmBZmhF9VfGpT0LlKEcOay/711ZbNKWRhB0SIaBA5URvZdyUPYEOyuI3OdoewqX24LR1FYq9NmXnqDzza9duWCrGKVxo1mgYHPCZYcQQI9GgmGFsLv/FGRV+I1Yx/0RasvsYk6+JgeYDQQp3RNvVJ1p8/yr5Zeo5Q/LpzZ0Zuu0wxJ9vy6flJwOrYbYpeP65FjVfssJZITXJDWmWhWT4WfdKmCg5Cu4rFddTPaRvK7aoJmPjKxvww7KdwWgyGVUC2XlB3sruenkYeefuJ7oQM8ZU3qFzrJTrRoTPHGjqcKgka9hd3aja8R90h4t3t39xICd5FpgBwck1ALrN5KQkpH4bAV6lrX8jiAYAurNdo0rUUb+6vBmCxcWobZkfqkx5LvjiC00QF1Mxhyd8deRUYQciosIy1B8ibUhP1mTSj8cyZFCBo26fMCq6iwH43vJY9qRJJehfrAEkp0oya2XpDtxeJki33docqgSVHPBYM9n3r7mbbeypl3j8BQCQO0IT+GHiQlpdzYQYWX3IgZ4qRqBG6drCPSl4sLoHKgtjJk3lraIHgTa9jnGSnrM="
+    dart: *node-compatible-dart
     script: skip
     deploy:
       provider: script
