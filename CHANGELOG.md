@@ -1,3 +1,7 @@
+## 1.2.2
+
+* No user-visible changes.
+
 ## 1.2.1
 
 ### Module Migrator
