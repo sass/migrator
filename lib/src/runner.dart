@@ -136,7 +136,7 @@ Future<String> _loadVersion() async {
     version += " compiled with dart2js "
         "${const String.fromEnvironment('dart-version')}";
   }
-  if (version != null) return version;
+  if (version != null && version.isNotEmpty) return version;
 
   var libDir = p.fromUri(
       await Isolate.resolvePackageUri(Uri.parse('package:sass_migrator/')));
