@@ -86,7 +86,7 @@ packages:
     source: hosted
     version: "0.13.9"
   crypto:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: crypto
       url: "https://pub.dartlang.org"
@@ -149,7 +149,7 @@ packages:
     source: hosted
     version: "0.3.4"
   js:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: js
       url: "https://pub.dartlang.org"
