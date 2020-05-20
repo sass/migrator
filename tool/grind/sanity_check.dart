@@ -4,26 +4,26 @@
 
 import 'dart:io';
 
+import 'package:cli_pkg/cli_pkg.dart' as pkg;
 import 'package:collection/collection.dart';
 import 'package:grinder/grinder.dart';
-import 'package:pub_semver/pub_semver.dart';
 
 import 'utils.dart';
 
 @Task('Verify that the package is in a good state to release.')
 sanityCheckBeforeRelease() {
   var travisTag = environment("TRAVIS_TAG");
-  if (travisTag != version) {
-    fail("TRAVIS_TAG $travisTag is different than pubspec version $version.");
+  if (travisTag != pkg.version.toString()) {
+    fail("TRAVIS_TAG $travisTag is different than pubspec version "
+        "${pkg.version}.");
   }
-
-  if (const ListEquality().equals(Version.parse(version).preRelease, ["dev"])) {
-    fail("$version is a dev release.");
+  if (const ListEquality().equals(pkg.version.preRelease, ["dev"])) {
+    fail("${pkg.version} is a dev release.");
   }
 
   var versionHeader =
-      RegExp("^## ${RegExp.escape(version)}\$", multiLine: true);
+      RegExp("^## ${RegExp.escape(pkg.version.toString())}\$", multiLine: true);
   if (!File("CHANGELOG.md").readAsStringSync().contains(versionHeader)) {
-    fail("There's no CHANGELOG entry for $version.");
+    fail("There's no CHANGELOG entry for ${pkg.version}.");
   }
 }

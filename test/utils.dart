@@ -6,10 +6,14 @@
 
 import 'dart:io';
 
+import 'package:cli_pkg/testing.dart' as pkg;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 import 'package:test_process/test_process.dart';
+
+const jsExecutable = "build/sass-migrator.dart.js";
+const dartSnapshot = "build/sass_migrator.dart.snapshot";
 
 /// Whether to run tests using the Node.js executable, as opposed to the Dart VM
 /// executable.
@@ -18,38 +22,20 @@ import 'package:test_process/test_process.dart';
 /// differently and run the same tests.
 var runNodeTests = false;
 
-/// Whether [ensureExecutableUpToDate] has been called.
-var _ensuredExecutableUpToDate = false;
-
 /// Starts a Sass migrator process with the given [args].
-Future<TestProcess> runMigrator(List<String> args) {
-  expect(_ensuredExecutableUpToDate, isTrue,
-      reason:
-          "ensureExecutableUpToDate() must be called at top of the test file.");
-
-  var executable = runNodeTests ? "node" : Platform.executable;
-
-  var executableArgs = <String>[];
-  if (runNodeTests) {
-    executableArgs.add(p.absolute("build/sass_migrator.dart.js"));
-  } else {
-    executableArgs.add("--enable-asserts");
-
-    var snapshotPath = "build/sass_migrator.dart.app.snapshot";
-    executableArgs.add(p.absolute(File(snapshotPath).existsSync()
-        ? snapshotPath
-        : "bin/sass_migrator.dart"));
-  }
-
-  return TestProcess.start(executable, [...executableArgs, ...args],
-      workingDirectory: d.sandbox, description: "migrator");
-}
+Future<TestProcess> runMigrator(List<String> args) =>
+    pkg.start('sass-migrator', args,
+        node: runNodeTests,
+        workingDirectory: d.sandbox,
+        description: "migrator");
 
 /// Runs all tests for [migrator].
 ///
 /// HRX files should be stored in `test/migrators/<migrator name>/`.
 void testMigrator(String migrator) {
-  ensureExecutableUpToDate();
+  setUpAll(() {
+    pkg.ensureExecutableUpToDate('sass-migrator', node: runNodeTests);
+  });
 
   var dir = "test/migrators/$migrator";
   group(migrator, () {
@@ -61,67 +47,6 @@ void testMigrator(String migrator) {
       }
     }
   });
-}
-
-/// Creates a [setUpAll] that verifies that the compiled form of the migrator
-/// executable is up-to-date, if necessary.
-///
-/// This should always be called before [runMigrator].
-void ensureExecutableUpToDate() {
-  setUpAll(() {
-    _ensuredExecutableUpToDate = true;
-
-    if (runNodeTests) {
-      _ensureUpToDate("build/sass_migrator.dart.js", "pub run grinder js");
-    } else {
-      _ensureUpToDate("build/sass_migrator.dart.app.snapshot",
-          'pub run grinder app-snapshot',
-          ifExists: true);
-    }
-  });
-}
-
-/// Ensures that [path] (usually a compilation artifact) has been modified more
-/// recently than all this package's source files.
-///
-/// If [path] isn't up-to-date, this throws an error encouraging the user to run
-/// [commandToRun].
-///
-/// If [ifExists] is `true`, this won't throw an error if the file in question
-/// doesn't exist.
-void _ensureUpToDate(String path, String commandToRun,
-    {bool ifExists = false}) {
-  // Ensure path is relative so the error messages are more readable.
-  path = p.relative(path);
-  if (!File(path).existsSync()) {
-    if (ifExists) return;
-    throw "$path does not exist. Run $commandToRun.";
-  }
-
-  var lastModified = File(path).lastModifiedSync();
-  var entriesToCheck = Directory("lib").listSync(recursive: true).toList();
-
-  // If we have a dependency override, "pub run" will touch the lockfile to mark
-  // it as newer than the pubspec, which makes it unsuitable to use for
-  // freshness checking.
-  if (File("pubspec.yaml")
-      .readAsStringSync()
-      .contains("dependency_overrides")) {
-    entriesToCheck.add(File("pubspec.yaml"));
-  } else {
-    entriesToCheck.add(File("pubspec.lock"));
-  }
-
-  for (var entry in entriesToCheck) {
-    if (entry is File) {
-      var entryLastModified = entry.lastModifiedSync();
-      if (lastModified.isBefore(entryLastModified)) {
-        throw "${entry.path} was modified after ${p.prettyUri(p.toUri(path))} "
-            "was generated.\n"
-            "Run $commandToRun.";
-      }
-    }
-  }
 }
 
 /// Run the migration test in [hrxFile].
