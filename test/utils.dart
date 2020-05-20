@@ -12,9 +12,6 @@ import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 import 'package:test_process/test_process.dart';
 
-const jsExecutable = "build/sass-migrator.dart.js";
-const dartSnapshot = "build/sass_migrator.dart.snapshot";
-
 /// Whether to run tests using the Node.js executable, as opposed to the Dart VM
 /// executable.
 ///
