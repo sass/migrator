@@ -58,7 +58,7 @@ jobs:
     env: &github-env
       - GITHUB_USER=sassbot
       # GITHUB_TOKEN="..."
-      - secure: "THIS NEEDS TO BE UPDATED"
+      - secure: "XmwFy85erVGX1EHIRlXe/vMKbJHmgrTKRu6SG713XFd2QdFRPce1VpKB/oc/x/5NbuE6LGSmPTAblfuXRiHs5PtD9p+73HzejdcOa4jkxMmU+FgPT8JuM0lpDIT/HXKW3liV+TLOytSpzJbH1EgCbaXJ4xh2CF2jzIIoZ47ylhl5jd4eZ2oip4nozOBMSwXXt4LJlGbLjINY+k/afB3Y9yP2WEPqdtjBsJNhWlXOx5IOcay5tK9iKtx6Pwt7YqQaNMopauZKEVJY4fxutE1i217pbcS+JEk+csjY0zDt40ZcdYdu3F8wV1DFKoKt/sw84ModsEBAOxG6gPTTtXYdGTGLQVK024m7x8tAc5mdJ4gx0eSaCKAhKRoo4WpESp+0gVzKxxSGscSaVkISxeV+UhDUfXa+C2rPwjEyAhByfuVq+O1zMDMMntFV5fHqg607LRPcK9swGfM7yqpBNFjXGI0ev4mhuG7Tt1ZvwBbIwcNWa1gV29Eplk6JG7OD9bkDJQC0FseUnmQ+IS6OPv8TWD+EOYLjjr0OZgKZXwUba/5w4IdNMjmxLcwhbNHqnWCvvs/0NWeLa06X5gqARKHfNmN9nc613u4myebbUrVtwBe1cpnHMIhGECjyzEaJ+TajqQfj2YrRTiPpKCcAmb6NFiDY5qBq/YhY2/VsrzY4o3U="
     script: skip # Don't run tests
     deploy:
       provider: script
@@ -82,7 +82,7 @@ jobs:
     if: *deploy-if
     env:
       # NPM_TOKEN="..."
-      - secure: "THIS NEEDS TO BE UPDATED"
+      - secure: "mf4pySNam2KFYNpYnMSSgQzWHrEUJSbLKhgaSgIq/biEdMO5imeQ/hiK8BvWKw4kzN58C2RCBVafxwWttL86SoBixSMViSxhR29QdVQGm3w6wGUnE7bauCTesFWuYm2Qhz8N7yGs0nWOq4fmLZGnkKhaUm45F3E3/AzAUY/ic5JueyZ74kMa92wx/ENz5aN3tj/TUHx29af3ZYpGTX8lVTaKXpjuu6LPxNU3RWSP0piFSt2sSgXsw7FidbM2JaS5mNCc86SECB/c+YBmvvIiqikZNPyH/kfXxZYRmZn6o2j+k0B3wSaAFWWVnO4dyqia40eIJlwzQ65QUMSZe6mmnLXjeWFwt6qB8s+FuBAUT+4bBSHxNXVGWvcphCrt59jHjssHSuee8CkASn8DWIXql/xAuzHmmqKRVcuA765zJ30dS9polTmPOsvDbcirHomFLypWP3zhePfqkIrwp9alVTMrApluoWtvyYfUgPaffmfKblvJEd3UAiweqUnd7cDG5+d4QubIlNRG+ywHnC9UWBoU9CCL6KuAwJLd0WFIAgKJWS9Yu5h2RBYkLXj0J7htOxdCYO47qsR9u1GFB6Jk8r7TtL9+8t0U0Mo2kX5xvlAPkEZfIzvcst3K467x3b5F4/kYLCxOffRFIn0oEPh9StHmzkWKS84gkqS+CK4/AYI="
     script: skip
     deploy:
       provider: script
