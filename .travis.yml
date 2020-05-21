@@ -14,8 +14,8 @@ before_script:
 - if-node . "$HOME/.nvm/nvm.sh"
 - if-node nvm install "$NODE_VERSION"
 - if-node nvm use "$NODE_VERSION"
-- if-node pub run grinder js
-- if-dart pub run grinder app-snapshot
+- if-node pub run grinder pkg-npm-dev
+- if-dart pub run grinder pkg-standalone-dev
 
 jobs:
   include:
@@ -29,14 +29,12 @@ jobs:
 
   # Testing on Node.js
   - env: NODE_VERSION=stable
-    # Remove once pulyaevskiy/node-interop#74 is fixed.
-    dart: &node-compatible-dart
-      2.7.2
     dart_task: {test: -t node}
   # Keep these up-to-date with the latest LTS Node releases. They next need to
-  # be rotated April 2020. See https://github.com/nodejs/Release.
+  # be rotated April 2021. See https://github.com/nodejs/Release.
   - env: NODE_VERSION=lts/dubnium
-    dart: *node-compatible-dart
+    dart_task: {test: -t node}
+  - env: NODE_VERSION=lts/erbium
     dart_task: {test: -t node}
 
   # Static checks
@@ -51,18 +49,20 @@ jobs:
       (type IN (push, api)) AND (repo = sass/migrator) AND tag =~ ^\d+\.\d+\.\d+([+-].*)?$
     script: pub run grinder sanity-check-before-release
 
-  # Deploy to GitHub.
-  - stage: deploy
-    name: GitHub
+  # Deploy Linux releases to GitHub. macOS and Windows releases are deployed in
+  # a later stage so that we can build native snapshots on bots with the same
+  # operating system.
+  - stage: deploy 1
+    name: "GitHub: Linux"
     if: *deploy-if
     env: &github-env
       - GITHUB_USER=sassbot
-      # GITHUB_AUTH="..."
-      - secure: "tExT08Y/ByXpUPxH1AjsusFmKdqn3Qfjd+gIeK5s3CmxvQD9SfMG/5qzgX7vUKzeysry8bk9t62c+GWi54wiKAf0xzGfpJ3pXm0SX3CURkdN9BipUpJicisaWkwn6zQc2hbHgN7icXZg2xzS14TQntmo1gc8CmZIp+QFFF5hr3bWKe2GAd7ahegO8Gbc9MJbMj8F/0QcPIxdyCIUVM0PPFr0X5x2UladByl7/apHJyNGO10mJ593krh4p5ymA8gA8Q3eiyztIAyeOmJvCuVa5KsuWlhmMSKEmcQ+hjREtIXaUvFkgxs4xTXJtO+i4tKvI3kMivTx0nH3pJDjRZHvVRDCprFB2H2T4JDxmrQboNbsl0OgOtzOwZdzx9+Q4Ar2ePjD+tmypTVvFMrOjkJrPSlHMnSQTweRXa2qvoXyw3ls4pbQSKeh4vKgPuISroCT9E39Mivo9A/xpPV36ouTuBwDbFEEK6MgxciG0I2T/NjLqQz1a67/Or0DX6L7jhtUgjnU2l3dNRZ8z5sjXOXDNyJzxta9vNDQX8yr538Xk+eO+13vm6TjxZLDwXF8MFjm+E4DU8QVkeIHwwlTU5Q5cEemilnRdw368ae8k2DJQaiTmzfhU6864L9kHh7PNRvIN6kqAyTV4rzjlsjRYIMiBbjwbeGjC2oa9rVPcTJfPIY="
+      # GITHUB_TOKEN="..."
+      - secure: "XmwFy85erVGX1EHIRlXe/vMKbJHmgrTKRu6SG713XFd2QdFRPce1VpKB/oc/x/5NbuE6LGSmPTAblfuXRiHs5PtD9p+73HzejdcOa4jkxMmU+FgPT8JuM0lpDIT/HXKW3liV+TLOytSpzJbH1EgCbaXJ4xh2CF2jzIIoZ47ylhl5jd4eZ2oip4nozOBMSwXXt4LJlGbLjINY+k/afB3Y9yP2WEPqdtjBsJNhWlXOx5IOcay5tK9iKtx6Pwt7YqQaNMopauZKEVJY4fxutE1i217pbcS+JEk+csjY0zDt40ZcdYdu3F8wV1DFKoKt/sw84ModsEBAOxG6gPTTtXYdGTGLQVK024m7x8tAc5mdJ4gx0eSaCKAhKRoo4WpESp+0gVzKxxSGscSaVkISxeV+UhDUfXa+C2rPwjEyAhByfuVq+O1zMDMMntFV5fHqg607LRPcK9swGfM7yqpBNFjXGI0ev4mhuG7Tt1ZvwBbIwcNWa1gV29Eplk6JG7OD9bkDJQC0FseUnmQ+IS6OPv8TWD+EOYLjjr0OZgKZXwUba/5w4IdNMjmxLcwhbNHqnWCvvs/0NWeLa06X5gqARKHfNmN9nc613u4myebbUrVtwBe1cpnHMIhGECjyzEaJ+TajqQfj2YrRTiPpKCcAmb6NFiDY5qBq/YhY2/VsrzY4o3U="
     script: skip # Don't run tests
     deploy:
       provider: script
-      script: pub run grinder github-release
+      script: pub run grinder pkg-github-release pkg-github-linux
       skip_cleanup: true # Don't clean up the Dart SDK.
 
       # This causes the deploy to only be build when a tag is pushed. This
@@ -81,13 +81,12 @@ jobs:
   - name: npm
     if: *deploy-if
     env:
-      # NPM_RC="..."
-      - secure: "L1wC7SpeG+9s6XznmyGJBb9cD/wuXqGg4drwgYEesKhwPfWOSbxNT2b+o0MAUAidYQA0Et9J4twY/ou7vhGxZEbdi2tSDZ7D7gk2v2is+bcnt3rNKmBZmhF9VfGpT0LlKEcOay/711ZbNKWRhB0SIaBA5URvZdyUPYEOyuI3OdoewqX24LR1FYq9NmXnqDzza9duWCrGKVxo1mgYHPCZYcQQI9GgmGFsLv/FGRV+I1Yx/0RasvsYk6+JgeYDQQp3RNvVJ1p8/yr5Zeo5Q/LpzZ0Zuu0wxJ9vy6flJwOrYbYpeP65FjVfssJZITXJDWmWhWT4WfdKmCg5Cu4rFddTPaRvK7aoJmPjKxvww7KdwWgyGVUC2XlB3sruenkYeefuJ7oQM8ZU3qFzrJTrRoTPHGjqcKgka9hd3aja8R90h4t3t39xICd5FpgBwck1ALrN5KQkpH4bAV6lrX8jiAYAurNdo0rUUb+6vBmCxcWobZkfqkx5LvjiC00QF1Mxhyd8deRUYQciosIy1B8ibUhP1mTSj8cyZFCBo26fMCq6iwH43vJY9qRJJehfrAEkp0oya2XpDtxeJki33docqgSVHPBYM9n3r7mbbeypl3j8BQCQO0IT+GHiQlpdzYQYWX3IgZ4qRqBG6drCPSl4sLoHKgtjJk3lraIHgTa9jnGSnrM="
-    dart: *node-compatible-dart
+      # NPM_TOKEN="..."
+      - secure: "mf4pySNam2KFYNpYnMSSgQzWHrEUJSbLKhgaSgIq/biEdMO5imeQ/hiK8BvWKw4kzN58C2RCBVafxwWttL86SoBixSMViSxhR29QdVQGm3w6wGUnE7bauCTesFWuYm2Qhz8N7yGs0nWOq4fmLZGnkKhaUm45F3E3/AzAUY/ic5JueyZ74kMa92wx/ENz5aN3tj/TUHx29af3ZYpGTX8lVTaKXpjuu6LPxNU3RWSP0piFSt2sSgXsw7FidbM2JaS5mNCc86SECB/c+YBmvvIiqikZNPyH/kfXxZYRmZn6o2j+k0B3wSaAFWWVnO4dyqia40eIJlwzQ65QUMSZe6mmnLXjeWFwt6qB8s+FuBAUT+4bBSHxNXVGWvcphCrt59jHjssHSuee8CkASn8DWIXql/xAuzHmmqKRVcuA765zJ30dS9polTmPOsvDbcirHomFLypWP3zhePfqkIrwp9alVTMrApluoWtvyYfUgPaffmfKblvJEd3UAiweqUnd7cDG5+d4QubIlNRG+ywHnC9UWBoU9CCL6KuAwJLd0WFIAgKJWS9Yu5h2RBYkLXj0J7htOxdCYO47qsR9u1GFB6Jk8r7TtL9+8t0U0Mo2kX5xvlAPkEZfIzvcst3K467x3b5F4/kYLCxOffRFIn0oEPh9StHmzkWKS84gkqS+CK4/AYI="
     script: skip
     deploy:
       provider: script
-      script: tool/travis/deploy/npm.sh
+      script: pub run grinder pkg-npm-deploy
       skip_cleanup: true
       on: {tags: true}
 
@@ -100,7 +99,7 @@ jobs:
     script: skip
     deploy:
       provider: script
-      script: tool/travis/deploy/pub.sh
+      script: pub run grinder pkg-pub-deploy
       skip_cleanup: true
       on: {tags: true}
 
@@ -111,7 +110,29 @@ jobs:
     script: skip
     deploy:
       provider: script
-      script: pub run grinder update-homebrew
+      script: pub run grinder pkg-homebrew-update
       skip_cleanup: true
       on: {tags: true}
 
+  - stage: deploy 2
+    name: "GitHub: macOS"
+    if: *deploy-if
+    env: *github-env
+    script: skip
+    os: osx
+    deploy:
+      provider: script
+      script: pub run grinder pkg-github-macos
+      skip_cleanup: true
+      on: {tags: true}
+
+  - name: "GitHub: Windows"
+    if: *deploy-if
+    env: *github-env
+    script: skip
+    os: windows
+    deploy:
+      provider: script
+      script: pub run grinder pkg-github-windows
+      skip_cleanup: true
+      on: {tags: true}

@@ -4,13 +4,14 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:cli_pkg/testing.dart' as pkg;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 
 import 'utils.dart';
 
 void main() {
-  ensureExecutableUpToDate();
+  pkg.ensureExecutableUpToDate('sass-migrator', node: runNodeTests);
 
   test("--version prints the migrator version", () async {
     var migrator = await runMigrator(["--version"]);
