@@ -1,6 +1,6 @@
-## 1.2.3-test.2
+## 1.2.3
 
-* No user-visible changes.
+* Updates help text to use the correct binary name (`sass-migrator`).
 
 ## 1.2.2
 
