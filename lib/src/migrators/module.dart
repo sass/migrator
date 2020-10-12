@@ -447,12 +447,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // If there was already a blank line after the insertion point, or the
     // insertion point was at the end of the file, remove the additional line
     // break at the end of the extra rules.
-    if (insertionPoint == node.span.start) extras = '$extras\n';
+    extras = '$extras\n';
     var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
     if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
       extras = extras.substring(0, extras.length - 1);
     }
-    if (insertionPoint == _afterLastImport) extras = '\n$extras';
     addPatch(Patch.insert(insertionPoint, extras));
   }
 
@@ -746,7 +745,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var imports =
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
     var staticImports = imports.item1;
-    var dynamicImports = imports.item2;
+    var dynamicImports = imports.item2.where((import) =>
+        !references.orphanImportOnlyFiles.contains(importCache
+            .canonicalize(Uri.parse(import.url),
+                baseImporter: importer, forImport: true)
+            ?.item2));
 
     var start = node.span.start;
     var first = true;
@@ -759,6 +762,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
       _migrateImport(import, start);
     }
+
+    var spanWithNewline = extendForward(
+            extendThroughWhitespace(node.span), '$_semicolonIfNotIndented\n') ??
+        node.span;
 
     if (staticImports.isNotEmpty) {
       if (dynamicImports.isNotEmpty) {
@@ -777,18 +784,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             extendForward(extended, ",") ?? extendBackward(extended, ",")));
       }
     } else {
-      addPatch(patchDelete(node.span));
+      addPatch(
+          patchDelete(dynamicImports.isEmpty ? spanWithNewline : node.span));
     }
 
     if (_useAllowed) {
       _beforeFirstImport ??= node.span.start;
-      if (currentUrl.path.endsWith('.sass')) {
-        _afterLastImport = node.span.end;
-      } else {
-        _afterLastImport =
-            extendForward(extendThroughWhitespace(node.span), ';')?.end ??
-                node.span.end;
-      }
+      _afterLastImport = spanWithNewline.end;
     }
   }
 

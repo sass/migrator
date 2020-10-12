@@ -1,3 +1,12 @@
+## 1.2.4
+
+### Module Migrator
+
+* The migrator no longer crashes when it encounters an import-only file without
+  a corresponding regular file.
+* If an import-only file does not forward its corresponding regular file, the
+  migrator no longer includes a `@use` rule for it.
+
 ## 1.2.3
 
 * Updates help text to use the correct binary name (`sass-migrator`).
