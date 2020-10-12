@@ -39,7 +39,8 @@ jobs:
 
   # Static checks
   - dart_task: {dartanalyzer: --fatal-warnings --fatal-hints ./}
-  - dart_task: dartfmt
+  # TODO(jathak): Re-enable this once dart-lang/sdk#42989 is fixed.
+  # - dart_task: dartfmt
 
   ## Deployment
 
