@@ -57,7 +57,8 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
     migrator,
     '--no-unicode',
     ...files.arguments,
-    for (var path in files.input.keys) if (path.startsWith("entrypoint")) path
+    for (var path in files.input.keys)
+      if (path.startsWith("entrypoint")) path
   ]);
 
   if (files.expectedLog != null) {
