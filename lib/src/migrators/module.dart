@@ -745,11 +745,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var imports =
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
     var staticImports = imports.item1;
-    var dynamicImports = imports.item2.where((import) =>
-        !references.orphanImportOnlyFiles.contains(importCache
-            .canonicalize(Uri.parse(import.url),
-                baseImporter: importer, forImport: true)
-            ?.item2));
+    var dynamicImports = imports.item2.where((import) {
+      var url = importCache.canonicalize(
+              Uri.parse(import.url), baseImporter: importer, forImport: true)
+          ?.item2;
+      return !references.orphanImportOnlyFiles.contains(url);
+    });
 
     var start = node.span.start;
     var first = true;
