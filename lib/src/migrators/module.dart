@@ -746,8 +746,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
     var staticImports = imports.item1;
     var dynamicImports = imports.item2.where((import) {
-      var url = importCache.canonicalize(
-              Uri.parse(import.url), baseImporter: importer, forImport: true)
+      var url = importCache
+          .canonicalize(Uri.parse(import.url),
+              baseImporter: importer, forImport: true)
           ?.item2;
       return !references.orphanImportOnlyFiles.contains(url);
     });
