@@ -33,7 +33,9 @@ class UnreferencableType {
   MigrationException toException(SassNode reference, Uri source) {
     var type = reference is IncludeRule
         ? 'mixin'
-        : reference is FunctionExpression ? 'function' : 'variable';
+        : reference is FunctionExpression
+            ? 'function'
+            : 'variable';
     var url = p.prettyUri(source);
     switch (this) {
       case fromImporter:

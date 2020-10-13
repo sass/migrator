@@ -90,6 +90,10 @@ class References {
   /// map to the [ReferenceSource] for the `sass:meta` module).
   final Map<SassNode, ReferenceSource> sources;
 
+  /// The set of import-only files that do not directly depend on their regular
+  /// counterparts.
+  final Set<Uri> orphanImportOnlyFiles;
+
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -149,7 +153,8 @@ class References {
           getFunctionReferences,
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
-      Map<SassNode, ReferenceSource> sources)
+      Map<SassNode, ReferenceSource> sources,
+      Set<Uri> orphanImportOnlyFiles)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -162,7 +167,8 @@ class References {
         globalDeclarations = UnmodifiableSetView(globalDeclarations),
         libraries = UnmodifiableMapView(
             mapMap(libraries, value: (_, urls) => UnmodifiableSetView(urls))),
-        sources = UnmodifiableMapView(sources);
+        sources = UnmodifiableMapView(sources),
+        orphanImportOnlyFiles = UnmodifiableSetView(orphanImportOnlyFiles);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -188,6 +194,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   final _globalDeclarations = <MemberDeclaration>{};
   final _libraries = <MemberDeclaration, Set<Uri>>{};
   final _sources = <SassNode, ReferenceSource>{};
+  final _orphanImportOnlyFiles = <Uri>{};
 
   /// The current global scope.
   ///
@@ -243,6 +250,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// stylesheet.
   Importer _importer;
 
+  /// If the current stylesheet is an import-only file, this starts as true and
+  /// is changed to false if it forwards its regular counterpart.
+  ///
+  /// This is always false for regular files.
+  bool _isOrphanImportOnly;
+
   /// Cache used to load stylesheets.
   ImportCache importCache;
 
@@ -276,7 +289,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _getFunctionReferences,
         _globalDeclarations,
         _libraries,
-        _sources);
+        _sources,
+        _orphanImportOnlyFiles);
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -321,9 +335,13 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitStylesheet(Stylesheet node) {
     var oldNamespaces = _namespaces;
     var oldUrl = _currentUrl;
+    var oldOrphaned = _isOrphanImportOnly;
     _namespaces = {};
     _currentUrl = node.span.sourceUrl;
+    _isOrphanImportOnly = isImportOnlyFile(_currentUrl);
     super.visitStylesheet(node);
+    if (_isOrphanImportOnly) _orphanImportOnlyFiles.add(_currentUrl);
+    _isOrphanImportOnly = oldOrphaned;
     _namespaces = oldNamespaces;
     _currentUrl = oldUrl;
   }
@@ -436,6 +454,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitForwardRule(ForwardRule node) {
     super.visitForwardRule(node);
     var canonicalUrl = _loadUseOrForward(node.url, node);
+    if (_isOrphanImportOnly && _currentUrl == getImportOnlyUrl(canonicalUrl)) {
+      _isOrphanImportOnly = false;
+    }
     var moduleScope = _moduleScopes[canonicalUrl];
     for (var declaration in moduleScope.variables.values) {
       if (declaration.member is! VariableDeclaration) {

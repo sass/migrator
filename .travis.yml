@@ -39,7 +39,7 @@ jobs:
 
   # Static checks
   - dart_task: {dartanalyzer: --fatal-warnings --fatal-hints ./}
-  - dart_task: dartfmt
+  - dart_task: {dartfmt: sdk}
 
   ## Deployment
 
