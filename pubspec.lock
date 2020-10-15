@@ -60,10 +60,12 @@ packages:
   cli_pkg:
     dependency: "direct dev"
     description:
-      name: cli_pkg
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "1.0.0-beta.7"
+      path: "."
+      ref: "1.0.0-beta.10"
+      resolved-ref: "0dc2d8dd814207513277e4b9a096ce4cad3b4773"
+      url: "git://github.com/google/dart_cli_pkg"
+    source: git
+    version: "1.0.0-beta.10"
   cli_repl:
     dependency: transitive
     description:
@@ -126,7 +128,7 @@ packages:
       name: grinder
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "0.8.4"
+    version: "0.8.6"
   html:
     dependency: transitive
     description:
@@ -485,4 +487,4 @@ packages:
     source: hosted
     version: "2.2.0"
 sdks:
-  dart: ">=2.7.0 <3.0.0"
+  dart: ">=2.10.0 <3.0.0"

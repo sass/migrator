@@ -24,7 +24,7 @@ dependencies:
 
 dev_dependencies:
   archive: ">=1.0.0 <3.0.0"
-  cli_pkg: "^1.0.0-beta.7"
+  cli_pkg: "^1.0.0-beta.10"
   crypto: "^2.1.4"
   grinder: "^0.8.0"
   http: ">=0.11.0 <0.13.0"
@@ -39,3 +39,9 @@ dev_dependencies:
 
 executables:
   sass-migrator: sass_migrator
+
+dependency_overrides:
+  cli_pkg:
+    git:
+      url: git://github.com/google/dart_cli_pkg
+      ref: 1.0.0-beta.10

@@ -9,13 +9,13 @@ import 'package:collection/collection.dart';
 import 'package:grinder/grinder.dart';
 
 main(List<String> args) {
-  pkg.humanName = "Sass Migrator";
-  pkg.botName = "Sass Bot";
-  pkg.botEmail = "sass.bot.beep.boop@gmail.com";
-  pkg.homebrewRepo = "sass/homebrew-sass";
-  pkg.homebrewFormula = "migrator.rb";
-  pkg.jsRequires = {"fs": "fs", "os": "os", "path": "path"};
-  pkg.standaloneName = "sass-migrator";
+  pkg.humanName.value = "Sass Migrator";
+  pkg.botName.value = "Sass Bot";
+  pkg.botEmail.value = "sass.bot.beep.boop@gmail.com";
+  pkg.homebrewRepo.value = "sass/homebrew-sass";
+  pkg.homebrewFormula.value = "migrator.rb";
+  pkg.jsRequires.value = {"fs": "fs", "os": "os", "path": "path"};
+  pkg.standaloneName.value = "sass-migrator";
 
   pkg.addAllTasks();
   grind(args);
