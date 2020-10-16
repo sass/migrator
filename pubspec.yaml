@@ -39,9 +39,3 @@ dev_dependencies:
 
 executables:
   sass-migrator: sass_migrator
-
-dependency_overrides:
-  cli_pkg:
-    git:
-      url: git://github.com/google/dart_cli_pkg
-      ref: 1.0.0-beta.10
