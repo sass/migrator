@@ -300,7 +300,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     for (var function in functions) {
       if (_isCssCompatibilityOverload(function)) continue;
       if (function.name.asPlain == null) continue;
-      var name = function.name.asPlain;
+      var name = function.name.asPlain.replaceAll('_', '-');
       var module = builtInFunctionModules[name];
       if (module != null) _sources[function] = BuiltInSource(module);
     }

@@ -1,3 +1,10 @@
+## 1.2.5
+
+### Module Migrator
+
+* The migrator now properly migrates built-in function calls with underscores
+  (e.g. `map_get`).
+
 ## 1.2.4
 
 ### Module Migrator
