@@ -1,0 +1,12 @@
+<==> input/entrypoint.scss
+$a: map_get((a: 1), a);
+$b: str_length("hello");
+$c: scale_color(blue, $lightness: -10%);
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@use "sass:map";
+@use "sass:string";
+$a: map.get((a: 1), a);
+$b: string.length("hello");
+$c: color.scale(blue, $lightness: -10%);
