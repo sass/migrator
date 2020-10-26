@@ -1,3 +1,10 @@
+## 1.2.6
+
+### Module Migrator
+
+* Fix a bug where generated import-only files for index files would contain
+  invalid forwards.
+
 ## 1.2.5
 
 ### Module Migrator
