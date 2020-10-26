@@ -1201,7 +1201,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (tuple?.item2 is NodeModulesImporter) return Tuple2(tuple.item1, false);
 
     var basename = p.url.basenameWithoutExtension(url.path);
-    if (basename == 'index' || basename == '_index') {
+    if ((basename == 'index' || basename == '_index') &&
+        !isImportOnlyFile(relativeTo)) {
       // Don't directly depend on an index file, since it won't produce a good
       // namespace.
       url = url.replace(path: p.url.dirname(url.path));
