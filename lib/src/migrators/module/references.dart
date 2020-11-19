@@ -165,8 +165,10 @@ class References {
         getFunctionReferences =
             UnmodifiableBidirectionalMapView(getFunctionReferences),
         globalDeclarations = UnmodifiableSetView(globalDeclarations),
-        libraries = UnmodifiableMapView(
-            mapMap(libraries, value: (_, urls) => UnmodifiableSetView(urls))),
+        libraries = UnmodifiableMapView({
+          for (var entry in libraries.entries)
+            entry.key: UnmodifiableSetView(entry.value)
+        }),
         sources = UnmodifiableMapView(sources),
         orphanImportOnlyFiles = UnmodifiableSetView(orphanImportOnlyFiles);
 
