@@ -5,6 +5,18 @@
 * Fix a bug where generated import-only files for index files would contain
   invalid forwards.
 
+* Better handling for import-only files without corresponding regular files,
+  including fixing a crash when `@import` rules for two files like this are
+  adjacent to each other.
+
+* Midstream files that both forward configurable variables and configure other
+  variables themselves should now be properly migrated.
+
+* When an `@import` rule is migrated to both a `@use` rule and a `@forward`
+  rule, both rules will now be migrated in-place (previously, the `@use` rule
+  would replace the `@import` rule and the `@forward` rule would be added after
+  all other dependencies).
+
 ## 1.2.5
 
 ### Module Migrator
