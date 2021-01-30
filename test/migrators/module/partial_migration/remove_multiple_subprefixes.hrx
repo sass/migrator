@@ -19,7 +19,6 @@ $var2: blue;
 
 <==> output/entrypoint.scss
 @use "dependency";
-
 @forward "dependency" as a-* hide $a-var2;
 @forward "dependency" as b-* hide $b-var1;
 

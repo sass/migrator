@@ -310,7 +310,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _absoluteUrlToDependency(entrypoint, relativeTo: importOnlyUrl).item1;
     var entrypointForwards = forwardsByUrl.containsKey(entrypoint)
         ? _forwardRulesForShown(
-            entrypoint, dependency, forwardsByUrl.remove(entrypoint), {})
+            entrypoint, '"$dependency"', forwardsByUrl.remove(entrypoint), {})
         : ['@forward "$dependency"'];
     var tuples = [
       for (var entry in forwardsByUrl.entries)
@@ -322,7 +322,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     ];
     var forwardLines = [
       for (var tuple in tuples)
-        ..._forwardRulesForShown(tuple.item1, tuple.item2, tuple.item3,
+        ..._forwardRulesForShown(tuple.item1, '"${tuple.item2}"', tuple.item3,
             hiddenByUrl[tuple.item1] ?? {}),
       ...entrypointForwards
     ];
@@ -379,7 +379,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         .map((declaration) => declaration.sourceUrl)
         .toSet()) {
       if (url == currentUrl || _forwardedUrls.contains(url)) continue;
-      var forwards = _makeForwardRules(url);
+      var forwards =
+          _makeForwardRules(url, '"${_absoluteUrlToDependency(url).item1}"');
       if (forwards == null) continue;
       var isRelative = _absoluteUrlToDependency(url).item2;
       (isRelative ? relativeForwards : loadPathForwards).addAll(
@@ -738,82 +739,163 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitFunctionRule(node);
   }
 
-  /// Migrates an `@import` rule to a `@use` rule after migrating the imported
-  /// file.
+  /// Visits an `@import` rule, migrating it to one or more `@use`, `@forward`,
+  /// `meta.load-css`, or static `@import` rules
   @override
   void visitImportRule(ImportRule node) {
     var imports =
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
     var staticImports = imports.item1;
-    var dynamicImports = imports.item2.where((import) {
-      var url = importCache
-          .canonicalize(Uri.parse(import.url),
+    var dynamicImports = imports.item2;
+    if (dynamicImports.isEmpty) {
+      _useAllowed = false;
+      return;
+    }
+    String rulesText;
+
+    var migratedRules = <String>[];
+
+    var indent = ' ' * node.span.start.column;
+
+    for (var import in dynamicImports) {
+      var ruleUrl = import.url;
+      var canonicalImport = importCache
+          .canonicalize(Uri.parse(ruleUrl),
               baseImporter: importer, forImport: true)
           ?.item2;
-      return !references.orphanImportOnlyFiles.contains(url);
-    });
-
-    var start = node.span.start;
-    var first = true;
-    for (var import in dynamicImports) {
-      if (first) {
-        first = false;
-      } else {
-        addPatch(Patch.insert(start, "$_semicolonIfNotIndented\n"));
+      if (references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
+        ruleUrl =
+            references.orphanImportOnlyFiles[canonicalImport]?.url.toString();
       }
 
-      _migrateImport(import, start);
+      if (ruleUrl != null) {
+        if (_useAllowed) {
+          migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
+        } else {
+          migratedRules.add(_migrateImportToLoadCss(ruleUrl, import.span)
+              .replaceAll('\n', '\n$indent'));
+        }
+      }
     }
 
-    var spanWithNewline = extendForward(
-            extendThroughWhitespace(node.span), '$_semicolonIfNotIndented\n') ??
-        node.span;
+    rulesText = migratedRules.join('$_semicolonIfNotIndented\n$indent');
 
-    if (staticImports.isNotEmpty) {
-      if (dynamicImports.isNotEmpty) {
-        addPatch(Patch.insert(start, "$_semicolonIfNotIndented\n"));
-      }
-
-      _useAllowed = false;
-      super.visitImportRule(node);
-
-      // Delete any dynamic imports intermixed with static imports, as well as
-      // any whitespace surrounding them and the preceding comma separator (or
-      // following if the first import is dynamic).
-      for (var import in dynamicImports) {
-        var extended = extendThroughWhitespace(import.span);
-        addPatch(patchDelete(
-            extendForward(extended, ",") ?? extendBackward(extended, ",")));
-      }
-    } else {
-      addPatch(
-          patchDelete(dynamicImports.isEmpty ? spanWithNewline : node.span));
-    }
-
+    addPatch(Patch(node.span, rulesText));
     if (_useAllowed) {
       _beforeFirstImport ??= node.span.start;
-      _afterLastImport = spanWithNewline.end;
+      _afterLastImport = extendThroughLine(node.span).end;
+    }
+
+    if (staticImports.isNotEmpty) {
+      _useAllowed = false;
+      addPatch(Patch.insert(
+          _afterLastImport,
+          '$indent@import ' +
+              staticImports.map((import) => import.span.text).join(', ') +
+              '$_semicolonIfNotIndented\n'));
     }
   }
 
-  /// Migrates a single imported URL to a `@use` rule.
+  /// Migrates an import to a list of `@use` and/or `@forward` rules.
   ///
-  /// The [importStart] is the original location of the beginning of the
-  /// `@import` rule, at which point the new `@use` should be injected.
-  void _migrateImport(DynamicImport import, FileLocation importStart) {
+  /// [ruleUrl] is the non-canonicalized URL for the stylesheet being loaded
+  /// while [context] is the span for the import, including the quotes.
+  ///
+  /// These usually match (so [ruleUrl] is the contents of [context] excluding
+  /// quotes), but [ruleUrl] is sometimes replaced with the URL from a
+  /// `@forward` rule from an import-only file that does not forward its
+  /// corresponding regular file. This allows imports of import-only files that
+  /// redirect to a different path to be migrated in-place.
+  List<String> _migrateImportToRules(String ruleUrl, FileSpan context) {
+    var tuple = _migrateImportCommon(ruleUrl, context);
+    var canonicalUrl = tuple.item1;
+    var config = tuple.item2;
+    var forwardForConfig = tuple.item3;
+
+    var asClause = '';
+    var defaultNamespace = namespaceForPath(ruleUrl);
+    // If a member from this dependency is actually referenced, it should
+    // already have a namespace from [_determineNamespaces], so we just use
+    // a simple number suffix to resolve conflicts at this point.
+    var namespace = _namespaces.putIfAbsent(canonicalUrl,
+        () => _incrementUntilAvailable(defaultNamespace, _namespaces));
+    if (namespace != defaultNamespace) asClause = ' as $namespace';
+
+    var quote = context.text.startsWith("'") ? "'" : '"';
+    var quotedUrl = '$quote$ruleUrl$quote';
+    var withClause = config == null ? '' : ' with $config';
+    var rules = <String>[];
+    if (forwardForConfig != null) {
+      rules.add('@forward $quotedUrl show $forwardForConfig$withClause');
+      // We consume the `with` clause if it exists so that it doesn't get
+      // duplicated on the `@use` rule.
+      withClause = '';
+    }
+    var normalForwardRules = _upstreamStylesheets.isEmpty
+        ? _makeForwardRules(canonicalUrl, quotedUrl)
+        : null;
+    if ((rules.isEmpty && normalForwardRules == null) ||
+        withClause.isNotEmpty ||
+        references.anyMemberReferenced(canonicalUrl, currentUrl)) {
+      _usedUrls.add(canonicalUrl);
+      rules.add('@use $quotedUrl$asClause$withClause');
+    }
+    if (normalForwardRules != null) rules.addAll(normalForwardRules);
+    return rules;
+  }
+
+  /// Similar to [_migrateImportToRules], but instead migrates an import to a
+  /// single `meta.load-css` call, or errors if this isn't allowed.
+  ///
+  /// This is used for migrating `@import` rules that are nested or appear after
+  /// some other rules.
+  String _migrateImportToLoadCss(String ruleUrl, FileSpan context) {
+    _unreferencable = UnreferencableMembers(_unreferencable);
+    for (var declaration in references.allDeclarations) {
+      if (declaration.sourceUrl != currentUrl) continue;
+      _unreferencable.add(declaration, UnreferencableType.fromImporter);
+    }
+
+    var tuple = _migrateImportCommon(ruleUrl, context);
+    var canonicalUrl = tuple.item1;
+    var config = tuple.item2;
+    if (tuple.item3 != null) {
+      throw MigrationSourceSpanException(
+          "This declaration attempts to override a default value in an "
+          "indirect, nested import of ${p.prettyUri(canonicalUrl)}, which is "
+          "not possible in the module system.",
+          _configuredVariables.last.member.span);
+    }
+
+    _unreferencable = _unreferencable.parent;
+    for (var declaration in references.allDeclarations) {
+      if (declaration.sourceUrl != canonicalUrl) continue;
+      _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
+    }
+
+    var meta = _findOrAddBuiltInNamespace('meta');
+    var configuration = config == null ? '' : ', \$with: $config';
+    var quote = context.text.startsWith("'") ? "'" : '"';
+    var quotedUrl = '$quote$ruleUrl$quote';
+    return '@include $meta.load-css($quotedUrl$configuration)';
+  }
+
+  /// Common logic for migrating imports shared by both the normal migration to
+  /// `@use`/`@forward` rules and the migration to `meta.load-css`.
+  ///
+  /// This returns 3 values. The first is the canonical URL referred to by
+  /// [ruleUrl]. The second is a configuration that can be added to the `with`
+  /// clause of a `@use` or `@forward` rule or the `$with` parameter of
+  /// `meta.load-css`. The third is a string of variables that should be added
+  /// to a `show` clause of a `@forward` rule so that they can be configured by
+  /// an upstream file.
+  Tuple3<Uri, String, String> _migrateImportCommon(
+      String ruleUrl, FileSpan context) {
     var oldConfiguredVariables = _configuredVariables;
     _configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
-    if (!_useAllowed) {
-      _unreferencable = UnreferencableMembers(_unreferencable);
-      for (var declaration in references.allDeclarations) {
-        if (declaration.sourceUrl != currentUrl) continue;
-        _unreferencable.add(declaration, UnreferencableType.fromImporter);
-      }
-    }
-
-    var parsedUrl = Uri.parse(import.url);
-    if (migrateDependencies) visitDependency(parsedUrl, import.span);
+    var parsedUrl = Uri.parse(ruleUrl);
+    if (migrateDependencies) visitDependency(parsedUrl, context);
     _upstreamStylesheets.remove(currentUrl);
 
     var tuple = importCache.canonicalize(parsedUrl,
@@ -821,27 +903,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Associate the importer for this URL with the resolved URL so that we can
     // re-use this import URL later on.
-    var resolvedUrl = tuple.item2;
+    var canonicalUrl = tuple.item2;
     _originalImports.putIfAbsent(
-        resolvedUrl, () => Tuple2(import.url, tuple.item1));
-
-    var asClause = '';
-    if (!_useAllowed) {
-      _unreferencable = _unreferencable.parent;
-      for (var declaration in references.allDeclarations) {
-        if (declaration.sourceUrl != resolvedUrl) continue;
-        _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
-      }
-    } else {
-      var defaultNamespace = namespaceForPath(import.url);
-      // If a member from this dependency is actually referenced, it should
-      // already have a namespace from [_determineNamespaces], so we just use
-      // a simple number suffix to resolve conflicts at this point.
-      _namespaces.putIfAbsent(resolvedUrl,
-          () => _incrementUntilAvailable(defaultNamespace, _namespaces));
-      var namespace = _namespaces[resolvedUrl];
-      if (namespace != defaultNamespace) asClause = ' as $namespace';
-    }
+        canonicalUrl, () => Tuple2(ruleUrl, tuple.item1));
 
     // Pass the variables that were configured by the importing file to `with`,
     // and forward the rest and add them to `oldConfiguredVariables` because
@@ -860,25 +924,22 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     _configuredVariables = oldConfiguredVariables;
 
+    String extraForward;
     if (externallyConfiguredVariables.isNotEmpty) {
       if (!_useAllowed) {
         var firstConfig = externallyConfiguredVariables.values.first;
         throw MigrationSourceSpanException(
             "This declaration attempts to override a default value in an "
-            "indirect, nested import of ${p.prettyUri(resolvedUrl)}, which is "
+            "indirect, nested import of ${p.prettyUri(canonicalUrl)}, which is "
             "not possible in the module system.",
             firstConfig.member.span);
       }
-      addPatch(Patch.insert(
-          importStart,
-          "@forward ${import.span.text} show " +
-              externallyConfiguredVariables.keys
-                  .map((variable) => "\$$variable")
-                  .join(", ") +
-              "$_semicolonIfNotIndented\n"));
+      extraForward = externallyConfiguredVariables.keys
+          .map((variable) => "\$$variable")
+          .join(", ");
     }
 
-    var configuration = "";
+    String normalConfig;
     var configured = <String>[];
     for (var name in locallyConfiguredVariables.keys) {
       var variable = locallyConfiguredVariables[name];
@@ -905,40 +966,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     }
     if (configured.length == 1) {
-      configuration = " with (" + configured.first + ")";
+      normalConfig = "(" + configured.first + ")";
     } else if (configured.isNotEmpty) {
-      var indent = ' ' * importStart.column;
-      configuration =
-          " with (\n$indent  " + configured.join(',\n$indent  ') + "\n$indent)";
+      normalConfig = "(\n  " + configured.join(',\n  ') + "\n)";
     }
-    if (!_useAllowed) {
-      var namespace = _findOrAddBuiltInNamespace('meta');
-      configuration = configuration.replaceFirst(' with', r', $with:');
-      addPatch(Patch.insert(importStart,
-          '@include $namespace.load-css(${import.span.text}$configuration)'));
-    } else {
-      if (_upstreamStylesheets.isEmpty &&
-          configuration.isEmpty &&
-          !references.anyMemberReferenced(resolvedUrl, currentUrl)) {
-        var forwards = _makeForwardRules(resolvedUrl);
-        if (forwards != null) {
-          _forwardedUrls.add(resolvedUrl);
-          addPatch(Patch.insert(
-              importStart, forwards.join('$_semicolonIfNotIndented\n')));
-          return;
-        }
-      }
-      _usedUrls.add(resolvedUrl);
-      addPatch(Patch.insert(
-          importStart, '@use ${import.span.text}$asClause$configuration'));
-    }
+    return Tuple3(canonicalUrl, normalConfig, extraForward);
   }
 
   /// If [url] contains any member declarations that should be forwarded from
   /// the entrypoint, returns a list of `@forward` rule(s) to do so.
   ///
   /// If nothing from [url] should be forwarded, returns null.
-  List<String> _makeForwardRules(Uri url) {
+  List<String> _makeForwardRules(Uri url, String quotedUrl) {
     var shownByPrefix = <String, Set<MemberDeclaration>>{};
     var hidden = <MemberDeclaration>{};
 
@@ -971,14 +1010,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     }
     if (shownByPrefix.isEmpty) return null;
-    return _forwardRulesForShown(
-        url, _absoluteUrlToDependency(url).item1, shownByPrefix, hidden);
+    _forwardedUrls.add(url);
+    return _forwardRulesForShown(url, quotedUrl, shownByPrefix, hidden);
   }
 
   /// Returns a list of `@forward` rules for [url].
   ///
-  /// [ruleUrl] is the form of [url] that should actually be used in the
-  /// generated `@forward` rules.
+  /// [quotedUrl] is the form of [url] that should actually be used in the
+  /// generated `@forward` rules (including quotes).
   ///
   /// [shownByPrefix] contains all members that should be forwarded, categorized
   /// based on the prefix they should be forwarded with (this will be an empty
@@ -989,11 +1028,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// in this set.
   List<String> _forwardRulesForShown(
       Uri url,
-      String ruleUrl,
+      String quotedUrl,
       Map<String, Set<MemberDeclaration>> shownByPrefix,
       Set<MemberDeclaration> hidden) {
     var forwards = <String>[];
-    var forwardBase = '@forward "$ruleUrl"';
+    var forwardBase = '@forward $quotedUrl';
     for (var subprefix in shownByPrefix.keys.toList()..sort()) {
       var hiddenMembers = {
         ...hidden,

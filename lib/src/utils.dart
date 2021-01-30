@@ -76,6 +76,13 @@ FileSpan extendForward(FileSpan span, String text) {
   return span.file.span(span.start.offset, end + text.length);
 }
 
+/// Extends [span] forward until after the next line break.
+FileSpan extendThroughLine(FileSpan span) {
+  var end = span.end.offset;
+  var breakIndex = span.file.getText(end).indexOf('\n');
+  return span.file.span(span.start.offset, end + breakIndex + 1);
+}
+
 /// Extends [span] backward if it's preceded by exactly [text].
 ///
 /// If [span] is preceded by anything other than [text], returns `null`.

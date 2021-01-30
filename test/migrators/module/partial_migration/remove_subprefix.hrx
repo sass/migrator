@@ -16,7 +16,6 @@ $variable: green;
 
 <==> output/entrypoint.scss
 @use "button";
-
 @forward "button" as button-*;
 
 a {

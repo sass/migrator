@@ -90,9 +90,9 @@ class References {
   /// map to the [ReferenceSource] for the `sass:meta` module).
   final Map<SassNode, ReferenceSource> sources;
 
-  /// The set of import-only files that do not directly depend on their regular
-  /// counterparts.
-  final Set<Uri> orphanImportOnlyFiles;
+  /// Map of import-only files that do not directly depend on their regular
+  /// counterparts to the last forward appearing within it.
+  final Map<Uri, ForwardRule> orphanImportOnlyFiles;
 
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
@@ -154,7 +154,7 @@ class References {
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
       Map<SassNode, ReferenceSource> sources,
-      Set<Uri> orphanImportOnlyFiles)
+      Map<Uri, ForwardRule> orphanImportOnlyFiles)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -170,7 +170,7 @@ class References {
             entry.key: UnmodifiableSetView(entry.value)
         }),
         sources = UnmodifiableMapView(sources),
-        orphanImportOnlyFiles = UnmodifiableSetView(orphanImportOnlyFiles);
+        orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -196,7 +196,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   final _globalDeclarations = <MemberDeclaration>{};
   final _libraries = <MemberDeclaration, Set<Uri>>{};
   final _sources = <SassNode, ReferenceSource>{};
-  final _orphanImportOnlyFiles = <Uri>{};
+  final _orphanImportOnlyFiles = <Uri, ForwardRule>{};
 
   /// The current global scope.
   ///
@@ -260,6 +260,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// Cache used to load stylesheets.
   ImportCache importCache;
+
+  /// The last `@forward` rule to be visited that was not an import-only file.
+  ForwardRule _lastRegularForward;
 
   _ReferenceVisitor(this.importCache);
 
@@ -342,7 +345,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _currentUrl = node.span.sourceUrl;
     _isOrphanImportOnly = isImportOnlyFile(_currentUrl);
     super.visitStylesheet(node);
-    if (_isOrphanImportOnly) _orphanImportOnlyFiles.add(_currentUrl);
+    if (_isOrphanImportOnly) {
+      _orphanImportOnlyFiles[_currentUrl] =
+          _lastRegularForward.span.sourceUrl == _currentUrl
+              ? _lastRegularForward
+              : null;
+    }
     _isOrphanImportOnly = oldOrphaned;
     _namespaces = oldNamespaces;
     _currentUrl = oldUrl;
@@ -459,6 +467,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     if (_isOrphanImportOnly && _currentUrl == getImportOnlyUrl(canonicalUrl)) {
       _isOrphanImportOnly = false;
     }
+    if (!isImportOnlyFile(canonicalUrl)) _lastRegularForward = node;
     var moduleScope = _moduleScopes[canonicalUrl];
     for (var declaration in moduleScope.variables.values) {
       if (declaration.member is! VariableDeclaration) {

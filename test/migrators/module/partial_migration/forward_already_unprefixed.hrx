@@ -16,7 +16,6 @@ $variable: green;
 
 <==> output/entrypoint.scss
 @use "library";
-
 @forward "library";
 
 a {
