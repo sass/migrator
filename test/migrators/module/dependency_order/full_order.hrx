@@ -43,11 +43,11 @@ $load-path: yellow;
 @use "sass:color";
 @forward "forwarded";
 @use "library";
+@forward "library";
 @use "load-path";
 @use "relative";
 
 @forward "load-path";
-@forward "library";
 @forward "relative";
 
 a {

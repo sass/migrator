@@ -15,7 +15,6 @@ $_lib-pseudoprivate: blue;
 
 <==> output/entrypoint.scss
 @use "dependency";
-
 @forward "dependency" hide $pseudoprivate;
 
 a {

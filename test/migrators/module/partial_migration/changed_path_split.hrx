@@ -3,6 +3,7 @@
 
 <==> input/entrypoint.scss
 @import "old";
+
 a {
   b: $lib-variable1;
   c: $lib-variable2;
@@ -19,8 +20,8 @@ $variable1: green;
 $variable2: blue;
 
 <==> output/entrypoint.scss
-@use "a";
 @use "b";
+@use "a";
 
 a {
   b: a.$variable1;

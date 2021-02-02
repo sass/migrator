@@ -16,4 +16,3 @@ $config: green !default;
 
 <==> output/_direct.scss
 @forward "indirect" show $config;
-@use "indirect";

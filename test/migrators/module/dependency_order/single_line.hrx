@@ -1,0 +1,24 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+This test makes sure that inserting an additional `@use` rule still works if an
+`@import` is followed by additional code on the same line.
+
+<==> input/entrypoint.scss
+@import "direct";a {color: $variable;}
+
+<==> input/_direct.scss
+@import "indirect";
+
+<==> input/_indirect.scss
+$variable: blue;
+
+<==> output/entrypoint.scss
+@use "direct";
+@use "indirect";
+
+a {color: indirect.$variable;}
+
+<==> output/_direct.scss
+@use "indirect";

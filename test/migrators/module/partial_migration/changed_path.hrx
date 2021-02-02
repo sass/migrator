@@ -3,6 +3,7 @@
 
 <==> input/entrypoint.scss
 @import "old";
+
 a {
   b: $lib-variable;
 }

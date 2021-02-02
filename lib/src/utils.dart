@@ -76,6 +76,47 @@ FileSpan extendForward(FileSpan span, String text) {
   return span.file.span(span.start.offset, end + text.length);
 }
 
+/// Returns the next location after [import] that it would be safe to insert
+/// a `@use` or `@forward` rule.
+///
+/// This is generally the start of the next line, but may vary if there's any
+/// non-whitespace, non-comment code on the same line.
+FileLocation afterImport(ImportRule import, {bool shouldHaveSemicolon = true}) {
+  var loc = import.span.end;
+  var textAfter = loc.file.getText(loc.offset);
+  var inLineComment = false;
+  var inBlockComment = false;
+  var i = 0;
+  for (; i < textAfter.length; i++) {
+    var char = textAfter.codeUnitAt(i);
+    if (inBlockComment) {
+      if (char == $asterisk && textAfter.codeUnitAt(i + 1) == $slash) {
+        i++;
+        inBlockComment = false;
+      }
+    } else if (char == $lf && !shouldHaveSemicolon) {
+      i++;
+      break;
+    } else if (inLineComment) {
+      continue;
+    } else if (char == $slash) {
+      var next = textAfter.codeUnitAt(i + 1);
+      if (next == $slash) {
+        inLineComment = true;
+      } else if (next == $asterisk) {
+        inBlockComment = true;
+      } else {
+        break;
+      }
+    } else if (shouldHaveSemicolon && char == $semicolon) {
+      shouldHaveSemicolon = false;
+    } else if (!isWhitespace(char)) {
+      break;
+    }
+  }
+  return loc.file.location(loc.offset + i);
+}
+
 /// Extends [span] backward if it's preceded by exactly [text].
 ///
 /// If [span] is preceded by anything other than [text], returns `null`.
