@@ -445,13 +445,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         _getAdditionalForwardRules();
     if (extras == '') return;
     var insertionPoint = _afterLastImport ?? node.span.start;
-    // If there was already a blank line after the insertion point, or the
-    // insertion point was at the end of the file, remove the additional line
-    // break at the end of the extra rules.
-    extras = '$extras\n';
+    // If the insertion point is in the middle of a line, add a line break
+    // before the extra rules.
+    if (insertionPoint.column != 0) {
+      extras = '\n$extras';
+    }
+    // Add a line break after the extra rules if there's not already a blank
+    // line after the insertion point.
     var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
-    if (whitespace.text.contains('\n\n') || whitespace.end == node.span.end) {
-      extras = extras.substring(0, extras.length - 1);
+    if (!whitespace.text.contains('\n\n') && whitespace.end != node.span.end) {
+      extras = '$extras\n'; //extras.substring(0, extras.length - 1);
     }
     addPatch(Patch.insert(insertionPoint, extras));
   }
@@ -783,7 +786,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     addPatch(Patch(node.span, rulesText));
     if (_useAllowed) {
       _beforeFirstImport ??= node.span.start;
-      _afterLastImport = extendThroughLine(node.span).end;
+      _afterLastImport = afterImport(node,
+          shouldHaveSemicolon: !currentUrl.path.endsWith('.sass'));
     }
 
     if (staticImports.isNotEmpty) {
@@ -926,14 +930,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     String extraForward;
     if (externallyConfiguredVariables.isNotEmpty) {
-      if (!_useAllowed) {
-        var firstConfig = externallyConfiguredVariables.values.first;
-        throw MigrationSourceSpanException(
-            "This declaration attempts to override a default value in an "
-            "indirect, nested import of ${p.prettyUri(canonicalUrl)}, which is "
-            "not possible in the module system.",
-            firstConfig.member.span);
-      }
       extraForward = externallyConfiguredVariables.keys
           .map((variable) => "\$$variable")
           .join(", ");

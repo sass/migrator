@@ -1,0 +1,26 @@
+<==> arguments
+--migrate-deps
+
+<==> README
+This test makes sure that comments after an `@import` are not mangled when an
+additional `@use` rule is inserted.
+
+<==> input/entrypoint.scss
+@import "direct"; // comment for direct
+
+a {color: $variable;}
+
+<==> input/_direct.scss
+@import "indirect";
+
+<==> input/_indirect.scss
+$variable: blue;
+
+<==> output/entrypoint.scss
+@use "direct"; // comment for direct
+@use "indirect";
+
+a {color: indirect.$variable;}
+
+<==> output/_direct.scss
+@use "indirect";

@@ -91,7 +91,8 @@ class References {
   final Map<SassNode, ReferenceSource> sources;
 
   /// Map of import-only files that do not directly depend on their regular
-  /// counterparts to the last forward appearing within it.
+  /// counterparts to the last forward appearing within it (or null, if no
+  /// regular file is forwarded by the import-only file).
   final Map<Uri, ForwardRule> orphanImportOnlyFiles;
 
   /// An iterable of all member declarations.
