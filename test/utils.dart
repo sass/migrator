@@ -132,7 +132,8 @@ class _HrxTestFiles {
             "given test.";
       }
     } else if (filename == "arguments") {
-      arguments = contents.trim().split(" ");
+      // TODO(jathak): Handle spaces with quotes here.
+      arguments = contents.trim().split(RegExp(r'\s+'));
     }
   }
 

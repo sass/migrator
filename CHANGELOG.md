@@ -1,3 +1,35 @@
+## 1.3.0
+
+### Namespace Migrator
+
+* Adds a new migrator for changing namespaces of `@use` rules.
+
+* This migrator lets you change namespaces by matching regular expressions on
+  existing namespaces or on `@use` rule URLs. You do this by passing scripts to
+  the `--rename` flag in the form of `old-namespace to new-namespace` or
+  `url rule-url to new-namespace` where `old-namespace` and `rule-url` are
+  regular expressions that match the entirety of the existing namespace or the
+  rule URL and `new-namespace` is an output pattern that can include references
+  to captured groups from the matching regular expression (e.g. `\1`).
+
+* Alternatively, you may use a sed-style syntax like
+  `/old-namespace/new-namespace/` or `url/rule-url/new-namespace`.
+
+* You can pass `--rename` multiple times and they will be checked in order
+  until one matches (at which point subsequent renames will be ignored). You
+  can also separate multiple renames with semicolons or line breaks.
+
+* By default, if the renaming results in a conflict between multiple `@use`
+  rules, the migration will fail, but you can force it to resolve conflicts with
+  numerical suffixes by passing `--force`.
+
+* This migrator will also check for `@use` rules without referenced members. If
+  any of these results has a conflict, it will be resolved by namespacing the
+  unreferenced rule with `_unreferenced#` instead of failing. You can disable
+  this behavior with `--unreferenced=none` or have the migrator rename *all*
+  unreferenced `@use` rules with this pattern (instead of just conflicting ones)
+  by passing `--unreferenced=all`.
+
 ## 1.2.6
 
 ### Module Migrator

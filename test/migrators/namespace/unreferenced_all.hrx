@@ -1,0 +1,21 @@
+<==> arguments
+--rename /library.*/library/
+--unreferenced all
+
+<==> input/entrypoint.scss
+@use "library-a";
+@use "library-b";
+@use "other";
+
+a {
+  b: library-a.$variable;
+}
+
+<==> output/entrypoint.scss
+@use "library-a" as library;
+@use "library-b" as _unreferenced1;
+@use "other" as _unreferenced2;
+
+a {
+  b: library.$variable;
+}

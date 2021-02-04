@@ -1,0 +1,24 @@
+<==> arguments
+--rename url~(.*)/(\w+)/lib/mixins~\2~
+
+<==> input/entrypoint.scss
+@use "some/path/button/lib/mixins";
+@use "some/path/input/lib/mixins" as mixins2;
+@use "some/path/table/lib/mixins" as mixins3;
+
+a {
+  @include mixins.styles;
+  @include mixins2.styles;
+  @include mixins3.styles;
+}
+
+<==> output/entrypoint.scss
+@use "some/path/button/lib/mixins" as button;
+@use "some/path/input/lib/mixins" as input;
+@use "some/path/table/lib/mixins" as table;
+
+a {
+  @include button.styles;
+  @include input.styles;
+  @include table.styles;
+}

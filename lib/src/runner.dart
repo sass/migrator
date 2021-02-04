@@ -15,6 +15,7 @@ import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'io.dart';
 import 'migrators/division.dart';
 import 'migrators/module.dart';
+import 'migrators/namespace.dart';
 import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
@@ -53,6 +54,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
           help: 'Print the version of the Sass migrator.', negatable: false);
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
+    addCommand(NamespaceMigrator());
   }
 
   /// Runs a migrator and then writes the migrated files to disk unless

@@ -1,0 +1,9 @@
+<==> arguments
+--rename invalid
+
+<==> input/entrypoint.scss
+// nothing
+
+<==> error.txt
+Error: Invalid rename "invalid"
+Migration failed!

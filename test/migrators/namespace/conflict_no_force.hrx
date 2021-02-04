@@ -1,0 +1,16 @@
+<==> arguments
+--rename /library.*/library/
+
+<==> input/entrypoint.scss
+@use "library-a";
+@use "library-b";
+
+a {
+  b: library-a.$variable;
+  c: library-b.$variable;
+}
+
+<==> error.txt
+Error: Rename failed. 2 rules would use namespace "library".
+Run with --force to rename with numerical suffixes.
+Migration failed!

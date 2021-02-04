@@ -1,0 +1,21 @@
+<==> arguments
+--rename /library.*/library/
+--force
+
+<==> input/entrypoint.scss
+@use "library-a";
+@use "library-b";
+
+a {
+  b: library-a.$variable;
+  c: library-b.$variable;
+}
+
+<==> output/entrypoint.scss
+@use "library-a" as library;
+@use "library-b" as library2;
+
+a {
+  b: library.$variable;
+  c: library2.$variable;
+}
