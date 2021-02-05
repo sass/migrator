@@ -12,7 +12,6 @@ import 'package:source_span/source_span.dart';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/exception.dart';
 import 'package:sass/src/import_cache.dart';
 
 import '../migration_visitor.dart';
