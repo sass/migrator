@@ -2,28 +2,36 @@
 
 ### Namespace Migrator
 
-* Adds a new migrator for changing namespaces of `@use` rules.
+* Add a new migrator for changing namespaces of `@use` rules.
 
-* This migrator lets you change namespaces by matching regular expressions on
-  existing namespaces or on `@use` rule URLs. You do this by passing scripts to
-  the `--rename` flag in the form of `old-namespace to new-namespace` or
-  `url rule-url to new-namespace` where `old-namespace` and `rule-url` are
-  regular expressions that match the entirety of the existing namespace or the
-  rule URL and `new-namespace` is an output pattern that can include references
-  to captured groups from the matching regular expression (e.g. `\1`).
+  This migrator lets you change namespaces by matching regular expressions on
+  existing namespaces or on `@use` rule URLs.
 
-* Alternatively, you may use a sed-style syntax like
-  `/old-namespace/new-namespace/` or `url/rule-url/new-namespace`.
+  You do this by passing expressions to the `--rename` in one of the following
+  forms:
 
-* You can pass `--rename` multiple times and they will be checked in order
-  until one matches (at which point subsequent renames will be ignored). You
-  can also separate multiple renames with semicolons or line breaks.
+  * `<old-namespace> to <new-namespace>`: The `<old-namespace>` regular
+    expression matches the entire existing namespace, and `<new-namespace>` is
+    the replacement.
 
-* By default, if the renaming results in a conflict between multiple `@use`
+  * `url <rule-url> to <new-namespace>`: The `<old-namespace>` regular
+    expression matches the entire URL in the `@use` rule, and `<new-namespace>`
+    is the namespace that's chosen for it.
+
+  The `<new-namespace>` patterns can include references to [captured groups][]
+  from the matching regular expression (e.g. `\1`).
+
+  [captured groups]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions/Groups_and_Ranges
+
+  You can pass `--rename` multiple times and they will be checked in order until
+  one matches (at which point subsequent renames will be ignored). You can also
+  separate multiple rename expressions with semicolons or line breaks.
+
+  By default, if the renaming results in a conflict between multiple `@use`
   rules, the migration will fail, but you can force it to resolve conflicts with
   numerical suffixes by passing `--force`.
 
-* This migrator will also check for `@use` rules without referenced members. If
+  This migrator will also check for `@use` rules without referenced members. If
   any of these results has a conflict, it will be resolved by namespacing the
   unreferenced rule with `_unreferenced#` instead of failing. You can disable
   this behavior with `--unreferenced=none` or have the migrator rename *all*

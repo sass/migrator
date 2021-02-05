@@ -1,5 +1,5 @@
 <==> arguments
---rename url~(.*)/(\w+)/lib/mixins~\2~
+--rename 'url (.*)/(\w+)/lib/mixins to \2'
 
 <==> input/entrypoint.scss
 @use "some/path/button/lib/mixins";

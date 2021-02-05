@@ -5,5 +5,9 @@
 // nothing
 
 <==> error.txt
-Error: Invalid rename "invalid"
+Error on line 1, column 8 of --rename: expected more input.
+  ,
+1 | invalid
+  |        ^
+  '
 Migration failed!

@@ -12,6 +12,7 @@ import 'package:source_span/source_span.dart';
 // the Sass team's explicit knowledge and approval. See
 // https://github.com/sass/dart-sass/issues/236.
 import 'package:sass/src/ast/sass.dart';
+import 'package:sass/src/exception.dart';
 import 'package:sass/src/import_cache.dart';
 
 import '../migration_visitor.dart';
@@ -32,18 +33,16 @@ class NamespaceMigrator extends Migrator {
     ..addMultiOption('rename',
         abbr: 'r',
         splitCommas: false,
-        help: 'Change namespaces based on a regular expression.\n'
-            'This can either be in the form `old-namespace to new-namespace`\n'
-            'or `url rule-url to new-namespace`, where `old-namespace and \n'
-            '`rule-url` are regular expressions and `new-namespace` can \n'
-            r'refer to captured groups with `\#`.')
+        help: 'e.g. "old-namespace to new-namespace" or\n'
+            '     "url my/url to new-namespace"\n'
+            'See https://sass-lang.com/documentation/cli/migrator#rename.')
     ..addOption('unreferenced',
         abbr: 'u',
         help: 'Whether to change namespaces of unreferenced rules to '
-            '`_unreferenced#`.',
+            '"_unreferenced#".',
         allowed: ['conflicting', 'all', 'none'],
         allowedHelp: {
-          'conflicting': 'Only when they conflict with other rules.',
+          'conflicting': 'Only when they conflict with other namespaces.',
           'all': 'All unreferenced rules will be renamed.',
           'none':
               'Unreferenced rules will be treated the same as referenced ones.'
@@ -57,15 +56,9 @@ class NamespaceMigrator extends Migrator {
   @override
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    Renamer<UseRule> renamer;
-    try {
-      renamer = Renamer(argResults['rename'].join('\n'), 'namespace', {
-        'namespace': (rule) => rule.namespace,
-        'url': (rule) => rule.url.toString()
-      });
-    } on FormatException catch (e) {
-      throw MigrationException(e.message);
-    }
+    var renamer = Renamer<UseRule>(argResults['rename'].join('\n'),
+        {'': (rule) => rule.namespace, 'url': (rule) => rule.url.toString()},
+        sourceUrl: '--rename');
     var visitor = _NamespaceMigrationVisitor(
         renamer,
         UnreferencedFlag(argResults['unreferenced']),
@@ -83,7 +76,12 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   final UnreferencedFlag unreferencedFlag;
   final bool forceRename;
 
+  /// A set of spans for each *original* namespace in the current file.
+  ///
+  /// Each span covers just the namespace of a member reference.
   Map<String, Set<FileSpan>> _spansByNamespace;
+
+  /// The set of namespaces used in the current file *after* renaming.
   Set<String> _usedNamespaces;
 
   _NamespaceMigrationVisitor(this.renamer, this.unreferencedFlag,
@@ -103,7 +101,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
 
   @override
   void beforePatch(Stylesheet node) {
-    // Pass each `@use` rule through
+    // Pass each `@use` rule through the renamer.
     var newNamespaces = <String, Set<UseRule>>{};
     for (var rule in node.children.whereType<UseRule>()) {
       if (rule.namespace == null) continue;
@@ -111,19 +109,28 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
           .putIfAbsent(renamer.rename(rule) ?? rule.namespace, () => {})
           .add(rule);
     }
+    // Contains `@use` rules that will get renamed to `_unreferenced#`.
     var unreferencedRules = <UseRule>{};
+
+    // Goes through each new namespace, resolving conflicts if necessary.
     for (var entry in newNamespaces.entries) {
       var newNamespace = entry.key;
       var rules = entry.value;
       if (rules.length == 1) {
+        // If --unreferenced=all, add to [unreferencedRules] even if there's
+        // no conflict.
         if (unreferencedFlag == UnreferencedFlag.all &&
             !_spansByNamespace.containsKey(rules.first.namespace)) {
           unreferencedRules.add(rules.first);
         } else {
+          // Otherwise, give this rule its preferred namespace.
           _patchNamespace(rules.first, newNamespace);
         }
         continue;
       }
+
+      // Since there's a conflict, check for unreferenced rules unless
+      // --unreferenced=none
       if (unreferencedFlag != UnreferencedFlag.none) {
         for (var rule in rules.toSet()) {
           if (!_spansByNamespace.containsKey(rule.namespace)) {
@@ -132,16 +139,27 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
           }
         }
       }
+
+      // If removing unreferenced rules resolves the conflict, give the
+      // remaining rule its preferred namespace.
       if (rules.length == 1) {
         _patchNamespace(rules.first, newNamespace);
         continue;
       }
+
+      // If there's still a conflict, fail unless --force is passed.
       if (!forceRename) {
-        throw MigrationException(
+        throw MultiSpanSassException(
             'Rename failed. ${rules.length} rules would use namespace '
-            '"$newNamespace".\n'
-            'Run with --force to rename with numerical suffixes.');
+                '"$newNamespace".\n'
+                'Run with --force to rename with numerical suffixes.',
+            rules.first.span,
+            '',
+            {for (var rule in rules.skip(1)) rule.span: ''});
       }
+
+      // With --force, give the first rule its preferred namespace and then
+      // add numerical suffixes to the rest.
       var suffix = 2;
       for (var rule in rules) {
         var forcedNamespace = newNamespace;
@@ -152,6 +170,8 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
         _patchNamespace(rule, forcedNamespace);
       }
     }
+
+    // Now assign _unreferenced# to each rule
     var suffix = 1;
     for (var rule in unreferencedRules) {
       var namespace = '_unreferenced$suffix';
@@ -168,10 +188,10 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
     _usedNamespaces.add(newNamespace);
     if (rule.namespace == newNamespace) return;
     var asClause =
-        RegExp('\\sas\\s(${rule.namespace})').firstMatch(rule.span.text);
+        RegExp('\\s*as\\s+(${rule.namespace})').firstMatch(rule.span.text);
     if (asClause == null) {
       // Add an `as` clause to a rule that previously lacked one.
-      var end = RegExp(r"""@use\s("|').*\1""").firstMatch(rule.span.text).end;
+      var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text).end;
       addPatch(
           Patch.insert(rule.span.subspan(0, end).end, ' as $newNamespace'));
     } else if (namespaceForPath(rule.url.toString()) == newNamespace) {

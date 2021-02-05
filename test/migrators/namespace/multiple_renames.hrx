@@ -1,8 +1,8 @@
 <==> arguments
---rename /library-a/library/
---rename /library-(.*)/\1/
---rename /library-b/library/
---rename /library/something-random/
+--rename 'library-a to library'
+--rename 'library-(.*) to \1'
+--rename 'library-b to library'
+--rename 'library to something-random'
 
 <==> README
 This test ensures that renames are tested in order, with the first one that

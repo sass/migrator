@@ -9,32 +9,8 @@ import 'package:test/test.dart';
 
 void main() {
   group('single statements', () {
-    group('simple rename with', () {
-      test('sed-style syntax', () {
-        var renamer = Renamer.simple('s/old/new/');
-        expect(renamer.rename('old'), equals('new'));
-        expect(renamer.rename('oldx'), isNull);
-        expect(renamer.rename('xold'), isNull);
-        expect(renamer.rename('new'), isNull);
-      });
-
-      test('default key', () {
-        var renamer = Renamer.simple('/old/new/');
-        expect(renamer.rename('old'), equals('new'));
-        expect(renamer.rename('oldx'), isNull);
-        expect(renamer.rename('xold'), isNull);
-        expect(renamer.rename('new'), isNull);
-      });
-
-      test('space syntax with `to` clause', () {
-        var renamer = Renamer.simple('s old to new');
-        expect(renamer.rename('old'), equals('new'));
-        expect(renamer.rename('oldx'), isNull);
-        expect(renamer.rename('xold'), isNull);
-        expect(renamer.rename('new'), isNull);
-      });
-
-      test('space syntax with `to` clause and default key', () {
+    group('single key', () {
+      test('simple rename', () {
         var renamer = Renamer.simple('old to new');
         expect(renamer.rename('old'), equals('new'));
         expect(renamer.rename('oldx'), isNull);
@@ -42,32 +18,14 @@ void main() {
         expect(renamer.rename('new'), isNull);
       });
 
-      test('space syntax with `->` clause', () {
-        var renamer = Renamer.simple('s old -> new');
-        expect(renamer.rename('old'), equals('new'));
-        expect(renamer.rename('oldx'), isNull);
-        expect(renamer.rename('xold'), isNull);
-        expect(renamer.rename('new'), isNull);
-      });
-
-      test('space syntax with `->` clause and default key', () {
-        var renamer = Renamer.simple('old -> new');
-        expect(renamer.rename('old'), equals('new'));
-        expect(renamer.rename('oldx'), isNull);
-        expect(renamer.rename('xold'), isNull);
-        expect(renamer.rename('new'), isNull);
-      });
-    });
-
-    group('backreferences', () {
-      test(r'to entire match', () {
+      test(r'backreference to entire match', () {
         var renamer = Renamer.simple(r'.+ to prefix-\0');
         expect(renamer.rename('a'), equals('prefix-a'));
         expect(renamer.rename('abc'), equals('prefix-abc'));
       });
 
-      test(r'to group', () {
-        var renamer = Renamer.simple(r'/(.+)-suffix/\1/');
+      test(r'backreference to group', () {
+        var renamer = Renamer.simple(r'(.+)-suffix to \1');
         expect(renamer.rename('a-suffix'), equals('a'));
         expect(renamer.rename('abc-suffix'), equals('abc'));
         expect(renamer.rename('abc'), isNull);
@@ -75,34 +33,40 @@ void main() {
       });
     });
 
-    group('escaping', () {
+    group('escapes', () {
       test(r'spaces', () {
         var renamer = Renamer.simple(r'a\ b to x\ y');
         expect(renamer.rename('a b'), equals('x y'));
-      });
-
-      test(r'normal delimiters', () {
-        var renamer = Renamer.simple(r'/a\/b/x\/y/');
-        expect(renamer.rename('a/b'), equals('x/y'));
       });
 
       test(r'semicolons', () {
         var renamer = Renamer.simple(r'a\;b to x\;y');
         expect(renamer.rename('a;b'), equals('x;y'));
       });
+
+      test(r'backslash at start', () {
+        var renamer = Renamer.simple(r'\\ab to \\xy');
+        expect(renamer.rename(r'\ab'), equals(r'\xy'));
+      });
+
+      test(r'backslash in middle', () {
+        var renamer = Renamer.simple(r'a\\b to x\\y');
+        expect(renamer.rename(r'a\b'), equals(r'x\y'));
+      });
+
+      test(r'backslash at end', () {
+        var renamer = Renamer.simple(r'ab\\ to xy\\');
+        expect(renamer.rename(r'ab\'), equals(r'xy\'));
+      });
+
+      test(r'backslash followed by escaped space', () {
+        var renamer = Renamer.simple(r'ab\\\  to x\\\ y');
+        expect(renamer.rename(r'ab\ '), equals(r'x\ y'));
+      });
     });
 
     group('multiple keys', () {
-      test('sed-style syntax', () {
-        var renamer =
-            Renamer.map(r'url=.*/(\w+)/lib/mixins=\1=', ['namespace', 'url']);
-        expect(
-            renamer.rename(
-                {'namespace': 'mixins', 'url': 'path/button/lib/mixins'}),
-            equals('button'));
-      });
-
-      test('space syntax', () {
+      test('named key', () {
         var renamer =
             Renamer.map(r'url .*/(\w+)/lib/mixins to \1', ['namespace', 'url']);
         expect(
@@ -110,12 +74,28 @@ void main() {
                 {'namespace': 'mixins', 'url': 'path/button/lib/mixins'}),
             equals('button'));
       });
+
+      test('named key with unused default key', () {
+        var renamer =
+            Renamer.map(r'url .*/(\w+)/lib/mixins to \1', ['', 'url']);
+        expect(renamer.rename({'': 'mixins', 'url': 'path/button/lib/mixins'}),
+            equals('button'));
+      });
+
+      test('default key', () {
+        var renamer =
+            Renamer.map(r'.*/(\w+)/lib/mixins to \1', ['namespace', '']);
+        expect(
+            renamer
+                .rename({'namespace': 'mixins', '': 'path/button/lib/mixins'}),
+            equals('button'));
+      });
     });
   });
 
   group('multiple statements', () {
     test('separated by semicolon', () {
-      var renamer = Renamer.simple('/a/b/;/x/y/');
+      var renamer = Renamer.simple('a to b; x to y');
       expect(renamer.rename('a'), equals('b'));
       expect(renamer.rename('b'), isNull);
       expect(renamer.rename('x'), equals('y'));
@@ -123,7 +103,15 @@ void main() {
     });
 
     test('separated by line break', () {
-      var renamer = Renamer.simple('/a/b/\n/x/y/');
+      var renamer = Renamer.simple('a to b\nx to y');
+      expect(renamer.rename('a'), equals('b'));
+      expect(renamer.rename('b'), isNull);
+      expect(renamer.rename('x'), equals('y'));
+      expect(renamer.rename('y'), isNull);
+    });
+
+    test('empty statements', () {
+      var renamer = Renamer.simple('\n;\n;a to b; ;;\n; \n;; x to y ;\n;');
       expect(renamer.rename('a'), equals('b'));
       expect(renamer.rename('b'), isNull);
       expect(renamer.rename('x'), equals('y'));
@@ -131,7 +119,7 @@ void main() {
     });
 
     test('separated by semicolon and line break', () {
-      var renamer = Renamer.simple('/a/b/;\n/x/y/;');
+      var renamer = Renamer.simple('a to b;\nx to y;');
       expect(renamer.rename('a'), equals('b'));
       expect(renamer.rename('b'), isNull);
       expect(renamer.rename('x'), equals('y'));
@@ -139,36 +127,39 @@ void main() {
     });
 
     test('only first matching statement is applied', () {
-      var renamer = Renamer.simple('/.*/all/;/old/wrong/;/all/wrong/');
+      var renamer = Renamer.simple('.* to all; old to wrong; all to wrong');
       expect(renamer.rename('old'), equals('all'));
       expect(renamer.rename('wrong'), equals('all'));
       expect(renamer.rename('all'), equals('all'));
     });
+
+    test('no statements', () {
+      var renamer = Renamer.simple('');
+      expect(renamer.rename('abc'), isNull);
+    });
   });
 
   group('invalid syntax', () {
-    test('extra code after statement', () {
-      expect(() => Renamer.simple('/old/new/extra'), throwsFormatException);
-    });
-
-    test('no trailing delimiter', () {
-      expect(() => Renamer.simple('s/old/new'), throwsFormatException);
-    });
-
     test('too few clauses', () {
-      expect(() => Renamer.simple('s/old/'), throwsFormatException);
-    });
-
-    test('too few clauses in space syntax', () {
       expect(() => Renamer.simple('old new'), throwsFormatException);
     });
 
-    test('too many clauses in space syntax', () {
-      expect(() => Renamer.simple('s old to new extra'), throwsFormatException);
+    test('three clauses but not `to` ', () {
+      expect(() => Renamer.simple('old xx new'), throwsFormatException);
     });
 
-    test('invalid delimiter', () {
-      expect(() => Renamer.simple('s-old-new-'), throwsFormatException);
+    test('four clauses with only default key', () {
+      expect(() => Renamer.simple('key old to new'), throwsFormatException);
+    });
+
+    test('four clauses with invalid key', () {
+      expect(() => Renamer.map('wrong old to new', ['key']),
+          throwsFormatException);
+    });
+
+    test('five clauses', () {
+      expect(() => Renamer.map('key old to new extra', ['key']),
+          throwsFormatException);
     });
   });
 }

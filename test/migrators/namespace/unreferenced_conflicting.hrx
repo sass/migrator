@@ -1,5 +1,5 @@
 <==> arguments
---rename /library.*/library/
+--rename 'library.* to library'
 --unreferenced conflicting
 
 <==> input/entrypoint.scss

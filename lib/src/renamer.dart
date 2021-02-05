@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 import 'package:charcode/charcode.dart';
+import 'package:string_scanner/string_scanner.dart';
 
 /// Renamer is a small DSL for renaming things.
 ///
@@ -16,10 +17,10 @@ import 'package:charcode/charcode.dart';
 ///
 /// The language itself consists of a series of statements separated by
 /// semicolons or line breaks. Each statement has 3 clauses: the key clause,
-/// the matcher clause, and theoutput clause.
+/// the matcher clause, and the output clause.
 ///
-/// The key clause specifies which key to match on. If no key is provided,
-/// the default key is assumed.
+/// The key clause specifies which key to match on. This can be empty to refer
+/// to a key that's just the empty string.
 ///
 /// The matcher clause is a regular expression that should match the entirety of
 /// the value of that key.
@@ -32,30 +33,168 @@ import 'package:charcode/charcode.dart';
 /// a match is found, its output is returned immediately, bypassing any
 /// subsequent statements.
 ///
-/// Each statement can use one of two syntaxes: a sed-style one and a more
-/// readable, space-separated one.
+/// These clauses are combined as `<key> <matcher> to <output>`. If the key in
+/// question is the empty string, you omit that clause, so you get
+/// `<matcher> to <output>`.
 ///
-/// The sed-style syntax looks like `key/matcher/output/`. In place of `/`, you
-/// can instead use `=`, `~`, `!`, `@`, "`", `%`, `&`, or `:` as the delimiter.
-/// If your chosen delimiter needs to appear within `matcher` or `output`, it
-/// must be escaped with `\` (or just choose a different delimiter). If you
-/// choose the omit the key clause, you must still include the delimiter after
-/// it, so `/matcher/output/` is valid syntax, but `matcher/output/` is not.
-///
-/// The more readable syntax looks like `key matcher to output`. In place of
-/// the `to` keyword, you may instead use `->`. In this syntax, when you omit
-/// the key clause, you also omit the trailing space (e.g. `matcher -> output`).
-/// Clauses must always be separated by a single space. If you need to include
-/// a literal space in `matcher` or `output`, you may escape it as `\ `, or you
-/// may opt to just use the sed-style syntax.
+/// If you wish to include a semicolon or space in the matcher or output clause,
+/// you can either escape it with `\` or wrap the entire clause in single or
+/// double quotes.
 class Renamer<T> {
-  final String defaultKey;
-
+  /// A map from keys to functions that take an input and return the value of
+  /// that key for that input.
   final Map<String, String Function(T input)> keys;
 
+  /// The list of statements that are evaluated in order by this renamer.
   final List<_Statement<T>> _statements;
 
-  Renamer._(this.defaultKey, this.keys, this._statements);
+  Renamer._(this.keys, this._statements);
+
+  /// Creates a simple Renamer from [code] that only uses an empty key.
+  static Renamer<String> simple(String code) {
+    return Renamer(code, {'': (input) => input});
+  }
+
+  /// Creates a Renamer from [code] that takes a map from keys to string values
+  /// as input.
+  ///
+  /// [keys] is the list of keys that can be referenced in [code] and must
+  /// all appear in every input map.
+  static Renamer<Map<String, String>> map(String code, List<String> keys) {
+    return Renamer(code, {for (var key in keys) key: (input) => input[key]});
+  }
+
+  /// Creates a Renamer based on [code] and a map from keys to functions that
+  /// take an input and return a string.
+  ///
+  /// All keys must consist of only lowercase letters, underscores, and hyphens.
+  ///
+  /// If provided, [sourceUrl] will appear in parsing errors. It can be
+  /// a [String] or a [Uri].
+  factory Renamer(String code, Map<String, String Function(T input)> keys,
+      {dynamic sourceUrl}) {
+    for (var key in keys.keys) {
+      if (!RegExp(r'^[a-z_-]*$').hasMatch(key)) {
+        throw ArgumentError(
+            'Invalid key "$key". Must use only lowercase letters, '
+            'underscores, and hyphens.');
+      }
+    }
+    var scanner = StringScanner(code, sourceUrl: sourceUrl);
+    var statements = <_Statement<T>>[];
+    scanner.scan(_statementDelimiter);
+    while (!scanner.isDone) {
+      statements.add(_readStatement(scanner, keys));
+    }
+    return Renamer._(keys, statements);
+  }
+
+  /// Reads the next statement (and the trailing delimiter, if any) from
+  /// [scanner].
+  static _Statement<T> _readStatement<T>(
+      StringScanner scanner, Map<String, String Function(T input)> keys) {
+    var start = scanner.position;
+    FormatException lastException;
+    // Tries each key in succession until one is successfully returned.
+    for (var entry in keys.entries) {
+      try {
+        scanner.position = start;
+        var statement = _tryKey(scanner, entry.key, entry.value);
+        if (statement != null) return statement;
+      } on FormatException catch (e) {
+        lastException = e;
+      }
+    }
+    if (lastException == null) {
+      scanner.error('invalid key');
+    }
+    throw lastException;
+  }
+
+  /// Tries to read a statement for [key] from [scanner].
+  ///
+  /// If [key] is non-null and the next text in [scanner] is not that key, this
+  /// returns null immediately, since the parse error would not be useful.
+  ///
+  /// Otherwise, after consuming the key clause (if any), attempts to read
+  /// the matcher and output clauses, throwing if it's unable to.
+  static _Statement<T> _tryKey<T>(
+      StringScanner scanner, String key, String Function(T input) keyFunction) {
+    if (key.isNotEmpty && !scanner.scan('$key ')) return null;
+    var matcher = _readMatcher(scanner);
+    scanner.expect(' to ');
+    var output = _readOutput(scanner);
+    return _Statement(keyFunction, matcher, output);
+  }
+
+  /// Reads a matcher clause and its trailing space from [scanner].
+  static RegExp _readMatcher(StringScanner scanner) {
+    int quote;
+    if ({$single_quote, $double_quote}.contains(scanner.peekChar())) {
+      quote = scanner.readChar();
+    }
+    var src = StringBuffer();
+    while (true) {
+      var char = scanner.peekChar();
+      if (quote == null) {
+        if (char == $space) break;
+        if (char == $semicolon || char == $lf) {
+          scanner.error('statement ended unexpectedly');
+        }
+      }
+      scanner.readChar();
+      if (char == quote) break;
+      if (char == $backslash) {
+        var next = scanner.readChar();
+        if (next == quote ||
+            (quote == null && (next == $semicolon || next == $space))) {
+          src.writeCharCode(next);
+        } else {
+          // If we don't capture the escape here, let regex parser handle it.
+          src.writeCharCode($backslash);
+          src.writeCharCode(next);
+        }
+      } else {
+        src.writeCharCode(char);
+      }
+    }
+    return RegExp('^$src\$');
+  }
+
+  /// Reads an output clause and the statement's trailing delimiter (if any).
+  static List<_OutputComponent> _readOutput(StringScanner scanner) {
+    int quote;
+    if ({$single_quote, $double_quote}.contains(scanner.peekChar())) {
+      quote = scanner.readChar();
+    }
+    var components = <_OutputComponent>[];
+    var buffer = StringBuffer();
+    while (true) {
+      var char = scanner.peekChar();
+      if (quote == null && {null, $space, $semicolon, $lf}.contains(char)) {
+        break;
+      }
+      scanner.readChar();
+      if (quote != null && char == quote) break;
+      if (char == $backslash) {
+        var next = scanner.readChar();
+        if (next >= $0 && next <= $9) {
+          if (buffer.isNotEmpty) components.add(_Literal(buffer.toString()));
+          components.add(_Backreference(next - $0));
+          buffer.clear();
+        } else {
+          buffer.writeCharCode(next);
+        }
+      } else {
+        buffer.writeCharCode(char);
+      }
+    }
+    if (buffer.isNotEmpty) components.add(_Literal(buffer.toString()));
+    if (!scanner.isDone) {
+      scanner.expect(_statementDelimiter, name: 'end of statement');
+    }
+    return components;
+  }
 
   /// Runs this renamer based on [input].
   String rename(T input) {
@@ -65,67 +204,14 @@ class Renamer<T> {
     }
     return null;
   }
-
-  /// Creates a simple Renamer with a single key.
-  static Renamer<String> simple(String code, {String keyName = 's'}) {
-    return Renamer(code, keyName, {keyName: (input) => input});
-  }
-
-  /// Creates a Renamer for a map of strings.
-  ///
-  /// The first item in [keys] is the default key.
-  static Renamer<Map<String, String>> map(String code, List<String> keys) {
-    return Renamer(
-        code, keys.first, {for (var key in keys) key: (input) => input[key]});
-  }
-
-  /// Creates a Renamer based on [code], a [defaultKey], and a map from keys to
-  /// functions that take an input and return a string.
-  ///
-  /// [defaultKey] must be one of the keys in [keys], and all keys must consist
-  /// of only lowercase letters.
-  factory Renamer(String code, String defaultKey,
-      Map<String, String Function(T input)> keys) {
-    for (var key in keys.keys) {
-      if (!RegExp(r'^[a-z]+$').hasMatch(key)) {
-        throw FormatException(
-            'Invalid key "$key". Must use only lowercase letters.');
-      }
-    }
-    if (!keys.containsKey(defaultKey)) {
-      throw FormatException("Default key not present in keys.");
-    }
-    // Break code into statements by line breaks or semicolons, but ignore
-    // escaped delimiters.
-    var statements = <String>[];
-    var current = '';
-    var i = 0;
-    while (true) {
-      var nextDelim = code.indexOf(RegExp(r'\n|;'), i);
-      if (nextDelim == -1) {
-        current += code.substring(i);
-        break;
-      }
-      if (code.codeUnitAt(nextDelim - 1) == $backslash) {
-        current += code.substring(i, nextDelim + 1);
-      } else {
-        current += code.substring(i, nextDelim);
-        statements.add(current.trim());
-        current = '';
-      }
-      i = nextDelim + 1;
-    }
-    if (current.isNotEmpty) statements.add(current.trim());
-    return Renamer._(defaultKey, keys, [
-      for (var statement in statements)
-        if (statement.isNotEmpty) _Statement(statement, defaultKey, keys)
-    ]);
-  }
 }
 
-/// List of delimiters allowed in the sed-style syntax.
-const _normalDelimiters = ['/', '=', '~', '!', '@', '`', '%', '&', ':'];
+// Regex that matches at least one line break or semicolon as well as any
+// number of spaces in any order.
+final _statementDelimiter = RegExp(r' *((\n|;) *)+');
 
+/// A Renamer statement, which defines a single key and regex to match on and
+/// the output to return if an input is successfully matched.
 class _Statement<T> {
   /// The key this statement matches on.
   final String Function(T input) key;
@@ -137,7 +223,7 @@ class _Statement<T> {
   /// these components.
   final List<_OutputComponent> output;
 
-  _Statement._(this.key, this.matcher, this.output);
+  _Statement(this.key, this.matcher, this.output);
 
   /// Return the output if this statement matches [input] or null otherwise.
   String rename(T input) {
@@ -145,95 +231,12 @@ class _Statement<T> {
     if (match == null) return null;
     return output.map((item) => item.build(match)).join();
   }
-
-  /// Parses a statement based on a line of [code] and the allowed [keys].
-  factory _Statement(String code, String defaultKey,
-      Map<String, String Function(T input)> keys) {
-    // First check for the sed-style syntax for all allowed keys and delimiters.
-    var startingMatch =
-        RegExp('^(|${keys.keys.join('|')})([${_normalDelimiters.join()}])'
-                r'.*\2.*\2')
-            .firstMatch(code);
-    var key = '';
-    String delimiter;
-    var cursor = 0;
-    if (startingMatch != null) {
-      key = startingMatch.group(1);
-      delimiter = startingMatch.group(2);
-      cursor = key.length + delimiter.length;
-    } else {
-      // If not sed-style, try the space-separated syntax.
-      delimiter = ' ';
-      var spaces = ' '.allMatches(code).length - r'\ '.allMatches(code).length;
-      // There should be 3 unescaped spaces if a key clause is included or 2
-      // if it's not, so anything else should error.
-      if (spaces == 3) {
-        key = code.substring(0, code.indexOf(' '));
-        cursor = key.length + 1;
-      } else if (spaces != 2) {
-        throw FormatException('Invalid rename "$code"');
-      }
-    }
-    if (key.isEmpty) key = defaultKey;
-
-    // Build the matcher based on all text before the next unescaped delimiter.
-    var matcherSrc = '';
-    for (; cursor < code.length; cursor++) {
-      var char = code[cursor];
-      if (char == delimiter) {
-        if (code.codeUnitAt(cursor - 1) != $backslash) break;
-        matcherSrc = matcherSrc.substring(0, matcherSrc.length - 1);
-      }
-      matcherSrc += char;
-    }
-    cursor++;
-    var matcher = RegExp('^$matcherSrc\$');
-
-    // The space-separated syntax requires the matcher and output to be
-    // separated by `to` or `->`.
-    if (delimiter == ' ') {
-      if (!code.substring(cursor).startsWith(RegExp('(to|->) '))) {
-        throw FormatException(
-            'Matcher clause and output clause must be separated by "to" or '
-            '"->"');
-      }
-      cursor += 3;
-    }
-
-    // Build the output as a series of literals and backreferences.
-    var output = <_OutputComponent>[];
-    var current = '';
-    var sawBackslash = false;
-    for (; cursor < code.length; cursor++) {
-      var char = code.codeUnitAt(cursor);
-      if (sawBackslash) {
-        sawBackslash = false;
-        if (char >= $0 && char <= $9) {
-          output.add(_Literal(current));
-          current = '';
-          output.add(_Backreference(char - $0));
-        } else {
-          current += code[cursor];
-        }
-      } else if (code[cursor] == delimiter) {
-        cursor++;
-        break;
-      } else if (char == $backslash) {
-        sawBackslash = true;
-      } else {
-        current += code[cursor];
-      }
-    }
-    if (current.isNotEmpty) output.add(_Literal(current));
-    if (cursor < code.length) {
-      throw FormatException(
-          'Extra text "${code.substring(cursor)}" after complete statement');
-    }
-    return _Statement._(keys[key], matcher, output);
-  }
 }
 
+/// A component of an output clause.
 abstract class _OutputComponent {
+  /// When constructing the output, this will be called with the match that
+  /// the matcher clause found.
   String build(RegExpMatch match);
 }
 
@@ -243,7 +246,7 @@ class _Literal extends _OutputComponent {
   _Literal(this.text);
 
   /// This just returns the literal text of this component.
-  String build(match) => text;
+  String build(RegExpMatch match) => text;
 }
 
 /// A backreference that's part of a statement's output.

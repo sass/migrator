@@ -1,0 +1,14 @@
+<==> arguments
+--rename 'a to x'
+--rename 'b to y'
+--rename 'c to z'
+
+<==> input/entrypoint.scss
+@use "a"; // default -> as
+@use "not-b" as b; // change as
+@use "z" as c; // as -> default
+
+<==> output/entrypoint.scss
+@use "a" as x; // default -> as
+@use "not-b" as y; // change as
+@use "z"; // as -> default
