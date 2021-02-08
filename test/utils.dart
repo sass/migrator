@@ -132,9 +132,18 @@ class _HrxTestFiles {
             "given test.";
       }
     } else if (filename == "arguments") {
-      arguments = contents.trim().split(" ");
+      arguments = [
+        for (var match in _argParseRegex.allMatches(contents))
+          match.group(1) ?? match.group(2) ?? match.group(3)
+      ];
     }
   }
+
+  /// Matches arguments, including quoted strings (but not escapes).
+  ///
+  /// To get the actual argument, you need to check groups 1, 2, and 3 (for
+  /// double-quoted, single-quoted, and unquoted strings respectively).
+  final _argParseRegex = RegExp(r'''"([^"]+)"|'([^']+)'|([^'"\s][^\s]*)''');
 
   /// Unpacks this test's input files into a temporary directory.
   Future unpack() async {

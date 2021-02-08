@@ -1,0 +1,27 @@
+<==> arguments
+--rename 'library-a to library'
+--rename 'library-(.*) to \1'
+--rename 'library-b to library'
+--rename 'library to something-random'
+
+<==> README
+This test ensures that renames are tested in order, with the first one that
+matches being used (and no namespace can be renamed multiple times).
+
+<==> input/entrypoint.scss
+@use "library-a";
+@use "library-b";
+
+a {
+  a: library-a.$variable;
+  b: library-b.$variable;
+}
+
+<==> output/entrypoint.scss
+@use "library-a" as library;
+@use "library-b" as b;
+
+a {
+  a: library.$variable;
+  b: b.$variable;
+}

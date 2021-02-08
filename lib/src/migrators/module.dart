@@ -93,9 +93,8 @@ class ModuleMigrator extends Migrator {
     }
 
     var references = References(importCache, stylesheet, importer);
-    var visitor = _ModuleMigrationVisitor(
-        importCache, references, globalResults['load-path'] as List<String>,
-        migrateDependencies: migrateDependencies,
+    var visitor = _ModuleMigrationVisitor(importCache, references,
+        globalResults['load-path'] as List<String>, migrateDependencies,
         prefixesToRemove: (argResults['remove-prefix'] as List<String>)
             ?.map((prefix) => prefix.replaceAll('_', '-')),
         forwards: forwards);
@@ -204,17 +203,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   ///
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
-  _ModuleMigrationVisitor(
-      this.importCache, this.references, List<String> loadPaths,
-      {bool migrateDependencies,
-      Iterable<String> prefixesToRemove,
-      this.forwards})
+  _ModuleMigrationVisitor(this.importCache, this.references,
+      List<String> loadPaths, bool migrateDependencies,
+      {Iterable<String> prefixesToRemove, this.forwards})
       : loadPaths = List.unmodifiable(
             loadPaths.map((path) => p.toUri(p.absolute(path)).path)),
         prefixesToRemove = prefixesToRemove == null
             ? const {}
             : UnmodifiableSetView(prefixesToRemove.toSet()),
-        super(importCache, migrateDependencies: migrateDependencies);
+        super(importCache, migrateDependencies);
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.

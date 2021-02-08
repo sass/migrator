@@ -1,0 +1,26 @@
+<==> arguments
+--rename 'a to b'
+
+<==> input/entrypoint.scss
+@use "meta";
+@use "library" as a;
+
+a {
+  b: a.$variable;
+  c: a.function();
+  d: meta.get-function('function', $module: 'a');
+  e: meta.get-function(function, false, a);
+  @include a.mixin;
+}
+
+<==> output/entrypoint.scss
+@use "meta";
+@use "library" as b;
+
+a {
+  b: b.$variable;
+  c: b.function();
+  d: meta.get-function('function', $module: 'b');
+  e: meta.get-function(function, false, b);
+  @include b.mixin;
+}

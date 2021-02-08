@@ -1,3 +1,36 @@
+## 1.3.0
+
+### Namespace Migrator
+
+* Add a new migrator for changing namespaces of `@use` rules.
+
+  This migrator lets you change namespaces by matching regular expressions on
+  existing namespaces or on `@use` rule URLs.
+
+  You do this by passing expressions to the `--rename` in one of the following
+  forms:
+
+  * `<old-namespace> to <new-namespace>`: The `<old-namespace>` regular
+    expression matches the entire existing namespace, and `<new-namespace>` is
+    the replacement.
+
+  * `url <rule-url> to <new-namespace>`: The `<old-namespace>` regular
+    expression matches the entire URL in the `@use` rule, and `<new-namespace>`
+    is the namespace that's chosen for it.
+
+  The `<new-namespace>` patterns can include references to [captured groups][]
+  from the matching regular expression (e.g. `\1`).
+
+  [captured groups]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions/Groups_and_Ranges
+
+  You can pass `--rename` multiple times and they will be checked in order until
+  one matches (at which point subsequent renames will be ignored). You can also
+  separate multiple rename expressions with semicolons or line breaks.
+
+  By default, if the renaming results in a conflict between multiple `@use`
+  rules, the migration will fail, but you can force it to resolve conflicts with
+  numerical suffixes by passing `--force`.
+
 ## 1.2.6
 
 ### Module Migrator

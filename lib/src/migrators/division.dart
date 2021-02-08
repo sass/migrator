@@ -56,7 +56,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   _DivisionMigrationVisitor(
       ImportCache importCache, this.isPessimistic, bool migrateDependencies)
-      : super(importCache, migrateDependencies: migrateDependencies);
+      : super(importCache, migrateDependencies);
 
   /// True when division is allowed by the context the current node is in.
   var _isDivisionAllowed = false;

@@ -1,0 +1,13 @@
+<==> arguments
+--rename invalid
+
+<==> input/entrypoint.scss
+// nothing
+
+<==> error.txt
+Error on line 1, column 8 of --rename: expected more input.
+  ,
+1 | invalid
+  |        ^
+  '
+Migration failed!
