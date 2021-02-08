@@ -90,6 +90,16 @@ void main() {
                 .rename({'namespace': 'mixins', '': 'path/button/lib/mixins'}),
             equals('button'));
       });
+
+      test('matcher on default key has same name as another key', () {
+        var renamer = Renamer.map('key to to', ['', 'key']);
+        expect(renamer.rename({'': 'key', 'key': 'x'}), equals('to'));
+      });
+
+      test('matcher on named key is `to`', () {
+        var renamer = Renamer.map('key to to new', ['', 'key']);
+        expect(renamer.rename({'': 'key', 'key': 'to'}), equals('new'));
+      });
     });
   });
 

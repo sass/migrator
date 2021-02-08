@@ -31,13 +31,6 @@
   rules, the migration will fail, but you can force it to resolve conflicts with
   numerical suffixes by passing `--force`.
 
-  This migrator will also check for `@use` rules without referenced members. If
-  any of these results has a conflict, it will be resolved by namespacing the
-  unreferenced rule with `_unreferenced#` instead of failing. You can disable
-  this behavior with `--unreferenced=none` or have the migrator rename *all*
-  unreferenced `@use` rules with this pattern (instead of just conflicting ones)
-  by passing `--unreferenced=all`.
-
 ## 1.2.6
 
 ### Module Migrator

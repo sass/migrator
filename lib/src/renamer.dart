@@ -37,9 +37,8 @@ import 'package:string_scanner/string_scanner.dart';
 /// question is the empty string, you omit that clause, so you get
 /// `<matcher> to <output>`.
 ///
-/// If you wish to include a semicolon or space in the matcher or output clause,
-/// you can either escape it with `\` or wrap the entire clause in single or
-/// double quotes.
+/// If you wish to include a semicolon, space, or literal backslash in the
+/// matcher or output clause, you should escape it with `\`.
 class Renamer<T> {
   /// A map from keys to functions that take an input and return the value of
   /// that key for that input.
@@ -51,8 +50,11 @@ class Renamer<T> {
   Renamer._(this.keys, this._statements);
 
   /// Creates a simple Renamer from [code] that only uses an empty key.
-  static Renamer<String> simple(String code) {
-    return Renamer(code, {'': (input) => input});
+  ///
+  /// If provided, [sourceUrl] will appear in parsing errors. It can be
+  /// a [String] or a [Uri].
+  static Renamer<String> simple(String code, {dynamic sourceUrl}) {
+    return Renamer(code, {'': (input) => input}, sourceUrl: sourceUrl);
   }
 
   /// Creates a Renamer from [code] that takes a map from keys to string values
@@ -60,8 +62,13 @@ class Renamer<T> {
   ///
   /// [keys] is the list of keys that can be referenced in [code] and must
   /// all appear in every input map.
-  static Renamer<Map<String, String>> map(String code, List<String> keys) {
-    return Renamer(code, {for (var key in keys) key: (input) => input[key]});
+  ///
+  /// If provided, [sourceUrl] will appear in parsing errors. It can be
+  /// a [String] or a [Uri].
+  static Renamer<Map<String, String>> map(String code, List<String> keys,
+      {dynamic sourceUrl}) {
+    return Renamer(code, {for (var key in keys) key: (input) => input[key]},
+        sourceUrl: sourceUrl);
   }
 
   /// Creates a Renamer based on [code] and a map from keys to functions that
@@ -98,11 +105,16 @@ class Renamer<T> {
     // Tries each key in succession until one is successfully returned.
     for (var entry in keys.entries) {
       try {
-        scanner.position = start;
         var statement = _tryKey(scanner, entry.key, entry.value);
         if (statement != null) return statement;
       } on FormatException catch (e) {
+        // While `_tryKey` will return null immediately if the statement doesn't
+        // start with the given key, there's a chance that a matcher for the
+        // default key will match a named key, so we catch the exception and
+        // reset the scanner's position if `_tryKey` starts consuming the
+        // statement before realizing the key doesn't work.
         lastException = e;
+        scanner.position = start;
       }
     }
     if (lastException == null) {
@@ -129,25 +141,17 @@ class Renamer<T> {
 
   /// Reads a matcher clause and its trailing space from [scanner].
   static RegExp _readMatcher(StringScanner scanner) {
-    int quote;
-    if ({$single_quote, $double_quote}.contains(scanner.peekChar())) {
-      quote = scanner.readChar();
-    }
     var src = StringBuffer();
     while (true) {
       var char = scanner.peekChar();
-      if (quote == null) {
-        if (char == $space) break;
-        if (char == $semicolon || char == $lf) {
-          scanner.error('statement ended unexpectedly');
-        }
+      if (char == $space) break;
+      if (char == $semicolon || char == $lf) {
+        scanner.error('statement ended unexpectedly');
       }
       scanner.readChar();
-      if (char == quote) break;
       if (char == $backslash) {
         var next = scanner.readChar();
-        if (next == quote ||
-            (quote == null && (next == $semicolon || next == $space))) {
+        if (next == $semicolon || next == $space) {
           src.writeCharCode(next);
         } else {
           // If we don't capture the escape here, let regex parser handle it.
@@ -163,19 +167,12 @@ class Renamer<T> {
 
   /// Reads an output clause and the statement's trailing delimiter (if any).
   static List<_OutputComponent> _readOutput(StringScanner scanner) {
-    int quote;
-    if ({$single_quote, $double_quote}.contains(scanner.peekChar())) {
-      quote = scanner.readChar();
-    }
     var components = <_OutputComponent>[];
     var buffer = StringBuffer();
     while (true) {
       var char = scanner.peekChar();
-      if (quote == null && {null, $space, $semicolon, $lf}.contains(char)) {
-        break;
-      }
+      if ({null, $space, $semicolon, $lf}.contains(char)) break;
       scanner.readChar();
-      if (quote != null && char == quote) break;
       if (char == $backslash) {
         var next = scanner.readChar();
         if (next >= $0 && next <= $9) {
