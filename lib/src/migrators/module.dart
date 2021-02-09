@@ -245,9 +245,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var hiddenByUrl = <Uri, Set<MemberDeclaration>>{};
     for (var declaration in references.globalDeclarations) {
       var private = declaration.name.startsWith('-');
+
       // Whether this member will be exposed by the regular entrypoint.
-      var visibleAtEntrypoint = declaration.sourceUrl == entrypoint ||
-          (_shouldForward(declaration.name) && !private);
+      var visibleAtEntrypoint = (declaration.sourceUrl == entrypoint ||
+              _shouldForward(declaration.name)) &&
+          !private;
       // Whether this member should be exposed by the import-only file for the
       // entrypoint.
       var shouldBeVisible =
@@ -1147,7 +1149,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration == null) return;
     if (renamedMembers.containsKey(declaration)) {
       var newName = renamedMembers[declaration];
-      if (declaration.name.endsWith(newName)) {
+      if (newName.startsWith('-') &&
+          declaration.name.endsWith(newName.substring(1))) {
+        addPatch(patchDelete(span,
+            start: 1, end: declaration.name.length - newName.length + 1));
+      } else if (declaration.name.endsWith(newName)) {
         addPatch(
             patchDelete(span, end: declaration.name.length - newName.length));
       } else {
@@ -1167,8 +1173,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// Otherwise, returns [name] unaltered.
   String _unprefix(String name) {
-    var prefix = _prefixFor(name);
-    return prefix == null ? name : name.substring(prefix.length);
+    var unprivateName = name.startsWith('-') ? name.substring(1) : name;
+    var prefix = _prefixFor(unprivateName);
+    if (prefix == null) return name;
+    return (name == unprivateName ? '' : '-') +
+        unprivateName.substring(prefix.length);
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.

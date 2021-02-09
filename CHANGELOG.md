@@ -1,3 +1,14 @@
+## 1.3.1
+
+### Module Migrator
+
+* Prefixes will now be removed from private members (e.g. a variable
+  `$_lib-variable` will be renamed to `$_variable` when `--remove-prefix=lib-`
+  is passed).
+
+* Fix a bug where private members would be incorrectly added to `hide` clauses
+  in generated import-only files.
+
 ## 1.3.0
 
 ### Namespace Migrator

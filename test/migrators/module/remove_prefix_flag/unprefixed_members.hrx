@@ -6,12 +6,16 @@ $lib-a: 1;
 $lib-b: 2;
 $c: 3;
 $d: 4;
+$_e: 5;
+$_lib-f: 6;
 
 <==> output/entrypoint.scss
 $a: 1;
 $b: 2;
 $c: 3;
 $d: 4;
+$_e: 5;
+$_f: 6;
 
 <==> output/entrypoint.import.scss
 @forward "entrypoint" hide $a, $b;
