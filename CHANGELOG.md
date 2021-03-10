@@ -1,3 +1,9 @@
+## 1.3.2
+
+### Module Migrator
+
+* Fix a bug on Windows where load paths would not be used in some cases.
+
 ## 1.3.1
 
 ### Module Migrator
