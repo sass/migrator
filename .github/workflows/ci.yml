@@ -25,6 +25,8 @@ jobs:
         include: [{os: ubuntu-latest, dart_channel: dev}]
 
     steps:
+      - if: ${{ matrix.os == 'windows-latest' }}
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v2
       - uses: dart-lang/setup-dart@v1
         with: {sdk: "${{ matrix.dart_channel }}"}
@@ -61,6 +63,8 @@ jobs:
             dart_channel: dev
 
     steps:
+      - if: ${{ matrix.os == 'windows-latest' }}
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v2
       - uses: dart-lang/setup-dart@v1
         with: {sdk: "${{ matrix.dart_channel }}"}
