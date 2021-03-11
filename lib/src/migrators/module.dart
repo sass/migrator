@@ -1252,12 +1252,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       basename = basename.substring(1);
     }
 
-    var loadPathUrls = loadPaths.map((path) => p.toUri(p.absolute(path)));
     var potentialUrls = [
       p.url.relative(url.path, from: p.url.dirname(relativeTo.path)),
-      for (var loadPath in loadPathUrls)
-        if (p.url.isWithin(loadPath.path, url.path))
-          p.url.relative(url.path, from: loadPath.path)
+      for (var loadPath in loadPaths)
+        if (p.url.isWithin(loadPath, url.path))
+          p.url.relative(url.path, from: loadPath)
     ];
     var relativePath = minBy(potentialUrls, (url) => url.length);
     var isRelative = relativePath == potentialUrls.first;

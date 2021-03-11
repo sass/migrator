@@ -23,10 +23,9 @@ main(List<String> args) {
 
 @Task('Verify that the package is in a good state to release.')
 sanityCheckBeforeRelease() {
-  var travisTag = environment("TRAVIS_TAG");
-  if (travisTag != pkg.version.toString()) {
-    fail("TRAVIS_TAG $travisTag is different than pubspec version "
-        "${pkg.version}.");
+  var ref = environment("GITHUB_REF");
+  if (ref != "refs/tags/${pkg.version}") {
+    fail("GITHUB_REF $ref is different than pubspec version ${pkg.version}.");
   }
   if (const ListEquality().equals(pkg.version.preRelease, ["dev"])) {
     fail("${pkg.version} is a dev release.");
