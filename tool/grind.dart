@@ -25,7 +25,7 @@ main(List<String> args) {
 sanityCheckBeforeRelease() {
   var ref = environment("GITHUB_REF");
   if (ref != "refs/tags/${pkg.version}") {
-    fail("TRAVIS_TAG $ref is different than pubspec version ${pkg.version}.");
+    fail("GITHUB_REF $ref is different than pubspec version ${pkg.version}.");
   }
   if (const ListEquality().equals(pkg.version.preRelease, ["dev"])) {
     fail("${pkg.version} is a dev release.");
