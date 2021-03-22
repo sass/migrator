@@ -1,3 +1,10 @@
+## 1.3.4
+
+### Module Migrator
+
+* Fix a crash when resolving references to orphan import-only files in a
+  different directory from the file depending on them.
+
 ## 1.3.3
 
 * No user-visible changes.

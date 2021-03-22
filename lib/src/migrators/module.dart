@@ -761,13 +761,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     for (var import in dynamicImports) {
       var ruleUrl = import.url;
-      var canonicalImport = importCache
-          .canonicalize(Uri.parse(ruleUrl),
-              baseImporter: importer, forImport: true)
-          ?.item2;
+      var tuple = importCache.canonicalize(Uri.parse(ruleUrl),
+          baseImporter: importer, forImport: true);
+      var canonicalImport = tuple?.item2;
       if (references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
-        ruleUrl =
-            references.orphanImportOnlyFiles[canonicalImport]?.url.toString();
+        var url = references.orphanImportOnlyFiles[canonicalImport]?.url;
+        if (url != null) {
+          var canonicalRedirect = importCache
+              .canonicalize(url,
+                  baseImporter: tuple.item1, baseUrl: canonicalImport)
+              .item2;
+          ruleUrl = _absoluteUrlToDependency(canonicalRedirect).item1;
+        }
       }
 
       if (ruleUrl != null) {
