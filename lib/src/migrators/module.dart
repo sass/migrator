@@ -451,7 +451,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     // Add a line break after the extra rules if there's not already a blank
     // line after the insertion point.
-    var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
+    var whitespace = insertionPoint.pointSpan().extendThroughWhitespace();
     if (!whitespace.text.contains('\n\n') && whitespace.end != node.span.end) {
       extras = '$extras\n'; //extras.substring(0, extras.length - 1);
     }
@@ -765,6 +765,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           baseImporter: importer, forImport: true);
       var canonicalImport = tuple?.item2;
       if (references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
+        ruleUrl = null;
         var url = references.orphanImportOnlyFiles[canonicalImport]?.url;
         if (url != null) {
           var canonicalRedirect = importCache
@@ -786,8 +787,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
 
     rulesText = migratedRules.join('$_semicolonIfNotIndented\n$indent');
-
-    addPatch(Patch(node.span, rulesText));
+    if (rulesText.isEmpty) {
+      var span =
+          node.span.extendIfMatches(RegExp(' *$_semicolonIfNotIndented\n?'));
+      addPatch(patchDelete(span));
+    } else {
+      addPatch(Patch(node.span, rulesText));
+    }
     if (_useAllowed) {
       _beforeFirstImport ??= node.span.start;
       _afterLastImport = afterImport(node,
@@ -1074,7 +1080,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
-      addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
+      addPatch(Patch.insert(nameSpan(node).start, '$namespace.'));
     }
   }
 
@@ -1116,7 +1122,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (namespace != null) {
       // Surround the variable in parens if negated to avoid `-` being parsed
       // as part of the namespace.
-      var negated = matchesBeforeSpan(node.span, '-');
+      var negated = node.span.matchesBefore('-');
       if (negated) addPatch(patchBefore(node, '('));
       addPatch(patchBefore(node, '$namespace.'));
       if (negated) addPatch(patchAfter(node, ')'));

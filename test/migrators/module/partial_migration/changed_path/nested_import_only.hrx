@@ -1,0 +1,35 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "old";
+
+a {
+  b: $lib-var1;
+  c: $lib-var2;
+}
+
+<==> input/_old.import.scss
+@forward "a.import";
+@forward "b.import";
+
+<==> input/_a.scss
+$var1: green;
+
+<==> input/_a.import.scss
+@forward "a" as lib-*;
+
+<==> input/_b.scss
+$var2: blue;
+
+<==> input/_b.import.scss
+@forward "b" as lib-*;
+
+<==> output/entrypoint.scss
+@use "a";
+@use "b";
+
+a {
+  b: a.$var1;
+  c: b.$var2;
+}
