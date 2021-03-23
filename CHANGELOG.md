@@ -1,3 +1,13 @@
+## 1.3.5
+
+### Module Migrator
+
+* Fix a bug where `@use` rules could be duplicated if the same file is depended
+  on via both an indirect `@import` and an existing `@use` rule.
+
+* Fix a bug where imports of orphan import-only files that only forward other
+  import-only files would not be removed.
+
 ## 1.3.4
 
 ### Module Migrator

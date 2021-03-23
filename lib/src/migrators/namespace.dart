@@ -157,7 +157,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
       assert(span.text.startsWith(namespace));
       _spansByNamespace
           .putIfAbsent(namespace, () => {})
-          .add(subspan(span, end: namespace.length));
+          .add(span.subspan(0, namespace.length));
     }
   }
 

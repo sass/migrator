@@ -17,6 +17,43 @@ import 'package:sass/src/ast/node.dart';
 import 'io.dart';
 import 'patch.dart';
 
+extension ExtendSpan on FileSpan {
+  /// Extends this span so it encompasses any whitespace on either side of it.
+  FileSpan extendThroughWhitespace() {
+    var text = file.getText(0);
+
+    var newStart = start.offset - 1;
+    for (; newStart >= 0; newStart--) {
+      if (!isWhitespace(text.codeUnitAt(newStart))) break;
+    }
+
+    var newEnd = end.offset;
+    for (; newEnd < text.length; newEnd++) {
+      if (!isWhitespace(text.codeUnitAt(newEnd))) break;
+    }
+
+    // Add 1 to start because it's guaranteed to end on either -1 or a character
+    // that's not whitespace.
+    return file.span(newStart + 1, newEnd);
+  }
+
+  /// Extends this span forward if it's followed by exactly [pattern].
+  ///
+  /// If it doesn't match, returns the span as-is.
+  FileSpan extendIfMatches(Pattern pattern) {
+    var text = file.getText(end.offset);
+    var match = pattern.matchAsPrefix(text);
+    if (match == null) return this;
+    return file.span(start.offset, end.offset + match.end);
+  }
+
+  /// Returns true if this span is preceded by exactly [text].
+  bool matchesBefore(String text) {
+    if (start.offset - text.length < 0) return false;
+    return file.getText(start.offset - text.length, start.offset) == text;
+  }
+}
+
 /// Returns the default namespace for a use rule with [path].
 String namespaceForPath(String path) {
   // TODO(jathak): Confirm that this is a valid Sass identifier
@@ -41,40 +78,7 @@ bool valuesAreUnique(Map<Object, Object> map) =>
 /// By default, this deletes the entire span. If [start] and/or [end] are
 /// provided, this deletes only the portion of the span within that range.
 Patch patchDelete(FileSpan span, {int start = 0, int end}) =>
-    Patch(subspan(span, start: start, end: end), "");
-
-/// Returns a subsection of [span].
-FileSpan subspan(FileSpan span, {int start = 0, int end}) => span.file
-    .span(span.start.offset + start, span.start.offset + (end ?? span.length));
-
-/// Extends [span] so it encompasses any whitespace on either side of it.
-FileSpan extendThroughWhitespace(FileSpan span) {
-  var text = span.file.getText(0);
-
-  var start = span.start.offset - 1;
-  for (; start >= 0; start--) {
-    if (!isWhitespace(text.codeUnitAt(start))) break;
-  }
-
-  var end = span.end.offset;
-  for (; end < text.length; end++) {
-    if (!isWhitespace(text.codeUnitAt(end))) break;
-  }
-
-  // Add 1 to start because it's guaranteed to end on either -1 or a character
-  // that's not whitespace.
-  return span.file.span(start + 1, end);
-}
-
-/// Extends [span] forward if it's followed by exactly [text].
-///
-/// If [span] is followed by anything other than [text], returns `null`.
-FileSpan extendForward(FileSpan span, String text) {
-  var end = span.end.offset;
-  if (end + text.length > span.file.length) return null;
-  if (span.file.getText(end, end + text.length) != text) return null;
-  return span.file.span(span.start.offset, end + text.length);
-}
+    Patch(span.subspan(start, end), "");
 
 /// Returns the next location after [import] that it would be safe to insert
 /// a `@use` or `@forward` rule.
@@ -117,23 +121,6 @@ FileLocation afterImport(ImportRule import, {bool shouldHaveSemicolon = true}) {
   return loc.file.location(loc.offset + i);
 }
 
-/// Extends [span] backward if it's preceded by exactly [text].
-///
-/// If [span] is preceded by anything other than [text], returns `null`.
-FileSpan extendBackward(FileSpan span, String text) {
-  var start = span.start.offset;
-  if (start - text.length < 0) return null;
-  if (span.file.getText(start - text.length, start) != text) return null;
-  return span.file.span(start - text.length, span.end.offset);
-}
-
-/// Returns true if [span] is preceded by exactly [text].
-bool matchesBeforeSpan(FileSpan span, String text) {
-  var start = span.start.offset;
-  if (start - text.length < 0) return false;
-  return span.file.getText(start - text.length, start) == text;
-}
-
 /// Returns whether [character] is whitespace, according to Sass's definition.
 bool isWhitespace(int character) =>
     character == $space ||
@@ -149,30 +136,27 @@ bool isWhitespace(int character) =>
 FileSpan nameSpan(SassNode node) {
   if (node is VariableDeclaration) {
     var start = node.namespace == null ? 1 : node.namespace.length + 2;
-    return subspan(node.span, start: start, end: start + node.name.length);
+    return node.span.subspan(start, start + node.name.length);
   } else if (node is VariableExpression) {
-    return subspan(node.span,
-        start: node.namespace == null ? 1 : node.namespace.length + 2);
+    return node.span
+        .subspan(node.namespace == null ? 1 : node.namespace.length + 2);
   } else if (node is FunctionRule) {
     var startName = node.span.text
         .replaceAll('_', '-')
         .indexOf(node.name, '@function'.length);
-    return subspan(node.span,
-        start: startName, end: startName + node.name.length);
+    return node.span.subspan(startName, startName + node.name.length);
   } else if (node is FunctionExpression) {
     return node.name.span;
   } else if (node is MixinRule) {
     var startName = node.span.text
         .replaceAll('_', '-')
         .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
-    return subspan(node.span,
-        start: startName, end: startName + node.name.length);
+    return node.span.subspan(startName, startName + node.name.length);
   } else if (node is IncludeRule) {
     var startName = node.span.text
         .replaceAll('_', '-')
         .indexOf(node.name, node.span.text[0] == '+' ? 1 : '@include'.length);
-    return subspan(node.span,
-        start: startName, end: startName + node.name.length);
+    return node.span.subspan(startName, startName + node.name.length);
   } else {
     throw UnsupportedError(
         "$node of type ${node.runtimeType} doesn't have a name");
@@ -213,7 +197,7 @@ FileSpan getStaticNameForGetFunctionCall(FunctionExpression node) {
     return null;
   }
   return (nameArgument as StringExpression).hasQuotes
-      ? subspan(nameArgument.span, start: 1, end: nameArgument.span.length - 1)
+      ? nameArgument.span.subspan(1, nameArgument.span.length - 1)
       : nameArgument.span;
 }
 
@@ -232,7 +216,7 @@ FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
     return null;
   }
   return (moduleArg as StringExpression).hasQuotes
-      ? subspan(moduleArg.span, start: 1, end: moduleArg.span.length - 2)
+      ? moduleArg.span.subspan(1, moduleArg.span.length - 2)
       : moduleArg.span;
 }
 

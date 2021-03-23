@@ -138,8 +138,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Set of canonical URLs that have a `@use` rule in the current stylesheet.
   ///
-  /// This includes both `@use` rules migrated from `@import` rules and
-  /// additional `@use` rules in the sets below.
+  /// This includes rules migrated from `@import` rules, additional rules in the
+  /// sets below, and existing `@use` rules in the file prior to migration.
   Set<Uri> _usedUrls;
 
   /// Set of additional `@use` rules for built-in modules.
@@ -402,9 +402,17 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldBeforeFirstImport = _beforeFirstImport;
     var oldAfterLastImport = _afterLastImport;
     var oldUseAllowed = _useAllowed;
-    _namespaces = _determineNamespaces(node.span.sourceUrl);
-    _forwardedUrls = {};
+    _namespaces = {
+      for (var rule in node.uses)
+        importCache
+                .canonicalize(rule.url,
+                    baseImporter: importer, baseUrl: node.span.sourceUrl)
+                ?.item2 ??
+            rule.url: rule.namespace
+    };
+    _determineNamespaces(node.span.sourceUrl, _namespaces);
     _usedUrls = {};
+    _forwardedUrls = {};
     _builtInUseRules = {};
     _additionalLoadPathUseRules = {};
     _additionalRelativeUseRules = {};
@@ -451,30 +459,27 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     // Add a line break after the extra rules if there's not already a blank
     // line after the insertion point.
-    var whitespace = extendThroughWhitespace(insertionPoint.pointSpan());
+    var whitespace = insertionPoint.pointSpan().extendThroughWhitespace();
     if (!whitespace.text.contains('\n\n') && whitespace.end != node.span.end) {
       extras = '$extras\n'; //extras.substring(0, extras.length - 1);
     }
     addPatch(Patch.insert(insertionPoint, extras));
   }
 
-  /// Determines namespaces for all `@use` rules that the stylesheet at [url]
-  /// will contain after migration.
-  Map<Uri, String> _determineNamespaces(Uri url) {
-    var namespaces = <Uri, String>{};
+  /// Adds namespaces for the `@use` rules added to [url] by the migration.
+  ///
+  /// [namespaces] should contain any existing namespaces prior to migration
+  /// (i.e. from existing `@use` rules).
+  void _determineNamespaces(Uri url, Map<Uri, String> namespaces) {
     var sourcesByNamespace = <String, Set<ReferenceSource>>{};
     for (var reference in references.sources.keys) {
       if (reference.span.sourceUrl != url) continue;
       var source = references.sources[reference];
+      if (source is UseSource) continue;
+      if (namespaces.containsKey(source.url)) continue;
       var namespace = source.preferredNamespace;
       if (namespace == null) continue;
-
-      // Existing `@use` rules should always keep their namespaces.
-      if (source is UseSource) {
-        namespaces[source.url] = namespace;
-      } else {
-        sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
-      }
+      sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
     }
     // First assign namespaces to module URLs without conflicts.
     var conflictingNamespaces = <String, Set<ReferenceSource>>{};
@@ -490,7 +495,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     conflictingNamespaces.forEach((namespace, sources) {
       _resolveNamespaceConflict(namespace, sources, namespaces, url);
     });
-    return namespaces;
   }
 
   /// Resolves a conflict between a set of sources with the same default
@@ -765,6 +769,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           baseImporter: importer, forImport: true);
       var canonicalImport = tuple?.item2;
       if (references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
+        ruleUrl = null;
         var url = references.orphanImportOnlyFiles[canonicalImport]?.url;
         if (url != null) {
           var canonicalRedirect = importCache
@@ -786,8 +791,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
 
     rulesText = migratedRules.join('$_semicolonIfNotIndented\n$indent');
-
-    addPatch(Patch(node.span, rulesText));
+    if (rulesText.isEmpty) {
+      var span =
+          node.span.extendIfMatches(RegExp(' *$_semicolonIfNotIndented\n?'));
+      addPatch(patchDelete(span));
+    } else {
+      addPatch(Patch(node.span, rulesText));
+    }
     if (_useAllowed) {
       _beforeFirstImport ??= node.span.start;
       _afterLastImport = afterImport(node,
@@ -1074,7 +1084,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
     if (namespace != null) {
-      addPatch(Patch(subspan(nameSpan(node), end: 0), '$namespace.'));
+      addPatch(Patch.insert(nameSpan(node).start, '$namespace.'));
     }
   }
 
@@ -1086,21 +1096,27 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     super.visitMixinRule(node);
   }
 
-  /// If [node] is for a built-in module, adds its URL to [_usedUrls] so we
-  /// don't add a duplicate one, but ignore other `@use` rules, as we'll assume
-  /// they've already been migrated.
+  /// Don't visit `@use` rules.
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
   void visitUseRule(UseRule node) {
-    if (node.url.scheme == 'sass') _usedUrls.add(node.url);
+    _usedUrls.add(importCache
+            .canonicalize(node.url, baseImporter: importer, baseUrl: currentUrl)
+            ?.item2 ??
+        node.url);
   }
 
   /// Similar to `@use` rules, don't visit `@forward` rules.
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
-  void visitForwardRule(ForwardRule node) {}
+  void visitForwardRule(ForwardRule node) {
+    _forwardedUrls.add(importCache
+            .canonicalize(node.url, baseImporter: importer, baseUrl: currentUrl)
+            ?.item2 ??
+        node.url);
+  }
 
   /// Adds a namespace to any variable that requires it.
   @override
@@ -1116,7 +1132,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (namespace != null) {
       // Surround the variable in parens if negated to avoid `-` being parsed
       // as part of the namespace.
-      var negated = matchesBeforeSpan(node.span, '-');
+      var negated = node.span.matchesBefore('-');
       if (negated) addPatch(patchBefore(node, '('));
       addPatch(patchBefore(node, '$namespace.'));
       if (negated) addPatch(patchAfter(node, ')'));
@@ -1215,7 +1231,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (libraryUrls != null) {
       url = minBy(libraryUrls, (url) => url.pathSegments.length);
     }
-
     if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
       var tuple = _absoluteUrlToDependency(url);
