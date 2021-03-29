@@ -1,3 +1,10 @@
+## 1.3.6
+
+### Module Migrator
+
+* Fix a bug that could result in unnecessary import-only files being generated
+  when running `--forward=import-only` on a file with no dependencies.
+
 ## 1.3.5
 
 ### Module Migrator
