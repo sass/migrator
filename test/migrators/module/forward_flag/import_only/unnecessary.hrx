@@ -1,0 +1,16 @@
+<==> arguments
+--migrate-deps --forward=import-only
+
+<==> README.md
+This text confirms that import-only files are only generated when they're
+necessary.
+
+<==> input/entrypoint.scss
+$variable: green;
+
+a {
+  color: $variable;
+}
+
+<==> log.txt
+Nothing to migrate!

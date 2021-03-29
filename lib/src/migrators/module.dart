@@ -299,7 +299,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // import-only file is necessary.
     if (forwardsByUrl.isEmpty ||
         (forwardsByUrl.length == 1 &&
-            forwardsByUrl[entrypoint]?.keys == {''})) {
+            forwardsByUrl[entrypoint]?.keys?.join() == '')) {
       return null;
     }
 
