@@ -1,3 +1,10 @@
+## 1.3.7
+
+### Module Migrator
+
+* Fix a crash in a rare edge case involving orphan import-only files and
+  multiple load paths.
+
 ## 1.3.6
 
 ### Module Migrator
