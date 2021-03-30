@@ -1,0 +1,36 @@
+<==> arguments
+--migrate-deps --load-path load-path --load-path .
+
+<==> README.md
+This test is for a combination of edge cases where an orphan import-only file
+available through two load paths, one of which is the directory the migrator
+is being run from.
+
+This is a regression test for a bug where References and _ModuleMigrationVisitor
+disagreed about which import-only file to use, resulting in a crash.
+
+<==> input/entrypoint/in/a/subdirectory.scss
+@import "old";
+
+a {
+  color: $lib-variable;
+}
+
+<==> input/load-path/_old.import.scss
+@forward "new" as lib-*;
+
+<==> input/_new.scss
+$variable: green;
+
+<==> input/_old.import.scss
+@forward "wrong";
+
+<==> input/_wrong.scss
+$lib-variable: blue;
+
+<==> output/entrypoint/in/a/subdirectory.scss
+@use "new";
+
+a {
+  color: new.$variable;
+}

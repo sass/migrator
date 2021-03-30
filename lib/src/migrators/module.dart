@@ -766,7 +766,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var import in dynamicImports) {
       var ruleUrl = import.url;
       var tuple = importCache.canonicalize(Uri.parse(ruleUrl),
-          baseImporter: importer, forImport: true);
+          baseImporter: importer, baseUrl: currentUrl, forImport: true);
       var canonicalImport = tuple?.item2;
       if (references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
         ruleUrl = null;
