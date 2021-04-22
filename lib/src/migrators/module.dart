@@ -593,12 +593,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     ];
   }
 
-  /// Visits the children of [node] with a new scope for tracking unreferencable
-  /// members.
+  /// Visits [children] with a new scope for tracking unreferencable members.
   @override
-  void visitChildren(ParentStatement node) {
+  void visitChildren(List<Statement> children) {
     _unreferencable = UnreferencableMembers(_unreferencable);
-    super.visitChildren(node);
+    super.visitChildren(children);
     _unreferencable = _unreferencable.parent;
   }
 

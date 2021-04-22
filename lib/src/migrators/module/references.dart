@@ -345,7 +345,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     _namespaces = {};
     _currentUrl = node.span.sourceUrl;
     _isOrphanImportOnly = isImportOnlyFile(_currentUrl);
-    super.visitStylesheet(node);
+    super.visitChildren(node.children);
     if (_isOrphanImportOnly) {
       _orphanImportOnlyFiles[_currentUrl] =
           _lastRegularForward.span.sourceUrl == _currentUrl
@@ -538,23 +538,16 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _scope.variables[argument.name] = MemberDeclaration(argument);
       if (argument.defaultValue != null) visitExpression(argument.defaultValue);
     }
-    super.visitChildren(node);
+    super.visitChildren(node.children);
     _checkUnresolvedReferences(_scope);
     _scope = _scope.parent;
   }
 
-  /// Visits the children of [node] with a local scope.
-  ///
-  /// Note: The children of a stylesheet are at the root, so we should not add
-  /// a local scope.
+  /// Visits [children] with a local scope.
   @override
-  void visitChildren(ParentStatement node) {
-    if (node is Stylesheet) {
-      super.visitChildren(node);
-      return;
-    }
+  void visitChildren(List<Statement> children) {
     _scope = Scope(_scope);
-    super.visitChildren(node);
+    super.visitChildren(children);
     _checkUnresolvedReferences(_scope);
     _scope = _scope.parent;
   }

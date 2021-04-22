@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cli_pkg/testing.dart' as pkg;
@@ -24,7 +25,8 @@ Future<TestProcess> runMigrator(List<String> args) =>
     pkg.start('sass-migrator', args,
         node: runNodeTests,
         workingDirectory: d.sandbox,
-        description: "migrator");
+        description: "migrator",
+        encoding: utf8);
 
 /// Runs all tests for [migrator].
 ///
