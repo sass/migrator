@@ -17,6 +17,9 @@ import 'package:sass/src/ast/node.dart';
 import 'io.dart';
 import 'patch.dart';
 
+T assertNotNull<T>(T /*?*/ object) =>
+    object ?? (throw AssertionError('Unexpected null value.'));
+
 extension ExtendSpan on FileSpan {
   /// Extends this span so it encompasses any whitespace on either side of it.
   FileSpan extendThroughWhitespace() {

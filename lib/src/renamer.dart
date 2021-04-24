@@ -42,7 +42,7 @@ import 'package:string_scanner/string_scanner.dart';
 class Renamer<T> {
   /// A map from keys to functions that take an input and return the value of
   /// that key for that input.
-  final Map<String, String Function(T input)> keys;
+  final Map<String, String /*!*/ Function(T input)> keys;
 
   /// The list of statements that are evaluated in order by this renamer.
   final List<_Statement<T>> _statements;
@@ -67,7 +67,14 @@ class Renamer<T> {
   /// a [String] or a [Uri].
   static Renamer<Map<String, String>> map(String code, List<String> keys,
       {dynamic sourceUrl}) {
-    return Renamer(code, {for (var key in keys) key: (input) => input[key]},
+    return Renamer(
+        code,
+        {
+          for (var key in keys)
+            key: ((input) =>
+                input[key] ??
+                (throw ArgumentError.value(input, 'Missing key "$key".')))
+        },
         sourceUrl: sourceUrl);
   }
 
@@ -78,7 +85,7 @@ class Renamer<T> {
   ///
   /// If provided, [sourceUrl] will appear in parsing errors. It can be
   /// a [String] or a [Uri].
-  factory Renamer(String code, Map<String, String Function(T input)> keys,
+  factory Renamer(String code, Map<String, String /*!*/ Function(T input)> keys,
       {dynamic sourceUrl}) {
     for (var key in keys.keys) {
       if (!RegExp(r'^[a-z_-]*$').hasMatch(key)) {

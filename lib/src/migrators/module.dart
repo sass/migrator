@@ -95,7 +95,7 @@ class ModuleMigrator extends Migrator {
     var references = References(importCache, stylesheet, importer);
     var visitor = _ModuleMigrationVisitor(importCache, references,
         globalResults['load-path'] as List<String>, migrateDependencies,
-        prefixesToRemove: (argResults['remove-prefix'] as List<String>)
+        prefixesToRemove: (argResults['remove-prefix'] as List<String> /*!*/)
             ?.map((prefix) => prefix.replaceAll('_', '-')),
         forwards: forwards);
     var migrated = visitor.run(stylesheet, importer);
@@ -127,30 +127,38 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   final _originalImports = <Uri, Tuple2<String, Importer>>{};
 
   /// Tracks members that are unreferencable in the current scope.
-  UnreferencableMembers _unreferencable = UnreferencableMembers();
+  var _unreferencable = UnreferencableMembers();
 
   /// Namespaces of modules used in this stylesheet.
-  Map<Uri, String> _namespaces;
+  Map<Uri /*!*/, String /*?*/ > get _namespaces => assertNotNull(__namespaces);
+  Map<Uri, String /*?*/ > __namespaces;
 
   /// Set of canonical URLs that have a `@forward` rule in the current
   /// stylesheet.
-  Set<Uri> _forwardedUrls;
+  Set<Uri> get _forwardedUrls => assertNotNull(__forwardedUrls);
+  Set<Uri> __forwardedUrls;
 
   /// Set of canonical URLs that have a `@use` rule in the current stylesheet.
   ///
   /// This includes rules migrated from `@import` rules, additional rules in the
   /// sets below, and existing `@use` rules in the file prior to migration.
-  Set<Uri> _usedUrls;
+  Set<Uri /*!*/ > get _usedUrls => assertNotNull(__usedUrls);
+  Set<Uri> __usedUrls;
 
   /// Set of additional `@use` rules for built-in modules.
-  Set<String> _builtInUseRules;
+  Set<String> get _builtInUseRules => assertNotNull(__builtInUseRules);
+  Set<String> __builtInUseRules;
 
   /// Set of additional `@use` rules for stylesheets at a load path.
-  Set<String> _additionalLoadPathUseRules;
+  Set<String> get _additionalLoadPathUseRules =>
+      assertNotNull(__additionalLoadPathUseRules);
+  Set<String> __additionalLoadPathUseRules;
 
   /// Set of additional `@use` rules for stylesheets relative to the current
   /// one.
-  Set<String> _additionalRelativeUseRules;
+  Set<String> get _additionalRelativeUseRules =>
+      assertNotNull(__additionalRelativeUseRules);
+  Set<String> __additionalRelativeUseRules;
 
   /// The first `@import` rule in this stylesheet that was converted to a `@use`
   /// or `@forward` rule, or null if none has been visited yet.
@@ -171,7 +179,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
-  Set<MemberDeclaration<VariableDeclaration>> _configuredVariables;
+  Set<MemberDeclaration<VariableDeclaration> /*!*/ > get _configuredVariables =>
+      assertNotNull(__configuredVariables);
+  Set<MemberDeclaration<VariableDeclaration>> __configuredVariables;
 
   /// A mapping between member declarations and references.
   ///
@@ -190,7 +200,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   final Set<String> prefixesToRemove;
 
   /// The values of the --forward flag.
-  final Set<ForwardType> forwards;
+  final Set<ForwardType> /*!*/ forwards;
 
   /// Constructs a new module migration visitor.
   ///
@@ -205,12 +215,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
   _ModuleMigrationVisitor(this.importCache, this.references,
       List<String> loadPaths, bool migrateDependencies,
-      {Iterable<String> prefixesToRemove, this.forwards})
+      {Iterable<String> /*!*/ prefixesToRemove, this.forwards})
       : loadPaths = List.unmodifiable(
             loadPaths.map((path) => p.toUri(p.absolute(path)).path)),
-        prefixesToRemove = prefixesToRemove == null
-            ? const {}
-            : UnmodifiableSetView(prefixesToRemove.toSet()),
+        prefixesToRemove = UnmodifiableSetView(prefixesToRemove.toSet()),
         super(importCache, migrateDependencies);
 
   /// Checks which global declarations need to be renamed, then runs the
@@ -393,16 +401,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// visiting it and restores the per-file state afterwards.
   @override
   void visitStylesheet(Stylesheet node) {
-    var oldNamespaces = _namespaces;
-    var oldForwardedUrls = _forwardedUrls;
-    var oldUsedUrls = _usedUrls;
-    var oldBuiltInUseRules = _builtInUseRules;
-    var oldLoadPathUseRules = _additionalLoadPathUseRules;
-    var oldRelativeUseRules = _additionalRelativeUseRules;
+    var oldNamespaces = __namespaces;
+    var oldForwardedUrls = __forwardedUrls;
+    var oldUsedUrls = __usedUrls;
+    var oldBuiltInUseRules = __builtInUseRules;
+    var oldLoadPathUseRules = __additionalLoadPathUseRules;
+    var oldRelativeUseRules = __additionalRelativeUseRules;
     var oldBeforeFirstImport = _beforeFirstImport;
     var oldAfterLastImport = _afterLastImport;
     var oldUseAllowed = _useAllowed;
-    _namespaces = {
+    __namespaces = {
       for (var rule in node.uses)
         importCache
                 .canonicalize(rule.url,
@@ -411,21 +419,21 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             rule.url: rule.namespace
     };
     _determineNamespaces(node.span.sourceUrl, _namespaces);
-    _usedUrls = {};
-    _forwardedUrls = {};
-    _builtInUseRules = {};
-    _additionalLoadPathUseRules = {};
-    _additionalRelativeUseRules = {};
+    __usedUrls = {};
+    __forwardedUrls = {};
+    __builtInUseRules = {};
+    __additionalLoadPathUseRules = {};
+    __additionalRelativeUseRules = {};
     _beforeFirstImport = null;
     _afterLastImport = null;
     _useAllowed = true;
     super.visitStylesheet(node);
-    _namespaces = oldNamespaces;
-    _forwardedUrls = oldForwardedUrls;
-    _usedUrls = oldUsedUrls;
-    _builtInUseRules = oldBuiltInUseRules;
-    _additionalLoadPathUseRules = oldLoadPathUseRules;
-    _additionalRelativeUseRules = oldRelativeUseRules;
+    __namespaces = oldNamespaces;
+    __forwardedUrls = oldForwardedUrls;
+    __usedUrls = oldUsedUrls;
+    __builtInUseRules = oldBuiltInUseRules;
+    __additionalLoadPathUseRules = oldLoadPathUseRules;
+    __additionalRelativeUseRules = oldRelativeUseRules;
     _beforeFirstImport = oldBeforeFirstImport;
     _afterLastImport = oldAfterLastImport;
     _useAllowed = oldUseAllowed;
@@ -470,17 +478,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// [namespaces] should contain any existing namespaces prior to migration
   /// (i.e. from existing `@use` rules).
-  void _determineNamespaces(Uri url, Map<Uri, String> namespaces) {
-    var sourcesByNamespace = <String, Set<ReferenceSource>>{};
-    for (var reference in references.sources.keys) {
-      if (reference.span.sourceUrl != url) continue;
-      var source = references.sources[reference];
-      if (source is UseSource) continue;
-      if (namespaces.containsKey(source.url)) continue;
+  void _determineNamespaces(Uri /*!*/ url, Map<Uri, String> namespaces) {
+    var sourcesByNamespace = <String, Set<ReferenceSource /*!*/ >>{};
+    references.sources.forEach((reference, source) {
+      if (reference.span.sourceUrl != url) return;
+      if (source is UseSource) return;
+      if (namespaces.containsKey(source.url)) return;
       var namespace = source.preferredNamespace;
-      if (namespace == null) continue;
+      if (namespace == null) return;
       sourcesByNamespace.putIfAbsent(namespace, () => {}).add(source);
-    }
+    });
     // First assign namespaces to module URLs without conflicts.
     var conflictingNamespaces = <String, Set<ReferenceSource>>{};
     sourcesByNamespace.forEach((namespace, sources) {
@@ -558,7 +565,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// If it is, but "sass-$module" is not, returns that. Otherwise, returns it
   /// with the lowest available number appended to the end.
   String _resolveBuiltInNamespace(
-      String module, Map<Uri, String> existingNamespaces) {
+      String /*!*/ module, Map<Uri, String> existingNamespaces) {
     return existingNamespaces.containsValue(module) &&
             !existingNamespaces.containsValue('sass-$module')
         ? 'sass-$module'
@@ -569,7 +576,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// [existingNamespaces], returns it. Otherwise, returns it with the lowest
   /// available number appended to the end.
   String _incrementUntilAvailable(
-      String defaultNamespace, Map<Uri, String> existingNamespaces) {
+      String /*!*/ defaultNamespace, Map<Uri, String> existingNamespaces) {
     var count = 1;
     var namespace = defaultNamespace;
     while (existingNamespaces.containsValue(namespace)) {
@@ -589,7 +596,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     return [
       for (var length in byPathLength.keys.toList()..sort())
-        byPathLength[length]
+        byPathLength[length] /*!*/
     ];
   }
 
@@ -598,7 +605,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitChildren(List<Statement> children) {
     _unreferencable = UnreferencableMembers(_unreferencable);
     super.visitChildren(children);
-    _unreferencable = _unreferencable.parent;
+    _unreferencable = _unreferencable.parent /*!*/;
   }
 
   /// Adds a namespace to any function call that requires it.
@@ -610,8 +617,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     if (references.sources.containsKey(node)) {
       var declaration = references.functions[node];
-      _unreferencable.check(declaration, node);
-      _renameReference(nameSpan(node), declaration);
+      if (declaration != null) {
+        _unreferencable.check(declaration, node);
+        _renameReference(nameSpan(node), declaration);
+      }
       _patchNamespaceForFunction(node, declaration, (namespace) {
         addPatch(patchBefore(node.name, '$namespace.'));
       });
@@ -619,8 +628,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     if (node.name.asPlain == "get-function") {
       var declaration = references.getFunctionReferences[node];
-      _unreferencable.check(declaration, node);
-      _renameReference(getStaticNameForGetFunctionCall(node), declaration);
+      if (declaration != null) {
+        _unreferencable.check(declaration, node);
+        var span = getStaticNameForGetFunctionCall(node);
+        if (span != null) _renameReference(span, declaration);
+      }
 
       // Ignore get-function calls that already have a module argument.
       var moduleArg = node.arguments.named['module'];
@@ -660,7 +672,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// If [node] is a get-function call, [getFunctionCall] should be true.
   void _patchNamespaceForFunction(
       FunctionExpression node,
-      MemberDeclaration<FunctionRule> declaration,
+      MemberDeclaration<FunctionRule> /*?*/ declaration,
       void patchNamespace(String namespace),
       {bool getFunctionCall = false}) {
     var span = getFunctionCall
@@ -668,11 +680,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         : nameSpan(node);
     if (span == null) return;
     var name = span.text.replaceAll('_', '-');
+    String namespace;
 
-    var namespace = _namespaceForDeclaration(declaration);
-    if (namespace != null) {
-      patchNamespace(namespace);
-      return;
+    if (declaration != null) {
+      namespace = _namespaceForDeclaration(declaration);
+      if (namespace != null) {
+        patchNamespace(namespace);
+        return;
+      }
     }
 
     if (!builtInFunctionModules.containsKey(name)) return;
@@ -700,7 +715,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         return;
       }
     }
-    patchNamespace(_findOrAddBuiltInNamespace(namespace));
+    namespace = _findOrAddBuiltInNamespace(namespace);
+    if (namespace != null) patchNamespace(namespace);
     if (name != span.text.replaceAll('_', '-')) addPatch(Patch(span, name));
   }
 
@@ -763,7 +779,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var indent = ' ' * node.span.start.column;
 
     for (var import in dynamicImports) {
-      var ruleUrl = import.url;
+      String /*?*/ ruleUrl = import.url;
       var tuple = importCache.canonicalize(Uri.parse(ruleUrl),
           baseImporter: importer, baseUrl: currentUrl, forImport: true);
       var canonicalImport = tuple?.item2;
@@ -884,7 +900,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           _configuredVariables.last.member.span);
     }
 
-    _unreferencable = _unreferencable.parent;
+    _unreferencable = _unreferencable.parent /*!*/;
     for (var declaration in references.allDeclarations) {
       if (declaration.sourceUrl != canonicalUrl) continue;
       _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
@@ -908,8 +924,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// an upstream file.
   Tuple3<Uri, String, String> _migrateImportCommon(
       String ruleUrl, FileSpan context) {
-    var oldConfiguredVariables = _configuredVariables;
-    _configuredVariables = {};
+    var oldConfiguredVariables = __configuredVariables;
+    __configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
     var parsedUrl = Uri.parse(ruleUrl);
     if (migrateDependencies) visitDependency(parsedUrl, context);
@@ -939,7 +955,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         oldConfiguredVariables.add(variable);
       }
     }
-    _configuredVariables = oldConfiguredVariables;
+    __configuredVariables = oldConfiguredVariables;
 
     String extraForward;
     if (externallyConfiguredVariables.isNotEmpty) {
@@ -1045,8 +1061,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     for (var subprefix in shownByPrefix.keys.toList()..sort()) {
       var hiddenMembers = {
         ...hidden,
-        for (var other in shownByPrefix.keys)
-          if (other != subprefix) ...shownByPrefix[other]
+        for (var entry in shownByPrefix.entries)
+          if (entry.key != subprefix) ...entry.value
       };
       var allHidden = <String>{};
       for (var declaration in hiddenMembers) {
@@ -1079,6 +1095,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (node.namespace != null) return;
 
     var declaration = references.mixins[node];
+    if (declaration == null) {
+      // TODO(jathak): Error here.
+      return;
+    }
     _unreferencable.check(declaration, node);
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
@@ -1122,9 +1142,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitVariableExpression(VariableExpression node) {
     if (node.namespace != null) return;
     var declaration = references.variables[node];
+    if (declaration == null) {
+      // TODO(jathak): Error here.
+      return;
+    }
     _unreferencable.check(declaration, node);
     if (_reassignedVariables.contains(declaration)) {
-      declaration = references.variableReassignments[declaration];
+      // TODO: Remove unnecessary cast
+      declaration =
+          references.variableReassignments[declaration] ?? declaration;
     }
     _renameReference(nameSpan(node), declaration);
     var namespace = _namespaceForDeclaration(declaration);
@@ -1144,6 +1170,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitVariableDeclaration(VariableDeclaration node) {
     var declaration = MemberDeclaration(node);
     if (references.defaultVariableDeclarations.containsKey(declaration)) {
+      // TODO: Remove unnecessary cast
       _configuredVariables
           .add(references.defaultVariableDeclarations[declaration]);
     }
@@ -1165,8 +1192,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   }
 
   /// If [declaration] was renamed, patches [span] to use the same name.
-  void _renameReference(FileSpan span, MemberDeclaration declaration) {
-    if (declaration == null) return;
+  void _renameReference(
+      FileSpan /*!*/ span, MemberDeclaration /*!*/ declaration) {
     if (renamedMembers.containsKey(declaration)) {
       var newName = renamedMembers[declaration];
       if (newName.startsWith('-') &&
@@ -1203,7 +1230,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Returns the namespace that built-in module [module] is loaded under.
   ///
   /// This adds an additional `@use` rule if [module] has not been loaded yet.
-  String _findOrAddBuiltInNamespace(String module) {
+  String _findOrAddBuiltInNamespace(String /*!*/ module) {
     var url = Uri.parse("sass:$module");
     _namespaces.putIfAbsent(
         url, () => _resolveBuiltInNamespace(module, _namespaces));
@@ -1218,17 +1245,15 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Finds the namespace for the stylesheet containing [declaration], adding a
   /// new `@use` rule if necessary.
-  String _namespaceForDeclaration(MemberDeclaration declaration) {
-    if (declaration == null) return null;
-
-    var url = declaration.sourceUrl;
+  String _namespaceForDeclaration(MemberDeclaration /*!*/ declaration) {
+    var url = declaration.sourceUrl /*!*/;
     if (url == currentUrl) return null;
 
     // If we can load [declaration] from a library entrypoint URL, do so. Choose
     // the shortest one if there are multiple options.
     var libraryUrls = references.libraries[declaration];
-    if (libraryUrls != null) {
-      url = minBy(libraryUrls, (url) => url.pathSegments.length);
+    if (libraryUrls != null && libraryUrls.isNotEmpty) {
+      url = minBy(libraryUrls, (url) => url.pathSegments.length) /*!*/;
     }
     if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
@@ -1277,7 +1302,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (p.url.isWithin(loadPath, url.path))
           p.url.relative(url.path, from: loadPath)
     ];
-    var relativePath = minBy(potentialUrls, (url) => url.length);
+    var relativePath = minBy(potentialUrls, (String url) => url.length);
     var isRelative = relativePath == potentialUrls.first;
 
     return Tuple2(

@@ -38,7 +38,7 @@ More info: https://sass-lang.com/d/slash-div""";
         help: "Only migrate / expressions that are unambiguously division.",
         negatable: false);
 
-  bool get isPessimistic => argResults['pessimistic'] as bool;
+  bool get isPessimistic => argResults['pessimistic'] as bool /*!*/;
 
   @override
   Map<Uri, String> migrateFile(

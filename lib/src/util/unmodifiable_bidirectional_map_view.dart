@@ -11,7 +11,7 @@ import 'bidirectional_map.dart';
 /// A unmodifiable view of [BidirectionalMap].
 class UnmodifiableBidirectionalMapView<K, V> extends UnmodifiableMapView<K, V>
     implements BidirectionalMap<K, V> {
-  final BidirectionalMap _map;
+  final BidirectionalMap<K, V> _map;
 
   UnmodifiableBidirectionalMapView(BidirectionalMap<K, V> map)
       : _map = map,

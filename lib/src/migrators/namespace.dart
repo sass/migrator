@@ -55,7 +55,7 @@ class NamespaceMigrator extends Migrator {
 
 class _NamespaceMigrationVisitor extends MigrationVisitor {
   final Renamer<UseRule> renamer;
-  final bool forceRename;
+  final bool/*!*/ forceRename;
 
   /// A set of spans for each *original* namespace in the current file.
   ///
@@ -63,7 +63,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   Map<String, Set<FileSpan>> _spansByNamespace;
 
   /// The set of namespaces used in the current file *after* renaming.
-  Set<String> _usedNamespaces;
+  Set<String/*!*/> _usedNamespaces;
 
   _NamespaceMigrationVisitor(this.renamer, this.forceRename,
       ImportCache importCache, bool migrateDependencies)
@@ -83,7 +83,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   @override
   void beforePatch(Stylesheet node) {
     // Pass each `@use` rule through the renamer.
-    var newNamespaces = <String, Set<UseRule>>{};
+    var newNamespaces = <String/*!*/, Set<UseRule>>{};
     for (var rule in node.children.whereType<UseRule>()) {
       if (rule.namespace == null) continue;
       newNamespaces

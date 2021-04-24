@@ -37,7 +37,7 @@ import 'utils.dart';
 ///
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
-abstract class Migrator extends Command<Map<Uri, String>> {
+abstract class Migrator extends Command<Map<Uri /*!*/, String /*!*/ >> {
   String get invocation => super
       .invocation
       .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
@@ -46,7 +46,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       "See also https://sass-lang.com/documentation/cli/migrator#$name";
 
   /// If true, dependencies will be migrated in addition to the entrypoints.
-  bool get migrateDependencies => globalResults['migrate-deps'] as bool;
+  bool /*!*/ get migrateDependencies => globalResults['migrate-deps'] as bool;
 
   /// Map of missing dependency URLs to the spans that import/use them.
   ///
@@ -62,7 +62,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// Files that did not require any changes, even if touched by the migrator,
   /// should not be included map of results.
   @protected
-  Map<Uri, String> migrateFile(
+  Map<Uri /*!*/, String /*!*/ > migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer);
 
   /// Runs this migrator.
@@ -73,7 +73,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   ///
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
-  Map<Uri, String> run() {
+  Map<Uri /*!*/, String /*!*/ > run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
     var importCache = ImportCache(
@@ -93,15 +93,14 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       }
 
       var migrated = migrateFile(importCache, tuple.item2, tuple.item1);
-      for (var file in migrated.keys) {
-        if (allMigrated.containsKey(file) &&
-            migrated[file] != allMigrated[file]) {
+      migrated.forEach((file, contents) {
+        if (allMigrated.containsKey(file) && contents != allMigrated[file]) {
           throw MigrationException(
               "The migrator has found multiple possible migrations for $file, "
               "depending on the context in which it's loaded.");
         }
-        allMigrated[file] = migrated[file];
-      }
+        allMigrated[file] = contents;
+      });
     }
 
     if (missingDependencies.isNotEmpty) _warnForMissingDependencies();
@@ -125,11 +124,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       var count = missingDependencies.length;
       emitWarning(
           "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.");
-      for (var uri in missingDependencies.keys) {
-        var context = missingDependencies[uri];
-        printStderr('  ${p.prettyUri(uri)} '
+      missingDependencies.forEach((url, context) {
+        printStderr('  ${p.prettyUri(url)} '
             '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
-      }
+      });
     }
   }
 }

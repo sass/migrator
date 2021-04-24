@@ -15,7 +15,7 @@ import 'package:path/path.dart' as p;
 /// A [ReferenceSource] is used to track where a referenced member came from.
 abstract class ReferenceSource {
   /// The canonical URL that contains the declaration being referenced.
-  Uri get url;
+  Uri/*!*/ get url;
 
   /// Returns the ideal namespace to use for this source, or null if the source
   /// doesn't have a namespace.

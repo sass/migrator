@@ -9,10 +9,10 @@ import 'package:source_span/source_span.dart';
 
 class Patch implements Comparable<Patch> {
   /// Selection to be replaced
-  final FileSpan selection;
+  final FileSpan/*!*/ selection;
 
   /// Text to replace the selection with.
-  final String replacement;
+  final String/*!*/ replacement;
 
   /// Constructs a patch that replaces [selection] with [replacement].
   const Patch(this.selection, this.replacement);

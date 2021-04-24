@@ -33,7 +33,7 @@ import 'patch.dart';
 /// `@import` or `@use` rule.
 abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// A mapping from URLs to migrated contents for stylesheets already migrated.
-  final _migrated = <Uri, String>{};
+  final _migrated = <Uri /*!*/, String>{};
 
   /// True if dependencies should be migrated as well.
   @protected
@@ -51,12 +51,12 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// The patches to be applied to the stylesheet being migrated.
   @protected
   List<Patch> get patches => UnmodifiableListView(_patches);
-  List<Patch> _patches;
+  /*late*/ List<Patch> /*!*/ _patches;
 
   /// URL of the stylesheet currently being migrated.
   @protected
   Uri get currentUrl => _currentUrl;
-  Uri _currentUrl;
+  /*late*/ Uri /*!*/ _currentUrl;
 
   /// The importer that's being used to resolve relative imports.
   ///
@@ -64,7 +64,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// stylesheet.
   @protected
   Importer get importer => _importer;
-  Importer _importer;
+  /*late*/ Importer /*!*/ _importer;
 
   MigrationVisitor(this.importCache, this.migrateDependencies);
 

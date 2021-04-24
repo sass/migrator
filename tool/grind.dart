@@ -16,8 +16,8 @@ main(List<String> args) {
   pkg.homebrewFormula.value = "migrator.rb";
   pkg.jsRequires.value = {"fs": "fs", "os": "os", "path": "path"};
   pkg.standaloneName.value = "sass-migrator";
-  pkg.githubUser.value = Platform.environment["GH_USER"];
-  pkg.githubPassword.value = Platform.environment["GH_TOKEN"];
+  pkg.githubUser.fn = () => Platform.environment["GH_USER"];
+  pkg.githubPassword.fn = () => Platform.environment["GH_TOKEN"];
 
   pkg.addAllTasks();
   grind(args);
@@ -42,8 +42,8 @@ sanityCheckBeforeRelease() {
 
 /// Returns the environment variable named [name], or throws an exception if it
 /// can't be found.
-String environment(String name) {
-  var value = Platform.environment[name];
+String /*!*/ environment(String name) {
+  String /*?*/ value = Platform.environment[name];
   if (value == null) fail("Required environment variable $name not found.");
   return value;
 }

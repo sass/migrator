@@ -88,7 +88,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     } on SourceSpanException catch (e) {
       printStderr(e.toString(
           color: argResults.wasParsed('color')
-              ? argResults['color'] as bool
+              ? argResults['color'] as bool /*!*/
               : supportsAnsiEscapes));
       printStderr('Migration failed!');
       exitCode = 1;
@@ -109,24 +109,24 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     if (argResults['dry-run']) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
 
-      for (var url in migrated.keys) {
+      migrated.forEach((url, contents) {
         if (argResults['verbose']) {
           // This isn't *strictly* HRX format, since it can produce absolute
           // URLs rather than those that are relative to the HRX root, but we
           // just need it to be readable, not to interoperate with other tools.
           print('<===> ${p.prettyUri(url)}');
-          print(migrated[url]);
+          print(contents);
         } else {
           print(p.prettyUri(url));
         }
-      }
+      });
     } else {
-      for (var url in migrated.keys) {
+      migrated.forEach((url, contents) {
         assert(url.scheme == null || url.scheme == "file",
             "$url is not a file path.");
         if (argResults['verbose']) print("Migrating ${p.prettyUri(url)}");
-        File(url.toFilePath()).writeAsStringSync(migrated[url]);
-      }
+        File(url.toFilePath()).writeAsStringSync(contents);
+      });
     }
   }
 }
