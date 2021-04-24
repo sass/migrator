@@ -38,7 +38,7 @@ class MemberDeclaration<T extends SassNode> {
   ///
   /// * For a member loaded from an import-only module, this is the URL of the
   ///   first non-import-only module in its chain of forwards.
-  final Uri/*!*/ sourceUrl;
+  final Uri sourceUrl;
 
   /// Whether this member declaration was loaded through a `@forward` rule,
   /// including via an import-only file.
@@ -58,7 +58,7 @@ class MemberDeclaration<T extends SassNode> {
           throw ArgumentError(
               "MemberDefinition must contain a VariableDeclaration, Argument, "
               "MixinRule, or FunctionRule");
-        }(), member.span.sourceUrl);
+        }(), member.span.sourceUrl!);
 
   /// Creates a MemberDefinition for a member that was forwarded through at
   /// least one non-import-only module.
@@ -72,12 +72,12 @@ class MemberDeclaration<T extends SassNode> {
   /// [ImportOnlyMemberDeclaration].
   factory MemberDeclaration.forward(
           MemberDeclaration<T> forwarded, ForwardRule forward) =>
-      isImportOnlyFile(forward.span.sourceUrl)
+      isImportOnlyFile(forward.span.sourceUrl!)
           ? ImportOnlyMemberDeclaration._(forwarded, forward)
           : MemberDeclaration._(
               forwarded.member,
               '${forward.prefix ?? ""}${forwarded.name}',
-              forward.span.sourceUrl);
+              forward.span.sourceUrl!);
 
   MemberDeclaration._(this.member, this.name, this.sourceUrl);
 
@@ -111,7 +111,7 @@ class ImportOnlyMemberDeclaration<T extends SassNode>
 
   /// The canonical URL of the outermost import-only module that forwarded this
   /// member.
-  final Uri/*!*/ importOnlyUrl;
+  final Uri importOnlyUrl;
 
   bool get isForwarded => true;
 
@@ -123,10 +123,10 @@ class ImportOnlyMemberDeclaration<T extends SassNode>
             (forwarded is ImportOnlyMemberDeclaration<T>
                 ? forwarded.importOnlyPrefix
                 : ""),
-        importOnlyUrl = forward.span.sourceUrl,
+        importOnlyUrl = forward.span.sourceUrl!,
         super._(forwarded.member, '${forward.prefix ?? ""}${forwarded.name}',
             forwarded.sourceUrl) {
-    assert(isImportOnlyFile(forward.span.sourceUrl));
+    assert(isImportOnlyFile(forward.span.sourceUrl!));
   }
 
   String toString() =>

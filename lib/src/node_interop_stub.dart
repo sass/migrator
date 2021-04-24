@@ -10,7 +10,7 @@
 /// [`node_interop/node`]: https://pub.dartlang.org/documentation/node_interop/latest/node_interop.node/node_interop.node-library.html
 
 class Process {
-  List get argv => null;
+  List? get argv => null;
 }
 
 final process = Process();

@@ -17,7 +17,7 @@ import 'package:sass/src/ast/node.dart';
 import 'io.dart';
 import 'patch.dart';
 
-T assertNotNull<T>(T /*?*/ object) =>
+T assertNotNull<T>(T? object) =>
     object ?? (throw AssertionError('Unexpected null value.'));
 
 extension ExtendSpan on FileSpan {
@@ -80,7 +80,7 @@ bool valuesAreUnique(Map<Object, Object> map) =>
 ///
 /// By default, this deletes the entire span. If [start] and/or [end] are
 /// provided, this deletes only the portion of the span within that range.
-Patch patchDelete(FileSpan span, {int start = 0, int end}) =>
+Patch patchDelete(FileSpan span, {int start = 0, int? end}) =>
     Patch(span.subspan(start, end), "");
 
 /// Returns the next location after [import] that it would be safe to insert
@@ -138,11 +138,11 @@ bool isWhitespace(int character) =>
 /// `$` at the start of variable names.
 FileSpan nameSpan(SassNode node) {
   if (node is VariableDeclaration) {
-    var start = node.namespace == null ? 1 : node.namespace.length + 2;
+    var start = node.namespace == null ? 1 : node.namespace!.length + 2;
     return node.span.subspan(start, start + node.name.length);
   } else if (node is VariableExpression) {
     return node.span
-        .subspan(node.namespace == null ? 1 : node.namespace.length + 2);
+        .subspan(node.namespace == null ? 1 : node.namespace!.length + 2);
   } else if (node is FunctionRule) {
     var startName = node.span.text
         .replaceAll('_', '-')
@@ -167,7 +167,7 @@ FileSpan nameSpan(SassNode node) {
 }
 
 /// Emits a warning with [message] and optionally [context];
-void emitWarning(String message, [FileSpan context]) {
+void emitWarning(String message, [FileSpan? context]) {
   if (context == null) {
     printStderr("WARNING: $message");
   } else {
@@ -177,7 +177,7 @@ void emitWarning(String message, [FileSpan context]) {
 
 /// Returns the only argument in [invocation], or null if [invocation] does not
 /// contain exactly one argument.
-Expression getOnlyArgument(ArgumentInvocation invocation) {
+Expression? getOnlyArgument(ArgumentInvocation invocation) {
   if (invocation.positional.length == 0 && invocation.named.length == 1) {
     return invocation.named.values.first;
   } else if (invocation.positional.length == 1 && invocation.named.isEmpty) {
@@ -191,15 +191,15 @@ Expression getOnlyArgument(ArgumentInvocation invocation) {
 /// determined, this returns the span containing it.
 ///
 /// Otherwise, this returns null.
-FileSpan getStaticNameForGetFunctionCall(FunctionExpression node) {
+FileSpan? getStaticNameForGetFunctionCall(FunctionExpression node) {
   if (node.name.asPlain != 'get-function') return null;
   var nameArgument =
       node.arguments.named['name'] ?? node.arguments.positional.first;
   if (nameArgument is! StringExpression ||
-      (nameArgument as StringExpression).text.asPlain == null) {
+      nameArgument.text.asPlain == null) {
     return null;
   }
-  return (nameArgument as StringExpression).hasQuotes
+  return nameArgument.hasQuotes
       ? nameArgument.span.subspan(1, nameArgument.span.length - 1)
       : nameArgument.span;
 }
@@ -208,17 +208,17 @@ FileSpan getStaticNameForGetFunctionCall(FunctionExpression node) {
 /// determined, this returns the span containing it.
 ///
 /// Otherwise, this returns null.
-FileSpan getStaticModuleForGetFunctionCall(FunctionExpression node) {
+FileSpan? getStaticModuleForGetFunctionCall(FunctionExpression node) {
   if (node.name.asPlain != 'get-function') return null;
   var moduleArg = node.arguments.named['module'];
   if (moduleArg == null && node.arguments.positional.length > 2) {
     moduleArg = node.arguments.positional[2];
   }
   if (moduleArg is! StringExpression ||
-      (moduleArg as StringExpression).text.asPlain == null) {
+      moduleArg.text.asPlain == null) {
     return null;
   }
-  return (moduleArg as StringExpression).hasQuotes
+  return moduleArg.hasQuotes
       ? moduleArg.span.subspan(1, moduleArg.span.length - 2)
       : moduleArg.span;
 }

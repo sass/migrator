@@ -23,7 +23,7 @@ class ForwardType {
 
   const ForwardType._(this.id);
 
-  factory ForwardType(String/*!*/ option) {
+  factory ForwardType(String option) {
     switch (option) {
       case 'all':
         return ForwardType.all;

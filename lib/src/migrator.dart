@@ -37,7 +37,7 @@ import 'utils.dart';
 ///
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
-abstract class Migrator extends Command<Map<Uri /*!*/, String /*!*/ >> {
+abstract class Migrator extends Command<Map<Uri, String >> {
   String get invocation => super
       .invocation
       .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
@@ -46,7 +46,7 @@ abstract class Migrator extends Command<Map<Uri /*!*/, String /*!*/ >> {
       "See also https://sass-lang.com/documentation/cli/migrator#$name";
 
   /// If true, dependencies will be migrated in addition to the entrypoints.
-  bool /*!*/ get migrateDependencies => globalResults['migrate-deps'] as bool;
+  bool get migrateDependencies => globalResults!['migrate-deps'] as bool;
 
   /// Map of missing dependency URLs to the spans that import/use them.
   ///
@@ -62,7 +62,7 @@ abstract class Migrator extends Command<Map<Uri /*!*/, String /*!*/ >> {
   /// Files that did not require any changes, even if touched by the migrator,
   /// should not be included map of results.
   @protected
-  Map<Uri /*!*/, String /*!*/ > migrateFile(
+  Map<Uri, String > migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer);
 
   /// Runs this migrator.
@@ -73,15 +73,15 @@ abstract class Migrator extends Command<Map<Uri /*!*/, String /*!*/ >> {
   ///
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
-  Map<Uri /*!*/, String /*!*/ > run() {
+  Map<Uri, String > run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
     var importCache = ImportCache(
         importers: [NodeModulesImporter()],
-        loadPaths: globalResults['load-path']);
+        loadPaths: globalResults!['load-path']);
 
     var entrypoints = [
-      for (var argument in argResults.rest)
+      for (var argument in argResults!.rest)
         for (var entry in Glob(argument).listSync())
           if (entry is File) entry.path
     ];
@@ -115,7 +115,7 @@ abstract class Migrator extends Command<Map<Uri /*!*/, String /*!*/ >> {
   /// In verbose mode, this instead prints a full warning with the source span
   /// for each missing dependency.
   void _warnForMissingDependencies() {
-    if (globalResults['verbose'] as bool) {
+    if (globalResults!['verbose'] as bool) {
       for (var uri in missingDependencies.keys) {
         emitWarning("Could not find Sass file at '${p.prettyUri(uri)}'.",
             missingDependencies[uri]);

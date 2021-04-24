@@ -20,6 +20,7 @@ import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'exception.dart';
 import 'patch.dart';
+import 'utils.dart';
 
 /// A visitor that migrates a stylesheet.
 ///
@@ -33,7 +34,7 @@ import 'patch.dart';
 /// `@import` or `@use` rule.
 abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// A mapping from URLs to migrated contents for stylesheets already migrated.
-  final _migrated = <Uri /*!*/, String>{};
+  final _migrated = <Uri, String>{};
 
   /// True if dependencies should be migrated as well.
   @protected
@@ -50,13 +51,13 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   /// The patches to be applied to the stylesheet being migrated.
   @protected
-  List<Patch> get patches => UnmodifiableListView(_patches);
-  /*late*/ List<Patch> /*!*/ _patches;
+  List<Patch> get patches => UnmodifiableListView(assertNotNull(_patches));
+  List<Patch>? _patches;
 
   /// URL of the stylesheet currently being migrated.
   @protected
-  Uri get currentUrl => _currentUrl;
-  /*late*/ Uri /*!*/ _currentUrl;
+  Uri get currentUrl => assertNotNull(_currentUrl);
+  Uri? _currentUrl;
 
   /// The importer that's being used to resolve relative imports.
   ///
@@ -64,7 +65,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// stylesheet.
   @protected
   Importer get importer => _importer;
-  /*late*/ Importer /*!*/ _importer;
+  late Importer _importer;
 
   MigrationVisitor(this.importCache, this.migrateDependencies);
 
@@ -87,7 +88,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     var oldPatches = _patches;
     var oldUrl = _currentUrl;
     _patches = [];
-    _currentUrl = node.span.sourceUrl;
+    _currentUrl = node.span.sourceUrl!;
     super.visitStylesheet(node);
     beforePatch(node);
     var results = patches.isNotEmpty
@@ -102,7 +103,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
             "it's loaded.");
       }
 
-      _migrated[_currentUrl] = results;
+      _migrated[currentUrl] = results;
     }
 
     _patches = oldPatches;
@@ -139,7 +140,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
       _importer = oldImporter;
     } else {
       _missingDependencies.putIfAbsent(
-          context.sourceUrl.resolveUri(dependency), () => context);
+          context.sourceUrl!.resolveUri(dependency), () => context);
     }
   }
 
@@ -151,9 +152,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   @protected
   void addPatch(Patch patch, {bool beforeExisting = false}) {
     if (beforeExisting) {
-      _patches.insert(0, patch);
+      _patches!.insert(0, patch);
     } else {
-      _patches.add(patch);
+      _patches!.add(patch);
     }
   }
 

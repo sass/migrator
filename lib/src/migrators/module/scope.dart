@@ -15,7 +15,7 @@ import 'member_declaration.dart';
 /// the stylesheet.
 class Scope {
   /// The parent of this scope, or null if this scope is global.
-  final Scope parent;
+  final Scope? parent;
 
   /// Variables defined in this scope.
   ///
@@ -39,21 +39,21 @@ class Scope {
   bool get isGlobal => parent == null;
 
   /// Returns true if this scope is [ancestor] or one of its descendents.
-  bool isDescendentOf(Scope/*!*/ ancestor) =>
+  bool isDescendentOf(Scope ancestor) =>
       this == ancestor || (parent?.isDescendentOf(ancestor) ?? false);
 
   /// Returns the declaration of a variable named [name] if it exists, or null
   /// if it does not.
-  MemberDeclaration findVariable(String name) =>
+  MemberDeclaration? findVariable(String name) =>
       variables[name] ?? parent?.findVariable(name);
 
   /// Returns the declaration of a mixin named [name] if it exists, or null if
   /// it does not.
-  MemberDeclaration<MixinRule> findMixin(String name) =>
+  MemberDeclaration<MixinRule>? findMixin(String name) =>
       mixins[name] ?? parent?.findMixin(name);
 
   /// Returns the declaration of a function named [name] if it exists, or null
   /// if it does not.
-  MemberDeclaration<FunctionRule> findFunction(String name) =>
+  MemberDeclaration<FunctionRule>? findFunction(String name) =>
       functions[name] ?? parent?.findFunction(name);
 }

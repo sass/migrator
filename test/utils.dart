@@ -65,7 +65,7 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
 
   if (files.expectedLog != null) {
     expect(process.stdout,
-        emitsInOrder(files.expectedLog.trimRight().split("\n")));
+        emitsInOrder(files.expectedLog!.trimRight().split("\n")));
   }
   expect(process.stdout, emitsDone);
 
@@ -89,17 +89,17 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
 }
 
 class _HrxTestFiles {
-  Map<String, String> input = {};
-  Map<String, String> output = {};
+  Map<String, String?> input = {};
+  Map<String, String?> output = {};
   List<String> arguments = [];
-  String expectedLog;
-  String expectedError;
-  String expectedWarning;
+  String? expectedLog;
+  String? expectedError;
+  String? expectedWarning;
 
   _HrxTestFiles(String hrxText) {
     // TODO(jathak): Replace this with an actual HRX parser.
-    String filename;
-    String contents;
+    String? filename;
+    var contents = "";
     for (var line in hrxText.substring(0, hrxText.length - 1).split("\n")) {
       if (line.startsWith("<==> ")) {
         if (filename != null) {
@@ -114,7 +114,7 @@ class _HrxTestFiles {
     if (filename != null) _load(filename, contents);
   }
 
-  void _load(String filename, String contents) {
+  void _load(String filename, String? contents) {
     if (filename.startsWith("input/")) {
       input[filename.substring(6)] = contents;
     } else if (filename.startsWith("output/")) {
@@ -135,8 +135,11 @@ class _HrxTestFiles {
       }
     } else if (filename == "arguments") {
       arguments = [
-        for (var match in _argParseRegex.allMatches(contents))
-          match.group(1) ?? match.group(2) ?? match.group(3)
+        for (var match in _argParseRegex.allMatches(contents!))
+          match.group(1) ??
+              match.group(2) ??
+              match.group(3) ??
+              (throw ArgumentError('Bad arguments for test'))
       ];
     }
   }
