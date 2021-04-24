@@ -18,7 +18,7 @@ dependencies:
   node_io: #"^2.0.0"
     git:
       url: https://github.com/pulyaevskiy/node-interop
-      ref: node-io-null-safety
+      ref: master
       path: node_io
   path: ^1.8.0
   sass: ^1.32.11
