@@ -14,20 +14,14 @@ dependencies:
   glob: ^2.0.1
   js: ^0.6.3
   meta: ^1.3.0
-  node_interop: "^2.0.1"
-  node_io: #"^2.0.0"
-    git:
-      url: https://github.com/pulyaevskiy/node-interop
-      ref: master
-      path: node_io
+  node_interop: ^2.0.1
+  node_io: ^2.0.0
   path: ^1.8.0
   sass: ^1.32.11
   source_span: ^1.8.1
   string_scanner: ^1.1.0
   term_glyph: ^1.2.0
   tuple: ^2.0.0
-
-publish_to: none
 
 dev_dependencies:
   archive: ^3.1.2
