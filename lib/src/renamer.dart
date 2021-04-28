@@ -155,7 +155,7 @@ class Renamer<T> {
       if (char == $semicolon || char == $lf) {
         scanner.error('statement ended unexpectedly');
       }
-      scanner.readChar();
+      char = scanner.readChar();
       if (char == $backslash) {
         var next = scanner.readChar();
         if (next == $semicolon || next == $space) {
@@ -166,7 +166,7 @@ class Renamer<T> {
           src.writeCharCode(next);
         }
       } else {
-        src.writeCharCode(char!);
+        src.writeCharCode(char);
       }
     }
     return RegExp('^$src\$');
@@ -179,7 +179,7 @@ class Renamer<T> {
     while (true) {
       var char = scanner.peekChar();
       if ({null, $space, $semicolon, $lf}.contains(char)) break;
-      scanner.readChar();
+      char = scanner.readChar();
       if (char == $backslash) {
         var next = scanner.readChar();
         if (next >= $0 && next <= $9) {
@@ -190,7 +190,7 @@ class Renamer<T> {
           buffer.writeCharCode(next);
         }
       } else {
-        buffer.writeCharCode(char!);
+        buffer.writeCharCode(char);
       }
     }
     if (buffer.isNotEmpty) components.add(_Literal(buffer.toString()));

@@ -30,10 +30,8 @@ class UnreferencableMembers {
   /// Checks whether [declaration] is marked as unreferencable within this
   /// scope or any ancestor scope and throws an appropriate exception if it is.
   void check(MemberDeclaration declaration, SassNode reference) {
-    if (_unreferencable.containsKey(declaration)) {
-      throw _unreferencable[declaration]!
-          .toException(reference, declaration.sourceUrl);
-    }
+    var type = _unreferencable[declaration];
+    if (type != null) throw type.toException(reference, declaration.sourceUrl);
     parent?.check(declaration, reference);
   }
 }

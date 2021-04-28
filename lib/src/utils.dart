@@ -17,9 +17,6 @@ import 'package:sass/src/ast/node.dart';
 import 'io.dart';
 import 'patch.dart';
 
-T assertNotNull<T>(T? object) =>
-    object ?? (throw AssertionError('Unexpected null value.'));
-
 extension ExtendSpan on FileSpan {
   /// Extends this span so it encompasses any whitespace on either side of it.
   FileSpan extendThroughWhitespace() {
@@ -54,6 +51,17 @@ extension ExtendSpan on FileSpan {
   bool matchesBefore(String text) {
     if (start.offset - text.length < 0) return false;
     return file.getText(start.offset - text.length, start.offset) == text;
+  }
+}
+
+extension NullableExtension<T> on T? {
+  /// If [this] is `null`, returns `null`. Otherwise, runs [fn] and returns its
+  /// result.
+  ///
+  /// Based on Rust's `Option.and_then`.
+  V? andThen<V>(V Function(T value) fn) {
+    var self = this; // dart-lang/language#1520
+    return self == null ? null : fn(self);
   }
 }
 
@@ -138,11 +146,12 @@ bool isWhitespace(int character) =>
 /// `$` at the start of variable names.
 FileSpan nameSpan(SassNode node) {
   if (node is VariableDeclaration) {
-    var start = node.namespace == null ? 1 : node.namespace!.length + 2;
+    var namespace = node.namespace;
+    var start = namespace == null ? 1 : namespace.length + 2;
     return node.span.subspan(start, start + node.name.length);
   } else if (node is VariableExpression) {
-    return node.span
-        .subspan(node.namespace == null ? 1 : node.namespace!.length + 2);
+    var namespace = node.namespace;
+    return node.span.subspan(namespace == null ? 1 : namespace.length + 2);
   } else if (node is FunctionRule) {
     var startName = node.span.text
         .replaceAll('_', '-')
@@ -195,8 +204,7 @@ FileSpan? getStaticNameForGetFunctionCall(FunctionExpression node) {
   if (node.name.asPlain != 'get-function') return null;
   var nameArgument =
       node.arguments.named['name'] ?? node.arguments.positional.first;
-  if (nameArgument is! StringExpression ||
-      nameArgument.text.asPlain == null) {
+  if (nameArgument is! StringExpression || nameArgument.text.asPlain == null) {
     return null;
   }
   return nameArgument.hasQuotes
@@ -214,8 +222,7 @@ FileSpan? getStaticModuleForGetFunctionCall(FunctionExpression node) {
   if (moduleArg == null && node.arguments.positional.length > 2) {
     moduleArg = node.arguments.positional[2];
   }
-  if (moduleArg is! StringExpression ||
-      moduleArg.text.asPlain == null) {
+  if (moduleArg is! StringExpression || moduleArg.text.asPlain == null) {
     return null;
   }
   return moduleArg.hasQuotes

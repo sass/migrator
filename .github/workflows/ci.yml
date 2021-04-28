@@ -84,6 +84,8 @@ jobs:
       - run: dart pub get
       - name: Analyze dart
         run: dartanalyzer --fatal-warnings --fatal-infos lib tool test
+      - name: Check formatting
+        run: dartfmt -n --set-exit-if-changed .
 
   sanity_checks:
     name: Sanity checks

@@ -170,6 +170,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       _patchOperatorToComma(last);
     }
     _withContext(() {
+      // Non-null assertion is required because of dart-lang/language#1536.
       channels!.contents[0].accept(this);
       channels.contents[1].accept(this);
       last.left.accept(this);

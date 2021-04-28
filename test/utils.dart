@@ -63,9 +63,9 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
       if (path.startsWith("entrypoint")) path
   ]);
 
-  if (files.expectedLog != null) {
-    expect(process.stdout,
-        emitsInOrder(files.expectedLog!.trimRight().split("\n")));
+  var expectedLog = files.expectedLog;
+  if (expectedLog != null) {
+    expect(process.stdout, emitsInOrder(expectedLog.trimRight().split("\n")));
   }
   expect(process.stdout, emitsDone);
 

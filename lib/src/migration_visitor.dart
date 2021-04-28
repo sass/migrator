@@ -20,7 +20,6 @@ import 'package:sass/src/visitor/recursive_ast.dart';
 
 import 'exception.dart';
 import 'patch.dart';
-import 'utils.dart';
 
 /// A visitor that migrates a stylesheet.
 ///
@@ -51,12 +50,13 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
 
   /// The patches to be applied to the stylesheet being migrated.
   @protected
-  List<Patch> get patches => UnmodifiableListView(assertNotNull(_patches));
-  List<Patch>? _patches;
+  List<Patch> get patches => UnmodifiableListView(_patches);
+  List<Patch> get _patches => assertInStylesheet(__patches, 'patches');
+  List<Patch>? __patches;
 
   /// URL of the stylesheet currently being migrated.
   @protected
-  Uri get currentUrl => assertNotNull(_currentUrl);
+  Uri get currentUrl => assertInStylesheet(_currentUrl, 'currentUrl');
   Uri? _currentUrl;
 
   /// The importer that's being used to resolve relative imports.
@@ -85,9 +85,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   /// file's state before calling the super method and restore it afterwards.
   @override
   void visitStylesheet(Stylesheet node) {
-    var oldPatches = _patches;
+    var oldPatches = __patches;
     var oldUrl = _currentUrl;
-    _patches = [];
+    __patches = [];
     _currentUrl = node.span.sourceUrl!;
     super.visitStylesheet(node);
     beforePatch(node);
@@ -106,7 +106,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
       _migrated[currentUrl] = results;
     }
 
-    _patches = oldPatches;
+    __patches = oldPatches;
     _currentUrl = oldUrl;
   }
 
@@ -152,9 +152,9 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   @protected
   void addPatch(Patch patch, {bool beforeExisting = false}) {
     if (beforeExisting) {
-      _patches!.insert(0, patch);
+      _patches.insert(0, patch);
     } else {
-      _patches!.add(patch);
+      _patches.add(patch);
     }
   }
 
@@ -180,5 +180,16 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       visitDependency(node.url, node.span);
     }
+  }
+
+  /// Asserts that [value] is not `null` and returns it.
+  ///
+  /// This is used for fields that are set whenever the migrator is visiting
+  /// a stylesheet, which means they should be non-null almost all the time
+  /// during a call to [run].
+  @protected
+  T assertInStylesheet<T>(T? value, String name) {
+    if (value != null) return value;
+    throw StateError("Can't access $name when not visiting a stylesheet.");
   }
 }

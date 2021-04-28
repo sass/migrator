@@ -54,6 +54,7 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
 
   /// Finds the keys associated with a given value.
   Iterable<K> keysForValue(V value) sync* {
-    if (_keysForValue.containsKey(value)) yield* _keysForValue[value]!;
+    var keys = _keysForValue[value];
+    if (keys != null) yield* keys;
   }
 }
