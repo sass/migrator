@@ -784,9 +784,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var tuple = importCache.canonicalize(Uri.parse(ruleUrl),
           baseImporter: importer, baseUrl: currentUrl, forImport: true);
       var canonicalImport = tuple?.item2;
-      if (references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
+      if (canonicalImport != null &&
+          references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
         ruleUrl = null;
-        var url = references.orphanImportOnlyFiles[canonicalImport!]?.url;
+        var url = references.orphanImportOnlyFiles[canonicalImport]?.url;
         if (url != null && tuple != null) {
           var canonicalRedirect = importCache
               .canonicalize(url,
@@ -1256,7 +1257,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     // the shortest one if there are multiple options.
     var libraryUrls = references.libraries[declaration];
     if (libraryUrls != null && libraryUrls.isNotEmpty) {
-      Uri? minUrl = minBy(libraryUrls, (url) => url.pathSegments.length);
+      var minUrl =
+          minBy<Uri, int>(libraryUrls, (url) => url.pathSegments.length);
       url = minUrl ?? url;
     }
     if (!_usedUrls.contains(url)) {
@@ -1308,7 +1310,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (p.url.isWithin(loadPath, url.path))
           p.url.relative(url.path, from: loadPath)
     ];
-    String relativePath = minBy(potentialUrls, (url) => url.length)!;
+    var relativePath = minBy<String, int>(potentialUrls, (url) => url.length)!;
     var isRelative = relativePath == potentialUrls.first;
 
     return Tuple2(
