@@ -67,7 +67,14 @@ class Renamer<T> {
   /// a [String] or a [Uri].
   static Renamer<Map<String, String>> map(String code, List<String> keys,
       {dynamic sourceUrl}) {
-    return Renamer(code, {for (var key in keys) key: (input) => input[key]},
+    return Renamer(
+        code,
+        {
+          for (var key in keys)
+            key: ((input) =>
+                input[key] ??
+                (throw ArgumentError.value(input, 'Missing key "$key".')))
+        },
         sourceUrl: sourceUrl);
   }
 
@@ -101,7 +108,7 @@ class Renamer<T> {
   static _Statement<T> _readStatement<T>(
       StringScanner scanner, Map<String, String Function(T input)> keys) {
     var start = scanner.position;
-    FormatException lastException;
+    FormatException? lastException;
     // Tries each key in succession until one is successfully returned.
     for (var entry in keys.entries) {
       try {
@@ -130,7 +137,7 @@ class Renamer<T> {
   ///
   /// Otherwise, after consuming the key clause (if any), attempts to read
   /// the matcher and output clauses, throwing if it's unable to.
-  static _Statement<T> _tryKey<T>(
+  static _Statement<T>? _tryKey<T>(
       StringScanner scanner, String key, String Function(T input) keyFunction) {
     if (key.isNotEmpty && !scanner.scan('$key ')) return null;
     var matcher = _readMatcher(scanner);
@@ -148,7 +155,7 @@ class Renamer<T> {
       if (char == $semicolon || char == $lf) {
         scanner.error('statement ended unexpectedly');
       }
-      scanner.readChar();
+      char = scanner.readChar();
       if (char == $backslash) {
         var next = scanner.readChar();
         if (next == $semicolon || next == $space) {
@@ -172,7 +179,7 @@ class Renamer<T> {
     while (true) {
       var char = scanner.peekChar();
       if ({null, $space, $semicolon, $lf}.contains(char)) break;
-      scanner.readChar();
+      char = scanner.readChar();
       if (char == $backslash) {
         var next = scanner.readChar();
         if (next >= $0 && next <= $9) {
@@ -194,7 +201,7 @@ class Renamer<T> {
   }
 
   /// Runs this renamer based on [input].
-  String rename(T input) {
+  String? rename(T input) {
     for (var statement in _statements) {
       var result = statement.rename(input);
       if (result != null) return result;
@@ -223,7 +230,7 @@ class _Statement<T> {
   _Statement(this.key, this.matcher, this.output);
 
   /// Return the output if this statement matches [input] or null otherwise.
-  String rename(T input) {
+  String? rename(T input) {
     var match = matcher.firstMatch(key(input));
     if (match == null) return null;
     return output.map((item) => item.build(match)).join();
@@ -234,7 +241,7 @@ class _Statement<T> {
 abstract class _OutputComponent {
   /// When constructing the output, this will be called with the match that
   /// the matcher clause found.
-  String build(RegExpMatch match);
+  String? build(RegExpMatch match);
 }
 
 /// Literal text that's part of a statement's output.
@@ -252,5 +259,5 @@ class _Backreference extends _OutputComponent {
   _Backreference(this.number);
 
   /// Returns the captured group numbered [number] in [match].
-  String build(RegExpMatch match) => match.group(number);
+  String? build(RegExpMatch match) => match.group(number);
 }

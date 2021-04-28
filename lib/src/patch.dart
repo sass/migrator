@@ -31,7 +31,7 @@ class Patch implements Comparable<Patch> {
 
     var buffer = StringBuffer();
     int offset = 0;
-    Patch lastPatch;
+    Patch? lastPatch;
     for (var patch in sortedPatches) {
       // The module migrator generates duplicate patches when renaming two nodes
       // that share the same span (itself a workaround within the parser).

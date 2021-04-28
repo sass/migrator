@@ -12,6 +12,7 @@ import 'package:sass_migrator/src/runner.dart';
 // We can't declare args as a List<String> or Iterable<String> beacause of
 // dart-lang/sdk#36627.
 main(Iterable args) {
-  if (process.argv != null) args = process.argv.skip(2);
+  var argv = process.argv;
+  if (argv != null) args = argv.skip(2);
   MigratorRunner().execute(args.cast<String>());
 }

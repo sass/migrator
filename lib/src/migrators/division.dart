@@ -38,7 +38,7 @@ More info: https://sass-lang.com/d/slash-div""";
         help: "Only migrate / expressions that are unambiguously division.",
         negatable: false);
 
-  bool get isPessimistic => argResults['pessimistic'] as bool;
+  bool get isPessimistic => argResults!['pessimistic'] as bool;
 
   @override
   Map<Uri, String> migrateFile(
@@ -143,16 +143,16 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       return false;
     }
 
-    ListExpression channels;
+    ListExpression? channels;
     if (node.arguments.positional.length == 1 &&
         node.arguments.named.isEmpty &&
         node.arguments.positional.first is ListExpression) {
-      channels = node.arguments.positional.first;
+      channels = node.arguments.positional.first as ListExpression?;
     } else if (node.arguments.positional.isEmpty &&
         node.arguments.named.containsKey(r'$channels') &&
         node.arguments.named.length == 1 &&
         node.arguments.named[r'$channels'] is ListExpression) {
-      channels = node.arguments.named[r'$channels'];
+      channels = node.arguments.named[r'$channels'] as ListExpression?;
     }
     if (channels == null ||
         channels.hasBrackets ||
@@ -170,7 +170,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       _patchOperatorToComma(last);
     }
     _withContext(() {
-      channels.contents[0].accept(this);
+      // Non-null assertion is required because of dart-lang/language#1536.
+      channels!.contents[0].accept(this);
       channels.contents[1].accept(this);
       last.left.accept(this);
     }, isDivisionAllowed: true);
@@ -326,7 +327,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// ParenthesizedExpression.
   void _patchParensIfAny(SassNode node) {
     if (node is! ParenthesizedExpression) return;
-    var expression = (node as ParenthesizedExpression).expression;
+    var expression = node.expression;
     if (expression is BinaryOperationExpression &&
         expression.operator == BinaryOperator.dividedBy) {
       return;
@@ -337,7 +338,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Runs [operation] with the given context.
   void _withContext(void operation(),
-      {bool isDivisionAllowed, bool expectsNumericResult}) {
+      {bool? isDivisionAllowed, bool? expectsNumericResult}) {
     var previousDivisionAllowed = _isDivisionAllowed;
     var previousNumericResult = _expectsNumericResult;
     if (isDivisionAllowed != null) _isDivisionAllowed = isDivisionAllowed;

@@ -78,7 +78,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     if (argResults.wasParsed('unicode')) {
       glyph.ascii = !(argResults['unicode'] as bool);
     }
-    Map<Uri, String> migrated;
+    Map<Uri, String>? migrated;
     try {
       migrated = await runCommand(argResults);
     } on UsageException catch (e) {
@@ -109,24 +109,24 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     if (argResults['dry-run']) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
 
-      for (var url in migrated.keys) {
+      migrated.forEach((url, contents) {
         if (argResults['verbose']) {
           // This isn't *strictly* HRX format, since it can produce absolute
           // URLs rather than those that are relative to the HRX root, but we
           // just need it to be readable, not to interoperate with other tools.
           print('<===> ${p.prettyUri(url)}');
-          print(migrated[url]);
+          print(contents);
         } else {
           print(p.prettyUri(url));
         }
-      }
+      });
     } else {
-      for (var url in migrated.keys) {
-        assert(url.scheme == null || url.scheme == "file",
+      migrated.forEach((url, contents) {
+        assert(url.scheme.isEmpty || url.scheme == "file",
             "$url is not a file path.");
         if (argResults['verbose']) print("Migrating ${p.prettyUri(url)}");
-        File(url.toFilePath()).writeAsStringSync(migrated[url]);
-      }
+        File(url.toFilePath()).writeAsStringSync(contents);
+      });
     }
   }
 }
@@ -138,7 +138,7 @@ Future<String> _loadVersion() async {
     version += " compiled with dart2js "
         "${const String.fromEnvironment('dart-version')}";
   }
-  if (version != null && version.isNotEmpty) return version;
+  if (version.isNotEmpty) return version;
 
   var libDir = p.fromUri(
       await Isolate.resolvePackageUri(Uri.parse('package:sass_migrator/')));

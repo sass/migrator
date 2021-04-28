@@ -19,7 +19,7 @@ abstract class ReferenceSource {
 
   /// Returns the ideal namespace to use for this source, or null if the source
   /// doesn't have a namespace.
-  String get preferredNamespace;
+  String? get preferredNamespace;
 }
 
 /// A source for references that should be migrated like an `@import` rule.
@@ -31,7 +31,7 @@ class ImportSource extends ReferenceSource {
 
   /// The URL of the `@import` rule that loaded this member, or null if this
   /// is for an indirect dependency forwarded in an import-only file.
-  final String originalRuleUrl;
+  final String? originalRuleUrl;
 
   /// Creates an [ImportSource] for [url] from [import].
   ///
@@ -80,7 +80,7 @@ class UseSource extends ReferenceSource {
 
   UseSource(this.url, this.use);
 
-  String get preferredNamespace => use.namespace;
+  String? get preferredNamespace => use.namespace;
 
   operator ==(other) =>
       other is UseSource && url == other.url && use == other.use;
@@ -106,7 +106,7 @@ class CurrentSource extends ReferenceSource {
   final Uri url;
   CurrentSource(this.url);
 
-  String get preferredNamespace => null;
+  String? get preferredNamespace => null;
 
   operator ==(other) => other is CurrentSource && url == other.url;
   int get hashCode => url.hashCode;
@@ -133,7 +133,7 @@ class ForwardSource extends ReferenceSource {
 
   ForwardSource(this.url, this.forward);
 
-  String get preferredNamespace => null;
+  String? get preferredNamespace => null;
 
   operator ==(other) =>
       other is ForwardSource && url == other.url && forward == other.forward;
@@ -158,11 +158,11 @@ class ImportOnlySource extends ReferenceSource {
   /// the URL of the `@import` rule that loaded that import-only file.
   ///
   /// Otherwise, this will be null.
-  final String originalRuleUrl;
+  final String? originalRuleUrl;
 
   ImportOnlySource(this.url, this.realSourceUrl, this.originalRuleUrl);
 
-  String get preferredNamespace => null;
+  String? get preferredNamespace => null;
 
   operator ==(other) =>
       other is ImportOnlySource &&

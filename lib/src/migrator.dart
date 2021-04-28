@@ -14,6 +14,7 @@ import 'package:sass/src/import_cache.dart';
 
 import 'package:args/command_runner.dart';
 import 'package:glob/glob.dart';
+import 'package:glob/list_local_fs.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:sass_migrator/src/util/node_modules_importer.dart';
@@ -45,7 +46,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       "See also https://sass-lang.com/documentation/cli/migrator#$name";
 
   /// If true, dependencies will be migrated in addition to the entrypoints.
-  bool get migrateDependencies => globalResults['migrate-deps'] as bool;
+  bool get migrateDependencies => globalResults!['migrate-deps'] as bool;
 
   /// Map of missing dependency URLs to the spans that import/use them.
   ///
@@ -75,11 +76,12 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    var importCache = ImportCache([NodeModulesImporter()],
-        loadPaths: globalResults['load-path']);
+    var importCache = ImportCache(
+        importers: [NodeModulesImporter()],
+        loadPaths: globalResults!['load-path']);
 
     var entrypoints = [
-      for (var argument in argResults.rest)
+      for (var argument in argResults!.rest)
         for (var entry in Glob(argument).listSync())
           if (entry is File) entry.path
     ];
@@ -91,15 +93,14 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       }
 
       var migrated = migrateFile(importCache, tuple.item2, tuple.item1);
-      for (var file in migrated.keys) {
-        if (allMigrated.containsKey(file) &&
-            migrated[file] != allMigrated[file]) {
+      migrated.forEach((file, contents) {
+        if (allMigrated.containsKey(file) && contents != allMigrated[file]) {
           throw MigrationException(
               "The migrator has found multiple possible migrations for $file, "
               "depending on the context in which it's loaded.");
         }
-        allMigrated[file] = migrated[file];
-      }
+        allMigrated[file] = contents;
+      });
     }
 
     if (missingDependencies.isNotEmpty) _warnForMissingDependencies();
@@ -114,7 +115,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// In verbose mode, this instead prints a full warning with the source span
   /// for each missing dependency.
   void _warnForMissingDependencies() {
-    if (globalResults['verbose'] as bool) {
+    if (globalResults!['verbose'] as bool) {
       for (var uri in missingDependencies.keys) {
         emitWarning("Could not find Sass file at '${p.prettyUri(uri)}'.",
             missingDependencies[uri]);
@@ -123,11 +124,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       var count = missingDependencies.length;
       emitWarning(
           "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.");
-      for (var uri in missingDependencies.keys) {
-        var context = missingDependencies[uri];
-        printStderr('  ${p.prettyUri(uri)} '
+      missingDependencies.forEach((url, context) {
+        printStderr('  ${p.prettyUri(url)} '
             '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
-      }
+      });
     }
   }
 }

@@ -93,7 +93,7 @@ class References {
   /// Map of import-only files that do not directly depend on their regular
   /// counterparts to the last forward appearing within it (or null, if no
   /// regular file is forwarded by the import-only file).
-  final Map<Uri, ForwardRule> orphanImportOnlyFiles;
+  final Map<Uri, ForwardRule?> orphanImportOnlyFiles;
 
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
@@ -101,11 +101,11 @@ class References {
 
   /// Returns all references to [declaration].
   Iterable<SassNode> referencesTo(MemberDeclaration declaration) {
-    if (declaration.member is FunctionRule) {
+    if (declaration is MemberDeclaration<FunctionRule>) {
       return functions
           .keysForValue(declaration)
           .followedBy(getFunctionReferences.keysForValue(declaration));
-    } else if (declaration.member is MixinRule) {
+    } else if (declaration is MemberDeclaration<MixinRule>) {
       return mixins.keysForValue(declaration);
     }
     return variables.keysForValue(declaration);
@@ -132,7 +132,7 @@ class References {
   /// Finds the original declaration of the variable referenced in [reference].
   ///
   /// The return value always wraps a [VariableDeclaration] or an [Argument].
-  MemberDeclaration originalDeclaration(VariableExpression reference) {
+  MemberDeclaration? originalDeclaration(VariableExpression reference) {
     var declaration = variables[reference];
     return variableReassignments[declaration] ?? declaration;
   }
@@ -155,7 +155,7 @@ class References {
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
       Map<SassNode, ReferenceSource> sources,
-      Map<Uri, ForwardRule> orphanImportOnlyFiles)
+      Map<Uri, ForwardRule?> orphanImportOnlyFiles)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -197,12 +197,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   final _globalDeclarations = <MemberDeclaration>{};
   final _libraries = <MemberDeclaration, Set<Uri>>{};
   final _sources = <SassNode, ReferenceSource>{};
-  final _orphanImportOnlyFiles = <Uri, ForwardRule>{};
+  final _orphanImportOnlyFiles = <Uri, ForwardRule?>{};
 
   /// The current global scope.
   ///
   /// This persists across imports, but not across module loads.
-  Scope _scope;
+  late Scope _scope;
 
   /// Mapping from canonical stylesheet URLs to the global scope of the module
   /// contained within it.
@@ -213,7 +213,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   final _moduleScopes = <Uri, Scope>{};
 
   /// Maps declarations to their source for the current stylesheet.
-  Map<MemberDeclaration, ReferenceSource> _declarationSources;
+  late Map<MemberDeclaration, ReferenceSource> _declarationSources;
 
   /// [_declarationSources] for each module.
   final _moduleSources = <Uri, Map<MemberDeclaration, ReferenceSource>>{};
@@ -231,7 +231,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Note: Unlike the similar property in _ModuleMigrationVisitor, this only
   /// includes namespaces for `@use` rules that already exist within the file.
   /// It doesn't include namespaces for to-be-migrated imports.
-  Map<String, Uri> _namespaces;
+  var _namespaces = <String, Uri>{};
 
   /// The URL of the root of the current library being visited.
   ///
@@ -239,31 +239,31 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// stylesheets loaded from a load path or from `node_modules`, this is the
   /// canonical URL of the last import that was handled with a different
   /// importer than the entrypoint's.
-  Uri _libraryUrl;
+  Uri? _libraryUrl;
 
   /// The canonical URL of the stylesheet currently being migrated.
-  Uri _currentUrl;
+  late Uri _currentUrl;
 
   /// The URL of the rule used to load the current stylesheet.
-  String _currentRuleUrl;
+  String? _currentRuleUrl;
 
   /// The importer that's currently being used to resolve relative imports.
   ///
   /// If this is `null`, relative imports aren't supported in the current
   /// stylesheet.
-  Importer _importer;
+  late Importer _importer;
 
   /// If the current stylesheet is an import-only file, this starts as true and
   /// is changed to false if it forwards its regular counterpart.
   ///
   /// This is always false for regular files.
-  bool _isOrphanImportOnly;
+  late bool _isOrphanImportOnly;
 
   /// Cache used to load stylesheets.
-  ImportCache importCache;
+  final ImportCache importCache;
 
   /// The last `@forward` rule to be visited that was not an import-only file.
-  ForwardRule _lastRegularForward;
+  ForwardRule? _lastRegularForward;
 
   _ReferenceVisitor(this.importCache);
 
@@ -272,9 +272,11 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   References build(Stylesheet stylesheet, Importer importer) {
     _importer = importer;
     _scope = Scope();
-    _moduleScopes[stylesheet.span.sourceUrl] = _scope;
+    _currentUrl = stylesheet.span.sourceUrl!;
+    _isOrphanImportOnly = isImportOnlyFile(_currentUrl);
+    _moduleScopes[_currentUrl] = _scope;
     _declarationSources = {};
-    _moduleSources[stylesheet.span.sourceUrl] = _declarationSources;
+    _moduleSources[_currentUrl] = _declarationSources;
     visitStylesheet(stylesheet);
 
     for (var variable in _scope.variables.values) {
@@ -306,7 +308,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     for (var function in functions) {
       if (_isCssCompatibilityOverload(function)) continue;
       if (function.name.asPlain == null) continue;
-      var name = function.name.asPlain.replaceAll('_', '-');
+      var name = function.name.asPlain!.replaceAll('_', '-');
       var module = builtInFunctionModules[name];
       if (module != null) _sources[function] = BuiltInSource(module);
     }
@@ -343,12 +345,12 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var oldUrl = _currentUrl;
     var oldOrphaned = _isOrphanImportOnly;
     _namespaces = {};
-    _currentUrl = node.span.sourceUrl;
+    _currentUrl = node.span.sourceUrl!;
     _isOrphanImportOnly = isImportOnlyFile(_currentUrl);
-    super.visitStylesheet(node);
+    super.visitChildren(node.children);
     if (_isOrphanImportOnly) {
       _orphanImportOnlyFiles[_currentUrl] =
-          _lastRegularForward.span.sourceUrl == _currentUrl
+          _lastRegularForward?.span.sourceUrl == _currentUrl
               ? _lastRegularForward
               : null;
     }
@@ -374,7 +376,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       var oldImporter = _importer;
       _importer = result.item1;
       var oldLibraryUrl = _libraryUrl;
-      var url = result.item2.span.sourceUrl;
+      var url = result.item2.span.sourceUrl!;
       if (_importer != oldImporter && !isImportOnlyFile(url)) {
         _libraryUrl ??= url;
       }
@@ -382,8 +384,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _currentRuleUrl = import.url;
       visitStylesheet(result.item2);
       var importSource = ImportSource(url, import);
-      for (var declaration in _declarationSources.keys.toList()) {
-        var source = _declarationSources[declaration];
+      for (var entry in _declarationSources.entries.toList()) {
+        var declaration = entry.key;
+        var source = entry.value;
         if (source.url != url) continue;
         if (source is CurrentSource || source is ForwardSource) {
           _declarationSources[declaration] = importSource;
@@ -404,22 +407,24 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
+    var namespace = node.namespace;
+    if (namespace == null) return;
     if (node.url.scheme == 'sass') {
-      _namespaces[node.namespace] = node.url;
+      _namespaces[namespace] = node.url;
       return;
     }
     var canonicalUrl = _loadUseOrForward(node.url, node);
-    _namespaces[node.namespace] = canonicalUrl;
+    _namespaces[namespace] = canonicalUrl;
 
-    var moduleSources = _moduleSources[canonicalUrl];
+    // `_moduleSources[canonicalUrl]` is set in `_loadUseOrForward`.
+    var moduleSources = _moduleSources[canonicalUrl]!;
     var useSource = UseSource(canonicalUrl, node);
-    for (var declaration in moduleSources.keys) {
-      var source = moduleSources[declaration];
+    moduleSources.forEach((declaration, source) {
       if (source.url == canonicalUrl &&
           (source is CurrentSource || source is ForwardSource)) {
         _declarationSources[declaration] = useSource;
       }
-    }
+    });
   }
 
   /// Given a URL from a `@use` or `@forward` rule, loads and visits the
@@ -434,7 +439,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     }
 
     var stylesheet = result.item2;
-    var canonicalUrl = stylesheet.span.sourceUrl;
+    var canonicalUrl = stylesheet.span.sourceUrl!;
     if (_moduleScopes.containsKey(canonicalUrl)) return canonicalUrl;
 
     var oldScope = _scope;
@@ -469,7 +474,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _isOrphanImportOnly = false;
     }
     if (!isImportOnlyFile(canonicalUrl)) _lastRegularForward = node;
-    var moduleScope = _moduleScopes[canonicalUrl];
+
+    // `_moduleSources[canonicalUrl]` is set in `_loadUseOrForward`.
+    var moduleScope = _moduleScopes[canonicalUrl]!;
     for (var declaration in moduleScope.variables.values) {
       if (declaration.member is! VariableDeclaration) {
         throw StateError(
@@ -497,7 +504,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Returns true if [name] should be shown based on [prefix], [shown], and
   /// [hidden] from a `@forward` rule.
   bool _visibleThroughForward(
-      String name, String prefix, Set<String> shown, Set<String> hidden) {
+      String name, String? prefix, Set<String>? shown, Set<String>? hidden) {
     if (prefix != null) name = '$prefix$name';
     return (shown?.contains(name) ?? true) &&
         !(hidden?.contains(name) ?? false);
@@ -524,7 +531,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
               : null);
     } else {
       _declarationSources[declaration] =
-          ForwardSource(forward.span.sourceUrl, forward);
+          ForwardSource(forward.span.sourceUrl!, forward);
     }
   }
 
@@ -533,30 +540,26 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// All of [node]'s arguments are declared as local variables in a new scope.
   @override
   void visitCallableDeclaration(CallableDeclaration node) {
+    var oldScope = _scope;
     _scope = Scope(_scope);
     for (var argument in node.arguments.arguments) {
       _scope.variables[argument.name] = MemberDeclaration(argument);
-      if (argument.defaultValue != null) visitExpression(argument.defaultValue);
+      var defaultValue = argument.defaultValue;
+      if (defaultValue != null) visitExpression(defaultValue);
     }
-    super.visitChildren(node);
+    super.visitChildren(node.children);
     _checkUnresolvedReferences(_scope);
-    _scope = _scope.parent;
+    _scope = oldScope;
   }
 
-  /// Visits the children of [node] with a local scope.
-  ///
-  /// Note: The children of a stylesheet are at the root, so we should not add
-  /// a local scope.
+  /// Visits [children] with a local scope.
   @override
-  void visitChildren(ParentStatement node) {
-    if (node is Stylesheet) {
-      super.visitChildren(node);
-      return;
-    }
+  void visitChildren(List<Statement> children) {
+    var oldScope = _scope;
     _scope = Scope(_scope);
-    super.visitChildren(node);
+    super.visitChildren(children);
     _checkUnresolvedReferences(_scope);
-    _scope = _scope.parent;
+    _scope = oldScope;
   }
 
   /// Finds any declarations in [scope] that match one of the references in
@@ -564,8 +567,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   ///
   /// This should be called on a scope immediately before it ends.
   void _checkUnresolvedReferences(Scope scope) {
-    for (var reference in _unresolvedReferences.keys.toList()) {
-      var refScope = _unresolvedReferences[reference];
+    for (var entry in _unresolvedReferences.entries.toList()) {
+      var reference = entry.key;
+      var refScope = entry.value;
       if (!refScope.isDescendentOf(scope)) continue;
       if (reference is VariableExpression) {
         _linkUnresolvedReference(
@@ -578,6 +582,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         if (name == null) continue;
         if (name == 'get-function') {
           var nameExpression = getStaticNameForGetFunctionCall(reference);
+          if (nameExpression == null) continue;
           var staticName = nameExpression.text.replaceAll('_', '-');
           _linkUnresolvedReference(
               reference, staticName, scope.functions, _getFunctionReferences,
@@ -603,7 +608,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var declaration = declarations[name];
     if (declaration == null) return;
     references[reference] = declaration;
-    if (trackSources) _sources[reference] = _declarationSources[declaration];
+    if (trackSources) _sources[reference] = _declarationSources[declaration]!;
     _unresolvedReferences.remove(reference);
   }
 
@@ -611,7 +616,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   ///
   /// If [namespace] is null or does not exist within this stylesheet, this
   /// returns the current stylesheet's scope.
-  Scope _scopeForNamespace(String namespace) =>
+  Scope _scopeForNamespace(String? namespace) =>
       _moduleScopes[_namespaces[namespace]] ?? _scope;
 
   /// Declares a variable in the current scope.
@@ -648,14 +653,19 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitVariableExpression(VariableExpression node) {
     super.visitVariableExpression(node);
-    var declaration =
-        _scopeForNamespace(node.namespace).findVariable(node.name);
+    var namespace = node.namespace;
+    var urlForNamespace = _namespaces[namespace];
+    if (urlForNamespace != null && urlForNamespace.scheme == 'sass') {
+      _sources[node] = BuiltInSource(urlForNamespace.path);
+      return;
+    }
+    var declaration = _scopeForNamespace(namespace).findVariable(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _variables[node] = declaration;
       if (declaration.member is VariableDeclaration) {
-        _sources[node] = _declarationSources[declaration];
+        _sources[node] = _declarationSources[declaration]!;
       }
-    } else if (node.namespace == null) {
+    } else if (namespace == null) {
       _unresolvedReferences[node] = _scope;
     }
   }
@@ -674,15 +684,17 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitIncludeRule(IncludeRule node) {
     super.visitIncludeRule(node);
-    if (_namespaces[node.namespace]?.scheme == 'sass') {
-      _sources[node] = BuiltInSource(_namespaces[node.namespace].path);
+    var namespace = node.namespace;
+    var urlForNamespace = _namespaces[namespace];
+    if (urlForNamespace != null && urlForNamespace.scheme == 'sass') {
+      _sources[node] = BuiltInSource(urlForNamespace.path);
       return;
     }
-    var declaration = _scopeForNamespace(node.namespace).findMixin(node.name);
+    var declaration = _scopeForNamespace(namespace).findMixin(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _mixins[node] = declaration;
-      _sources[node] = _declarationSources[declaration];
-    } else if (node.namespace == null) {
+      _sources[node] = _declarationSources[declaration]!;
+    } else if (namespace == null) {
       _unresolvedReferences[node] = _scope;
     }
   }
@@ -701,19 +713,22 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     super.visitFunctionExpression(node);
-    if (_namespaces[node.namespace]?.scheme == 'sass') {
-      _sources[node] = BuiltInSource(_namespaces[node.namespace].path);
+    var namespace = node.namespace;
+    var urlForNamespace = _namespaces[namespace];
+    if (urlForNamespace != null && urlForNamespace.scheme == 'sass') {
+      _sources[node] = BuiltInSource(urlForNamespace.path);
       return;
     }
-    if (node.name.asPlain == null) return;
-    var name = node.name.asPlain.replaceAll('_', '-');
+    var name = node.name.asPlain;
+    if (name == null) return;
+    name = name.replaceAll('_', '-');
 
-    var declaration = _scopeForNamespace(node.namespace).findFunction(name);
+    var declaration = _scopeForNamespace(namespace).findFunction(name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _functions[node] = declaration;
-      _sources[node] = _declarationSources[declaration];
+      _sources[node] = _declarationSources[declaration]!;
       return;
-    } else if (node.namespace == null) {
+    } else if (namespace == null) {
       if (name == 'get-function') {
         _sources[node] = BuiltInSource("meta");
       } else {
@@ -726,7 +741,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var nameExpression = getStaticNameForGetFunctionCall(node);
     if (nameExpression == null) return;
     var moduleExpression = getStaticModuleForGetFunctionCall(node);
-    var namespace = moduleExpression?.text;
+    namespace = moduleExpression?.text;
     name = nameExpression.text.replaceAll('_', '-');
     declaration = _scopeForNamespace(namespace).findFunction(name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
@@ -739,8 +754,9 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// Registers the current library as a location from which [declaration] can
   /// be loaded.
   void _registerLibraryUrl(MemberDeclaration<SassNode> declaration) {
-    if (_libraryUrl == null) return;
-    _libraries.putIfAbsent(declaration, () => {}).add(_libraryUrl);
+    var libraryUrl = _libraryUrl;
+    if (libraryUrl == null) return;
+    _libraries.putIfAbsent(declaration, () => {}).add(libraryUrl);
   }
 
   /// Returns true if [declaration] is from a `@forward` rule in the current

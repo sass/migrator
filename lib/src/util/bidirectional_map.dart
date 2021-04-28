@@ -21,7 +21,7 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   final _keysForValue = <V, Set<K>>{};
 
   @override
-  V operator [](Object key) => _valueForKey[key];
+  V? operator [](Object? key) => _valueForKey[key];
 
   @override
   void operator []=(K key, V value) {
@@ -43,16 +43,18 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   Iterable<V> get values => _keysForValue.keys;
 
   @override
-  V remove(Object key) {
+  V? remove(Object? key) {
     if (!_valueForKey.containsKey(key)) return null;
-    var value = _valueForKey.remove(key);
-    _keysForValue[value].remove(key);
-    if (_keysForValue[value].isEmpty) _keysForValue.remove(value);
+    V value = _valueForKey.remove(key)!;
+    var keys = _keysForValue[value]!;
+    keys.remove(key);
+    if (keys.isEmpty) _keysForValue.remove(value);
     return value;
   }
 
   /// Finds the keys associated with a given value.
   Iterable<K> keysForValue(V value) sync* {
-    if (_keysForValue.containsKey(value)) yield* _keysForValue[value];
+    var keys = _keysForValue[value];
+    if (keys != null) yield* keys;
   }
 }

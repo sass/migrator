@@ -42,11 +42,11 @@ class NamespaceMigrator extends Migrator {
   @override
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var renamer = Renamer<UseRule>(argResults['rename'].join('\n'),
-        {'': (rule) => rule.namespace, 'url': (rule) => rule.url.toString()},
+    var renamer = Renamer<UseRule>(argResults!['rename'].join('\n'),
+        {'': ((rule) => rule.namespace!), 'url': (rule) => rule.url.toString()},
         sourceUrl: '--rename');
-    var visitor = _NamespaceMigrationVisitor(
-        renamer, argResults['force'] as bool, importCache, migrateDependencies);
+    var visitor = _NamespaceMigrationVisitor(renamer,
+        argResults!['force'] as bool, importCache, migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -60,10 +60,14 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   /// A set of spans for each *original* namespace in the current file.
   ///
   /// Each span covers just the namespace of a member reference.
-  Map<String, Set<FileSpan>> _spansByNamespace;
+  Map<String, Set<FileSpan>> get _spansByNamespace =>
+      assertInStylesheet(__spansByNamespace, '_spansByNamespace');
+  Map<String, Set<FileSpan>>? __spansByNamespace;
 
   /// The set of namespaces used in the current file *after* renaming.
-  Set<String> _usedNamespaces;
+  Set<String> get _usedNamespaces =>
+      assertInStylesheet(__usedNamespaces, '_usedNamespaces');
+  Set<String>? __usedNamespaces;
 
   _NamespaceMigrationVisitor(this.renamer, this.forceRename,
       ImportCache importCache, bool migrateDependencies)
@@ -71,13 +75,13 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
 
   @override
   void visitStylesheet(Stylesheet node) {
-    var oldSpansByNamespace = _spansByNamespace;
-    var oldUsedNamespaces = _usedNamespaces;
-    _spansByNamespace = {};
-    _usedNamespaces = {};
+    var oldSpansByNamespace = __spansByNamespace;
+    var oldUsedNamespaces = __usedNamespaces;
+    __spansByNamespace = {};
+    __usedNamespaces = {};
     super.visitStylesheet(node);
-    _spansByNamespace = oldSpansByNamespace;
-    _usedNamespaces = oldUsedNamespaces;
+    __spansByNamespace = oldSpansByNamespace;
+    __usedNamespaces = oldUsedNamespaces;
   }
 
   @override
@@ -85,9 +89,10 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
     // Pass each `@use` rule through the renamer.
     var newNamespaces = <String, Set<UseRule>>{};
     for (var rule in node.children.whereType<UseRule>()) {
-      if (rule.namespace == null) continue;
+      var namespace = rule.namespace;
+      if (namespace == null) continue;
       newNamespaces
-          .putIfAbsent(renamer.rename(rule) ?? rule.namespace, () => {})
+          .putIfAbsent(renamer.rename(rule) ?? namespace, () => {})
           .add(rule);
     }
 
@@ -127,13 +132,14 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
 
   /// Patch [rule] and all references to it with [newNamespace].
   void _patchNamespace(UseRule rule, String newNamespace) {
+    var oldNamespace = rule.namespace!;
     _usedNamespaces.add(newNamespace);
     if (rule.namespace == newNamespace) return;
     var asClause =
         RegExp('\\s*as\\s+(${rule.namespace})').firstMatch(rule.span.text);
     if (asClause == null) {
       // Add an `as` clause to a rule that previously lacked one.
-      var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text).end;
+      var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text)!.end;
       addPatch(
           Patch.insert(rule.span.subspan(0, end).end, ' as $newNamespace'));
     } else if (namespaceForPath(rule.url.toString()) == newNamespace) {
@@ -143,16 +149,16 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
     } else {
       // Change the namespace of an existing `as` clause.
       addPatch(Patch(
-          rule.span.subspan(asClause.end - rule.namespace.length, asClause.end),
+          rule.span.subspan(asClause.end - oldNamespace.length, asClause.end),
           newNamespace));
     }
-    for (FileSpan span in _spansByNamespace[rule.namespace] ?? {}) {
+    for (FileSpan span in _spansByNamespace[oldNamespace] ?? {}) {
       addPatch(Patch(span, newNamespace));
     }
   }
 
   /// If [namespace] is not null, add its span to [_spansByNamespace].
-  void _addNamespaceSpan(String namespace, FileSpan span) {
+  void _addNamespaceSpan(String? namespace, FileSpan span) {
     if (namespace != null) {
       assert(span.text.startsWith(namespace));
       _spansByNamespace
@@ -185,10 +191,11 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
 
   @override
   void visitIncludeRule(IncludeRule node) {
-    if (node.namespace != null) {
-      var startNamespace = node.span.text.indexOf(
-          node.namespace, node.span.text[0] == '+' ? 1 : '@include'.length);
-      _addNamespaceSpan(node.namespace, node.span.subspan(startNamespace));
+    var namespace = node.namespace;
+    if (namespace != null) {
+      var startNamespace = node.span.text
+          .indexOf(namespace, node.span.text[0] == '+' ? 1 : '@include'.length);
+      _addNamespaceSpan(namespace, node.span.subspan(startNamespace));
     }
     super.visitIncludeRule(node);
   }

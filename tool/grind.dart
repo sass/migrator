@@ -16,8 +16,8 @@ main(List<String> args) {
   pkg.homebrewFormula.value = "migrator.rb";
   pkg.jsRequires.value = {"fs": "fs", "os": "os", "path": "path"};
   pkg.standaloneName.value = "sass-migrator";
-  pkg.githubUser.value = Platform.environment["GH_USER"];
-  pkg.githubPassword.value = Platform.environment["GH_TOKEN"];
+  pkg.githubUser.fn = () => Platform.environment["GH_USER"]!;
+  pkg.githubPassword.fn = () => Platform.environment["GH_TOKEN"]!;
 
   pkg.addAllTasks();
   grind(args);
