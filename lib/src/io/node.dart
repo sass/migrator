@@ -4,8 +4,10 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+import 'package:file/file.dart';
 import 'package:js/js.dart';
 import 'package:node_interop/node.dart';
+import 'package:node_io/node_io.dart';
 
 // Node seems to support ANSI escapes on all terminals.
 //
@@ -15,3 +17,5 @@ import 'package:node_interop/node.dart';
 external bool get supportsAnsiEscapes;
 
 void printStderr(Object message) => process.stderr.write("$message\n");
+
+FileSystem get fileSystem => nodeFileSystem;

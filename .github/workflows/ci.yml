@@ -73,6 +73,8 @@ jobs:
         with: {node-version: "${{ matrix.node_version }}"}
       - run: npm install
       - run: dart pub run grinder pkg-npm-dev
+      - name: Run tests
+        run: dart pub run test -t node -r expanded
 
   static_analysis:
     name: Static analysis
