@@ -14,7 +14,6 @@ import 'package:sass/src/import_cache.dart';
 
 import 'package:args/command_runner.dart';
 import 'package:glob/glob.dart';
-import 'package:glob/list_local_fs.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:sass_migrator/src/util/node_modules_importer.dart';
@@ -82,7 +81,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
 
     var entrypoints = [
       for (var argument in argResults!.rest)
-        for (var entry in Glob(argument).listSync())
+        for (var entry in Glob(argument).listFileSystemSync(fileSystem))
           if (entry is File) entry.path
     ];
     for (var entrypoint in entrypoints) {

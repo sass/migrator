@@ -6,6 +6,9 @@
 
 import 'dart:io';
 
+import 'package:file/file.dart';
+import 'package:file/local.dart';
+
 /// Whether this process is connected to a terminal that supports ANSI escape
 /// sequences.
 bool get supportsAnsiEscapes {
@@ -19,3 +22,6 @@ bool get supportsAnsiEscapes {
 
 /// Prints [message] to standard error, followed by a newline.
 void printStderr(Object message) => stderr.writeln(message);
+
+/// The local filesystem.
+FileSystem get fileSystem => const LocalFileSystem();

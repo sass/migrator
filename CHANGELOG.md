@@ -1,3 +1,7 @@
+## 1.3.9
+
+* Fix crash when running on Node.
+
 ## 1.3.8
 
 * No user-visible changes.
