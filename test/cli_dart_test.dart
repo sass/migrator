@@ -37,9 +37,15 @@ void main() {
 
     await (await runMigrator(["division", "test-*.scss"])).shouldExit(0);
 
-    await d.file("test-1.scss", "a {b: divide(1, 2)}").validate();
-    await d.file("test-2.scss", "c {d: divide(1, 2)}").validate();
-    await d.file("test-3.scss", "e {f: divide(1, 2)}").validate();
+    await d
+        .file("test-1.scss", '@use "sass:math";\n\na {b: math.div(1, 2)}')
+        .validate();
+    await d
+        .file("test-2.scss", '@use "sass:math";\n\nc {d: math.div(1, 2)}')
+        .validate();
+    await d
+        .file("test-3.scss", '@use "sass:math";\n\ne {f: math.div(1, 2)}')
+        .validate();
   });
 
   group("with --dry-run", () {

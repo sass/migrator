@@ -37,8 +37,10 @@ a {
 }
 
 <==> output/entrypoint.scss
+@use "sass:math";
+
 @function six-divided-by-three() {
-  @return divide(6px, 3px);
+  @return math.div(6px, 3px);
 }
 
 @function identity($x) {
@@ -47,26 +49,26 @@ a {
 
 a {
   // Arithmetic on number literals
-  b: divide(4px + 2px, 3px);
-  c: divide(6px, 3px) + 1;
-  d: divide(6px, 3px);
-  e: divide(divide(6px, 2px + 1px), 2);
-  $f: divide(6px, 3px);
+  b: math.div(4px + 2px, 3px);
+  c: math.div(6px, 3px) + 1;
+  d: math.div(6px, 3px);
+  e: math.div(math.div(6px, 2px + 1px), 2);
+  $f: math.div(6px, 3px);
 
   // * and % always return numbers, so we can assume division here
-  g: divide(3 * $x, 4);
-  h: divide(3, $x) * 4;
-  i: divide(3 % $x, 4);
-  j: divide(3, $x) % 4;
+  g: math.div(3 * $x, 4);
+  h: math.div(3, $x) * 4;
+  i: math.div(3 % $x, 4);
+  j: math.div(3, $x) % 4;
 
   // < and similar operators always operate on numbers
-  k: divide(3, $x) < 1;
-  l: divide(3, $x) > 1;
-  m: divide(3, $x) <= 1;
-  n: divide(3, $x) >= 1;
+  k: math.div(3, $x) < 1;
+  l: math.div(3, $x) > 1;
+  m: math.div(3, $x) <= 1;
+  n: math.div(3, $x) >= 1;
 
   // Function calls
-  o: identity(divide(6px, 3px));
-  p: rgba(10, 20, divide(30, 2), 0.5);
-  q: rgb(10, 20, divide(30, 2), 0.5);
+  o: identity(math.div(6px, 3px));
+  p: rgba(10, 20, math.div(30, 2), 0.5);
+  q: rgb(10, 20, math.div(30, 2), 0.5);
 }

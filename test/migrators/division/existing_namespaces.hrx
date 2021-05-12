@@ -1,0 +1,17 @@
+<==> input/entrypoint.scss
+@use "sass:math" as *;
+@use "sass:list" as other-namespace;
+
+a {
+  b: 3 / $x;
+  c: (six / three);
+}
+
+<==> output/entrypoint.scss
+@use "sass:math" as *;
+@use "sass:list" as other-namespace;
+
+a {
+  b: div(3, $x);
+  c: other-namespace.slash(six, three);
+}

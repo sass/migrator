@@ -9,11 +9,13 @@ a {
 }
 
 <==> output/entrypoint.scss
+@use "sass:math";
+
 a {
-  b: divide(3, $x) + 4;
-  c: divide(3, $x) - 4;
-  d: divide(3, $x) == 4;
-  e: divide(fn(), 3);
-  f: divide(3, $x);
-  g: fn(divide(3, $x));
+  b: math.div(3, $x) + 4;
+  c: math.div(3, $x) - 4;
+  d: math.div(3, $x) == 4;
+  e: math.div(fn(), 3);
+  f: math.div(3, $x);
+  g: fn(math.div(3, $x));
 }

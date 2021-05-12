@@ -67,6 +67,10 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
   Importer get importer => _importer;
   late Importer _importer;
 
+  /// Returns a semicolon unless the current stylesheet uses the indented
+  /// syntax, in which case this returns an empty string.
+  String get semicolon => currentUrl.path.endsWith('.sass') ? "" : ";";
+
   MigrationVisitor(this.importCache, this.migrateDependencies);
 
   /// Runs a new migration on [stylesheet] (and its dependencies, if
