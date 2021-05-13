@@ -111,7 +111,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if (_existingNamespaces.containsKey(url)) {
       return _existingNamespaces[url].andThen((ns) => '$ns.') ?? '';
     }
-    options() sync* {
+    Iterable<String> options() sync* {
       yield module;
       yield 'sass-$module';
       var i = 2;
