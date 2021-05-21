@@ -1,3 +1,10 @@
+## 1.4.0
+
+### Division Migrator
+
+* The division migrator is now enabled, and will convert slash-as-division to
+  the `math.div` function.
+
 ## 1.3.9
 
 * Fix crash when running on Node.

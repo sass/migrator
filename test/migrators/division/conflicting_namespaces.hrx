@@ -1,0 +1,22 @@
+<==> input/entrypoint.scss
+@use "other/list";
+@use "other/math";
+@use "other/sass-list";
+
+a {
+  b: 3 / $x;
+  c: (six / three);
+}
+
+<==> output/entrypoint.scss
+@use "sass:math" as sass-math;
+@use "sass:list" as list2;
+
+@use "other/list";
+@use "other/math";
+@use "other/sass-list";
+
+a {
+  b: sass-math.div(3, $x);
+  c: list2.slash(six, three);
+}

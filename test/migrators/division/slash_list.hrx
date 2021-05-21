@@ -8,10 +8,13 @@ a {
 }
 
 <==> output/entrypoint.scss
+@use "sass:list";
+@use "sass:math";
+
 a {
-  b: slash-list(4px + 2px, 3px);
-  c: slash-list(six, three);
-  $d: slash-list(6, three);
-  e: slash-list($x, 6px / 3px, 2);
-  $f: slash-list($x, divide(6px, 3px), 2);
+  b: list.slash(4px + 2px, 3px);
+  c: list.slash(six, three);
+  $d: list.slash(6, three);
+  e: list.slash($x, 6px / 3px, 2);
+  $f: list.slash($x, math.div(6px, 3px), 2);
 }

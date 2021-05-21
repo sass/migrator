@@ -1,0 +1,22 @@
+<==> input/entrypoint.scss
+// Comment
+
+@use "other";
+
+a {
+  b: 3 / $x;
+  c: (six / three);
+}
+
+<==> output/entrypoint.scss
+// Comment
+
+@use "sass:math";
+@use "sass:list";
+
+@use "other";
+
+a {
+  b: math.div(3, $x);
+  c: list.slash(six, three);
+}

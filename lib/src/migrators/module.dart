@@ -363,11 +363,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Returns a semicolon unless the current stylesheet uses the indented
-  /// syntax, in which case this returns an empty string.
-  String get _semicolonIfNotIndented =>
-      currentUrl.path.endsWith('.sass') ? "" : ";";
-
   /// Returns whether the member named [name] should be forwarded in the
   /// entrypoint.
   ///
@@ -394,8 +389,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           _makeForwardRules(url, '"${_absoluteUrlToDependency(url).item1}"');
       if (forwards == null) continue;
       var isRelative = _absoluteUrlToDependency(url).item2;
-      (isRelative ? relativeForwards : loadPathForwards).addAll(
-          [for (var rule in forwards) '$rule$_semicolonIfNotIndented\n']);
+      (isRelative ? relativeForwards : loadPathForwards)
+          .addAll([for (var rule in forwards) '$rule$semicolon\n']);
     }
     var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
     return forwards.isEmpty ? '' : '\n' + forwards.join('');
@@ -446,9 +441,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds additional patches for extra `@use` and `@forward` rules.
   @override
   void beforePatch(Stylesheet node) {
-    useRulesToString(Set<String> useRules) => (useRules.toList()..sort())
-        .map((use) => '$use$_semicolonIfNotIndented\n')
-        .join();
+    useRulesToString(Set<String> useRules) =>
+        (useRules.toList()..sort()).map((use) => '$use$semicolon\n').join();
 
     if (_builtInUseRules.isNotEmpty) {
       // This is added before existing patches to ensure that this patch is
@@ -807,10 +801,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     }
 
-    rulesText = migratedRules.join('$_semicolonIfNotIndented\n$indent');
+    rulesText = migratedRules.join('$semicolon\n$indent');
     if (rulesText.isEmpty) {
-      var span =
-          node.span.extendIfMatches(RegExp(' *$_semicolonIfNotIndented\n?'));
+      var span = node.span.extendIfMatches(RegExp(' *$semicolon\n?'));
       addPatch(patchDelete(span));
     } else {
       addPatch(Patch(node.span, rulesText));
@@ -827,7 +820,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           _afterLastImport ?? node.span.file.location(0),
           '$indent@import ' +
               staticImports.map((import) => import.span.text).join(', ') +
-              '$_semicolonIfNotIndented\n'));
+              '$semicolon\n'));
     }
   }
 
@@ -992,7 +985,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
         addPatch(patchDelete(span));
         var start = span.end.offset;
-        var end = start + _semicolonIfNotIndented.length;
+        var end = start + semicolon.length;
         if (span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(span.file.span(start, end)));
         var nameFormat = _useAllowed ? '\$$name' : '"$name"';

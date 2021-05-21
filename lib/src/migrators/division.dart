@@ -23,13 +23,9 @@ import 'package:sass_migrator/src/utils.dart';
 class DivisionMigrator extends Migrator {
   final name = "division";
   final description = """
-Use the divide() function instead of the / division operator
+Use the math.div() function instead of the / division operator
 
 More info: https://sass-lang.com/d/slash-div""";
-
-  // Hide this until the division deprecation has been launched in at least one
-  // implementation.
-  final hidden = true;
 
   @override
   final argParser = ArgParser()
@@ -63,6 +59,74 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// True when the current node is expected to evaluate to a number.
   var _expectsNumericResult = false;
+
+  /// The namespaces that already exist in the current stylesheet.
+  Map<Uri, String?> get _existingNamespaces =>
+      assertInStylesheet(__existingNamespaces, '_existingNamespaces');
+  Map<Uri, String?>? __existingNamespaces;
+
+  /// A list of `@use` rules to insert at [_useRuleInsertionPoint];
+  List<String> get _useRulesToInsert =>
+      assertInStylesheet(__useRulesToInsert, '_useRulesToInsert');
+  List<String>? __useRulesToInsert;
+
+  @override
+  void visitStylesheet(Stylesheet node) {
+    var oldNamespaces = __existingNamespaces;
+    var oldUseRules = __useRulesToInsert;
+    __existingNamespaces = {
+      for (var rule in node.uses) rule.url: rule.namespace
+    };
+    __useRulesToInsert = [];
+    super.visitStylesheet(node);
+    __existingNamespaces = oldNamespaces;
+    __useRulesToInsert = oldUseRules;
+  }
+
+  /// Inserts [_useRulesToInsert] before the first existing dependency (or at
+  /// the start of the stylesheet if none exist).
+  @override
+  void beforePatch(Stylesheet node) {
+    if (_useRulesToInsert.isEmpty) return;
+    var useRules = _useRulesToInsert.join('\n');
+    var insertionPoint = node.span.start;
+    for (var child in node.children) {
+      if (child is UseRule || child is ForwardRule || child is ImportRule) {
+        insertionPoint = child.span.start;
+        break;
+      }
+    }
+    addPatch(Patch.insert(insertionPoint, '$useRules\n\n'));
+  }
+
+  /// Returns the prefix that should be used before a built-in from [module].
+  ///
+  /// This will usually be the namespace for [module] followed by a period, but
+  /// will be an empty string if [module] is already used with no namespace.
+  ///
+  /// If [module] is not already used in this file, a new `@use` rule will be
+  /// added to [_useRulesToInsert].
+  String _builtInPrefix(String module) {
+    var url = Uri.parse('sass:$module');
+    if (_existingNamespaces.containsKey(url)) {
+      return _existingNamespaces[url].andThen((ns) => '$ns.') ?? '';
+    }
+    Iterable<String> options() sync* {
+      yield module;
+      yield 'sass-$module';
+      var i = 2;
+      while (true) {
+        yield '$module${i++}';
+      }
+    }
+
+    var namespace = options()
+        .firstWhere((option) => !_existingNamespaces.containsValue(option));
+    _existingNamespaces[url] = namespace;
+    var asClause = module == namespace ? '' : ' as $namespace';
+    _useRulesToInsert.add('@use "sass:$module"$asClause$semicolon');
+    return '$namespace.';
+  }
 
   /// Allows division within this argument invocation.
   @override
@@ -193,7 +257,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         // We only want to convert a non-division slash operation to a
         // slash-list call when it's in a non-plain-CSS context to avoid
         // unnecessary function calls within plain CSS.
-        addPatch(patchBefore(node, "slash-list("));
+        addPatch(patchBefore(node, "${_builtInPrefix('list')}slash("));
         addPatch(patchAfter(node, ")"));
         _visitSlashListArguments(node);
       }
@@ -202,7 +266,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         _isDefinitelyNumber(node) ||
         !isPessimistic) {
       // Definitely division
-      addPatch(patchBefore(node, "divide("));
+      addPatch(patchBefore(node, "${_builtInPrefix('math')}div("));
       addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
       _patchOperatorToComma(node);
