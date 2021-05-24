@@ -1,3 +1,7 @@
+## 1.4.1
+
+* Globs containing `**` should now be properly resolved when running on Node.
+
 ## 1.4.0
 
 ### Division Migrator
