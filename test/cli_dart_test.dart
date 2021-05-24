@@ -48,6 +48,22 @@ void main() {
         .validate();
   });
 
+  test("allows recursive glob arguments", () async {
+    await d.dir('dir', [
+      d.file("test-1.scss", "a {b: (1 / 2)}"),
+      d.file("test-2.scss", "c {d: (1 / 2)}"),
+      d.file("test-3.scss", "e {f: (1 / 2)}")
+    ]).create();
+
+    await (await runMigrator(["division", "**.scss"])).shouldExit(0);
+
+    await d.dir('dir', [
+      d.file("test-1.scss", '@use "sass:math";\n\na {b: math.div(1, 2)}'),
+      d.file("test-2.scss", '@use "sass:math";\n\nc {d: math.div(1, 2)}'),
+      d.file("test-3.scss", '@use "sass:math";\n\ne {f: math.div(1, 2)}')
+    ]).validate();
+  });
+
   group("with --dry-run", () {
     test("prints the name of a file that would be migrated", () async {
       await d.file("test.scss", "a {b: abs(-1)}").create();
