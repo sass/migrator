@@ -170,14 +170,16 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Allows division within this parenthesized expression.
   ///
   /// If these parentheses contain a `/` operation that is migrated to a
-  /// function call, the now-unnecessary parentheses will be removed.
+  /// function call and [negated] is false, the now-unnecessary parentheses
+  /// will be removed.
   @override
-  void visitParenthesizedExpression(ParenthesizedExpression node) {
+  void visitParenthesizedExpression(ParenthesizedExpression node,
+      {bool negated = false}) {
     _withContext(() {
       var expression = node.expression;
       if (expression is BinaryOperationExpression &&
           expression.operator == BinaryOperator.dividedBy) {
-        if (_visitSlashOperation(expression)) {
+        if (_visitSlashOperation(expression) && !negated) {
           addPatch(patchDelete(node.span, end: 1));
           addPatch(patchDelete(node.span, start: node.span.length - 1));
         }
@@ -185,6 +187,19 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         super.visitParenthesizedExpression(node);
       }
     }, isDivisionAllowed: true);
+  }
+
+  /// Sets [_negatedParenthesized] to true when about to visit a negated
+  /// parenthesized expression.
+  @override
+  void visitUnaryOperationExpression(UnaryOperationExpression node) {
+    var operand = node.operand;
+    if (node.operator == UnaryOperator.minus &&
+        operand is ParenthesizedExpression) {
+      visitParenthesizedExpression(operand, negated: true);
+      return;
+    }
+    super.visitUnaryOperationExpression(node);
   }
 
   /// Allows division within this return rule.

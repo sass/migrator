@@ -1,3 +1,9 @@
+## 1.4.2
+
+### Division Migrator
+
+* Fix a bug where negated division could be migrated incorrectly.
+
 ## 1.4.1
 
 * Globs containing `**` should now be properly resolved when running on Node.
