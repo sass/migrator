@@ -60,9 +60,6 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// True when the current node is expected to evaluate to a number.
   var _expectsNumericResult = false;
 
-  /// True when visiting a negated [ParenthesizedExpression].
-  var _negatedParenthesized = false;
-
   /// The namespaces that already exist in the current stylesheet.
   Map<Uri, String?> get _existingNamespaces =>
       assertInStylesheet(__existingNamespaces, '_existingNamespaces');
@@ -173,12 +170,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Allows division within this parenthesized expression.
   ///
   /// If these parentheses contain a `/` operation that is migrated to a
-  /// function call and there's no minus sign to make them otherwise necessary,
-  /// the now-unnecessary parentheses will be removed.
+  /// function call and [negated] is false, the now-unnecessary parentheses
+  /// will be removed.
   @override
-  void visitParenthesizedExpression(ParenthesizedExpression node) {
-    var negated = _negatedParenthesized;
-    _negatedParenthesized = false;
+  void visitParenthesizedExpression(ParenthesizedExpression node,
+      {bool negated = false}) {
     _withContext(() {
       var expression = node.expression;
       if (expression is BinaryOperationExpression &&
@@ -197,9 +193,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// parenthesized expression.
   @override
   void visitUnaryOperationExpression(UnaryOperationExpression node) {
+    var operand = node.operand;
     if (node.operator == UnaryOperator.minus &&
-        node.operand is ParenthesizedExpression) {
-      _negatedParenthesized = true;
+        operand is ParenthesizedExpression) {
+      visitParenthesizedExpression(operand, negated: true);
+      return;
     }
     super.visitUnaryOperationExpression(node);
   }
