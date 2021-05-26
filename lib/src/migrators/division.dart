@@ -378,7 +378,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Returns true if [node] contains an interpolation.
   bool _containsInterpolation(Expression node) {
-    if (node is ParenthesizedExpression) return _containsInterpolation(node);
+    if (node is ParenthesizedExpression) {
+      return _containsInterpolation(node.expression);
+    }
     if (node is BinaryOperationExpression) {
       return _containsInterpolation(node.left) ||
           _containsInterpolation(node.right);

@@ -1,3 +1,10 @@
+## 1.4.3
+
+### Division Migrator
+
+* Fix a crash when encountering parentheses in an expression that's definitely
+  not division.
+
 ## 1.4.2
 
 ### Division Migrator

@@ -6,6 +6,7 @@
   e: (bold 6px/3px sans-serif);
   f: 6 / three;
   g: rgb(10 20 30 / 0.5);
+  h: (2 + 3) / text;
 }
 
 <==> log.txt
