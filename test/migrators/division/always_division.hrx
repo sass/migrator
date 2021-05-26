@@ -34,6 +34,11 @@ a {
   o: identity(6px / 3px);
   p: rgba(10, 20, 30/2, 0.5);
   q: rgb(10 20 30/2 / 0.5);
+
+  // Negation
+  r: -(4/3);
+  s: (-4/3);
+  t: -((-6/3) / -(4/2));
 }
 
 <==> output/entrypoint.scss
@@ -71,4 +76,9 @@ a {
   o: identity(math.div(6px, 3px));
   p: rgba(10, 20, math.div(30, 2), 0.5);
   q: rgb(10, 20, math.div(30, 2), 0.5);
+
+  // Negation
+  r: -(math.div(4, 3));
+  s: math.div(-4, 3);
+  t: -(math.div(math.div(-6, 3), -(math.div(4, 2))));
 }
