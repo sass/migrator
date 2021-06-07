@@ -91,10 +91,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     var useRules = _useRulesToInsert.join('\n');
     var insertionPoint = node.span.start;
     for (var child in node.children) {
-      if (child is UseRule || child is ForwardRule || child is ImportRule) {
-        insertionPoint = child.span.start;
-        break;
-      }
+      if (child is LoudComment || child is SilentComment) continue;
+      insertionPoint = child.span.start;
+      break;
     }
     addPatch(Patch.insert(insertionPoint, '$useRules\n\n'));
   }
