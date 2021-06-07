@@ -1,3 +1,10 @@
+## 1.4.4
+
+### Division Migrator
+
+* Fix a bug where `@use "sass:math"` would sometimes be incorrectly inserted
+  after other rules.
+
 ## 1.4.3
 
 ### Division Migrator
