@@ -81,7 +81,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
 
     var entrypoints = [
       for (var argument in argResults!.rest)
-        if (FileSystemEntity.typeSync(argument) == FileSystemEntityType.FILE) argument
+        if (File(argument).existsSync()) argument
         else
           for (var entry in Glob(argument).listFileSystemSync(fileSystem))
             if (entry is File) entry.path
