@@ -64,6 +64,16 @@ void main() {
     ]).validate();
   });
 
+  test("allows non-glob file arguments containing glob syntax", () async {
+    await d.dir('[dir]', [d.file("test.scss", "a {b: (1 / 2)}")]).create();
+
+    await (await runMigrator(["division", "[dir]/test.scss"])).shouldExit(0);
+
+    await d.dir('[dir]', [
+      d.file("test.scss", '@use "sass:math";\n\na {b: math.div(1, 2)}')
+    ]).validate();
+  });
+
   group("with --dry-run", () {
     test("prints the name of a file that would be migrated", () async {
       await d.file("test.scss", "a {b: abs(-1)}").create();
