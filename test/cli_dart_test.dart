@@ -65,9 +65,7 @@ void main() {
   });
 
   test("allows non-glob file arguments containing glob syntax", () async {
-    await d.dir('[dir]', [
-      d.file("test.scss", "a {b: (1 / 2)}")
-    ]).create();
+    await d.dir('[dir]', [d.file("test.scss", "a {b: (1 / 2)}")]).create();
 
     await (await runMigrator(["division", "[dir]/test.scss"])).shouldExit(0);
 
