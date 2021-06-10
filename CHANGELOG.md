@@ -1,3 +1,8 @@
+## 1.4.5
+
+* Glob syntax will no longer be resolved if a file with that literal name
+  exists.
+
 ## 1.4.4
 
 ### Division Migrator
