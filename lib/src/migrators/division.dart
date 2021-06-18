@@ -269,9 +269,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Visits a `/` operation [node] and migrates it to either the `division`
   /// function or the `slash-list` function.
   ///
-  /// Returns true the `/` was migrated to either function call, and false if
-  /// the `/` is ambiguous and a warning was emitted instead (pessimistic mode
-  /// only).
+  /// Returns true the `/` was migrated to either function call (indicating that
+  /// parentheses surrounding this operation should be removed).
   bool _visitSlashOperation(BinaryOperationExpression node) {
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
@@ -288,7 +287,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
     if (_expectsNumericResult || _isDefinitelyNumber(node) || !isPessimistic) {
       // Definitely division
-      if (_tryMultiplication(node)) return true;
+      if (_tryMultiplication(node)) return false;
       addPatch(patchBefore(node, "${_builtInPrefix('math')}div("));
       addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
