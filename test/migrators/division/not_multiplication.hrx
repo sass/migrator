@@ -1,0 +1,17 @@
+<==> input/entrypoint.scss
+$a: 2000px / 3;
+$b: $a / 7;
+$c: $a / 16;
+$d: $a / 25;
+$e: $a / 10000;
+$f: $a / 2px;
+
+<==> output/entrypoint.scss
+@use "sass:math";
+
+$a: math.div(2000px, 3);
+$b: math.div($a, 7);
+$c: math.div($a, 16);
+$d: math.div($a, 25);
+$e: math.div($a, 10000);
+$f: math.div($a, 2px);
