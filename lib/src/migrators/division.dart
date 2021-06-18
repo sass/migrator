@@ -32,26 +32,35 @@ More info: https://sass-lang.com/d/slash-div""";
     ..addFlag('pessimistic',
         abbr: 'p',
         help: "Only migrate / expressions that are unambiguously division.",
-        negatable: false);
+        negatable: false)
+    ..addFlag('multiplication',
+        help: 'Migrate / expressions with certain constant divisors to use '
+            'multiplication instead.',
+        defaultsTo: true);
 
   bool get isPessimistic => argResults!['pessimistic'] as bool;
+  bool get useMultiplication => argResults!['multiplication'] as bool;
 
   @override
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var visitor = _DivisionMigrationVisitor(
-        importCache, this.isPessimistic, migrateDependencies);
+        importCache, isPessimistic, useMultiplication, migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
   }
 }
 
+/// The set of constant divisors that should be migrated to multiplication.
+const _allowedDivisors = {2, 4, 5, 8, 10, 20, 40, 50, 80, 100, 1000};
+
 class _DivisionMigrationVisitor extends MigrationVisitor {
   final bool isPessimistic;
+  final bool useMultiplication;
 
-  _DivisionMigrationVisitor(
-      ImportCache importCache, this.isPessimistic, bool migrateDependencies)
+  _DivisionMigrationVisitor(ImportCache importCache, this.isPessimistic,
+      this.useMultiplication, bool migrateDependencies)
       : super(importCache, migrateDependencies);
 
   /// True when division is allowed by the context the current node is in.
@@ -260,9 +269,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Visits a `/` operation [node] and migrates it to either the `division`
   /// function or the `slash-list` function.
   ///
-  /// Returns true the `/` was migrated to either function call, and false if
-  /// the `/` is ambiguous and a warning was emitted instead (pessimistic mode
-  /// only).
+  /// Returns true the `/` was migrated to either function call (indicating that
+  /// parentheses surrounding this operation should be removed).
   bool _visitSlashOperation(BinaryOperationExpression node) {
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
@@ -276,23 +284,44 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         _visitSlashListArguments(node);
       }
       return true;
-    } else if (_expectsNumericResult ||
-        _isDefinitelyNumber(node) ||
-        !isPessimistic) {
+    }
+    if (_expectsNumericResult || _isDefinitelyNumber(node) || !isPessimistic) {
       // Definitely division
+      _withContext(() => super.visitBinaryOperationExpression(node),
+          expectsNumericResult: true);
+      if (_tryMultiplication(node)) return false;
       addPatch(patchBefore(node, "${_builtInPrefix('math')}div("));
       addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
       _patchOperatorToComma(node);
       _patchParensIfAny(node.right);
-      _withContext(() => super.visitBinaryOperationExpression(node),
-          expectsNumericResult: true);
       return true;
     } else {
       emitWarning("Could not determine whether this is division", node.span);
       super.visitBinaryOperationExpression(node);
       return false;
     }
+  }
+
+  /// Given a division operation [node], patches it to use multiplication
+  /// instead if the reciprocal of the divisor can be accurately represented as
+  /// a decimal.
+  ///
+  /// Returns true if patched and false otherwise.
+  bool _tryMultiplication(BinaryOperationExpression node) {
+    if (!useMultiplication) return false;
+    var divisor = node.right;
+    if (divisor is! NumberExpression) return false;
+    if (divisor.unit != null) return false;
+    if (!_allowedDivisors.contains(divisor.value)) return false;
+    var operatorSpan = node.left.span
+        .extendThroughWhitespace()
+        .end
+        .pointSpan()
+        .extendIfMatches('/');
+    addPatch(Patch(operatorSpan, '*'));
+    addPatch(Patch(node.right.span, '${1 / divisor.value}'));
+    return true;
   }
 
   /// Visits the arguments of a `/` operation that is being converted into a

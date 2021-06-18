@@ -1,3 +1,15 @@
+## 1.5.0
+
+### Division Migrator
+
+* When migrating division where the divisor is a common constant value, the
+  migrator will now convert it to multiplication, rather than `math.div`.
+
+  For example: `$variable / 2` would be migrated to `$variable * 0.5`.
+
+  To disable this and migrate all division to `math.div`, pass
+  `--no-multiplication`.
+
 ## 1.4.5
 
 * Glob syntax will no longer be resolved if a file with that literal name
