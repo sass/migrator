@@ -63,9 +63,7 @@ void main() {
 
     await (await runMigrator(["division", "[dir]/test.scss"])).shouldExit(0);
 
-    await d.dir('[dir]', [
-      d.file("test.scss", 'a {b: (1 * 0.5)}')
-    ]).validate();
+    await d.dir('[dir]', [d.file("test.scss", 'a {b: (1 * 0.5)}')]).validate();
   });
 
   group("with --dry-run", () {
