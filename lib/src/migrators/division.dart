@@ -287,14 +287,14 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
     if (_expectsNumericResult || _isDefinitelyNumber(node) || !isPessimistic) {
       // Definitely division
+      _withContext(() => super.visitBinaryOperationExpression(node),
+          expectsNumericResult: true);
       if (_tryMultiplication(node)) return false;
       addPatch(patchBefore(node, "${_builtInPrefix('math')}div("));
       addPatch(patchAfter(node, ")"));
       _patchParensIfAny(node.left);
       _patchOperatorToComma(node);
       _patchParensIfAny(node.right);
-      _withContext(() => super.visitBinaryOperationExpression(node),
-          expectsNumericResult: true);
       return true;
     } else {
       emitWarning("Could not determine whether this is division", node.span);
@@ -310,8 +310,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if patched and false otherwise.
   bool _tryMultiplication(BinaryOperationExpression node) {
     if (!useMultiplication) return false;
-    if (node.right is! NumberExpression) return false;
-    var divisor = node.right as NumberExpression;
+    var divisor = node.right;
+    if (divisor is! NumberExpression) return false;
     if (divisor.unit != null) return false;
     if (!_allowedDivisors.contains(divisor.value)) return false;
     var operatorSpan = node.left.span
