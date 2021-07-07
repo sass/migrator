@@ -1,3 +1,10 @@
+## 1.5.1
+
+### Division Migrator
+
+* Fix a bug where some division nested in a parenthesized expression would not
+  be migrated.
+
 ## 1.5.0
 
 ### Division Migrator
