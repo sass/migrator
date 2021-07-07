@@ -16,6 +16,7 @@ a {
   c: 6px/3px + 1;
   d: (6px / 3px);
   e: 6px / (2px + 1px) / 2;
+  f: (6px / 3px * -1);
   $f: 6px / 3px;
 
   // * and % always return numbers, so we can assume division here
@@ -58,6 +59,7 @@ a {
   c: math.div(6px, 3px) + 1;
   d: math.div(6px, 3px);
   e: math.div(math.div(6px, 2px + 1px), 2);
+  f: (math.div(6px, 3px) * -1);
   $f: math.div(6px, 3px);
 
   // * and % always return numbers, so we can assume division here
