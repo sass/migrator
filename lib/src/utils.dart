@@ -140,39 +140,18 @@ bool isWhitespace(int character) =>
     character == $cr ||
     character == $ff;
 
-/// Returns a span containing the name of a member declaration or reference.
-///
-/// This does not include the namespace if present and does not include the
-/// `$` at the start of variable names.
+/// Like [SassDeclaration.nameSpan] or [SassReference.nameSpan], but removes the
+/// `$` from variable spans.
 FileSpan nameSpan(SassNode node) {
-  if (node is VariableDeclaration) {
-    var namespace = node.namespace;
-    var start = namespace == null ? 1 : namespace.length + 2;
-    return node.span.subspan(start, start + node.name.length);
-  } else if (node is VariableExpression) {
-    var namespace = node.namespace;
-    return node.span.subspan(namespace == null ? 1 : namespace.length + 2);
-  } else if (node is FunctionRule) {
-    var startName = node.span.text
-        .replaceAll('_', '-')
-        .indexOf(node.name, '@function'.length);
-    return node.span.subspan(startName, startName + node.name.length);
-  } else if (node is FunctionExpression) {
-    return node.name.span;
-  } else if (node is MixinRule) {
-    var startName = node.span.text
-        .replaceAll('_', '-')
-        .indexOf(node.name, node.span.text[0] == '=' ? 1 : '@mixin'.length);
-    return node.span.subspan(startName, startName + node.name.length);
-  } else if (node is IncludeRule) {
-    var startName = node.span.text
-        .replaceAll('_', '-')
-        .indexOf(node.name, node.span.text[0] == '+' ? 1 : '@include'.length);
-    return node.span.subspan(startName, startName + node.name.length);
-  } else {
-    throw UnsupportedError(
-        "$node of type ${node.runtimeType} doesn't have a name");
-  }
+  var span = node is SassDeclaration
+      ? node.nameSpan
+      : node is SassReference
+          ? node.nameSpan
+          : (throw UnsupportedError(
+              "$node of type ${node.runtimeType} doesn't have a nameSpan"));
+  return node is VariableDeclaration || node is VariableExpression
+      ? span.subspan(1)
+      : span;
 }
 
 /// Emits a warning with [message] and optionally [context];
@@ -201,7 +180,7 @@ Expression? getOnlyArgument(ArgumentInvocation invocation) {
 ///
 /// Otherwise, this returns null.
 FileSpan? getStaticNameForGetFunctionCall(FunctionExpression node) {
-  if (node.name.asPlain != 'get-function') return null;
+  if (node.name != 'get-function') return null;
   var nameArgument =
       node.arguments.named['name'] ?? node.arguments.positional.first;
   if (nameArgument is! StringExpression || nameArgument.text.asPlain == null) {
@@ -217,7 +196,7 @@ FileSpan? getStaticNameForGetFunctionCall(FunctionExpression node) {
 ///
 /// Otherwise, this returns null.
 FileSpan? getStaticModuleForGetFunctionCall(FunctionExpression node) {
-  if (node.name.asPlain != 'get-function') return null;
+  if (node.name != 'get-function') return null;
   var moduleArg = node.arguments.named['module'];
   if (moduleArg == null && node.arguments.positional.length > 2) {
     moduleArg = node.arguments.positional[2];

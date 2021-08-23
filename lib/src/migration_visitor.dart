@@ -170,7 +170,7 @@ abstract class MigrationVisitor extends RecursiveAstVisitor {
     if (migrateDependencies) {
       for (var import in node.imports) {
         if (import is DynamicImport) {
-          visitDependency(Uri.parse(import.url), import.span, forImport: true);
+          visitDependency(import.url, import.span, forImport: true);
         }
       }
     }

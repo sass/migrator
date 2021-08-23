@@ -14,10 +14,7 @@ import 'package:path/path.dart' as p;
 import '../../utils.dart';
 
 /// A wrapper class for nodes that declare a variable, function, or mixin.
-///
-/// The member this class wraps will always be a [VariableDeclaration],
-/// an [Argument], a [MixinRule], or a [FunctionRule].
-class MemberDeclaration<T extends SassNode> {
+class MemberDeclaration<T extends SassDeclaration> {
   /// The original definition of the member, after all `@forward` rules have
   /// been resolved.
   final T member;
@@ -46,27 +43,13 @@ class MemberDeclaration<T extends SassNode> {
 
   /// Creates a MemberDefinition for a [member] that was loaded from the same
   /// module it was defined.
-  ///
-  /// The [member] must be a [VariableDeclaration], [Argument], [MixinRule], or
-  /// [FunctionRule].
   MemberDeclaration(T member)
-      : this._(member, () {
-          if (member is VariableDeclaration) return member.name;
-          if (member is Argument) return member.name;
-          if (member is MixinRule) return member.name;
-          if (member is FunctionRule) return member.name;
-          throw ArgumentError(
-              "MemberDefinition must contain a VariableDeclaration, Argument, "
-              "MixinRule, or FunctionRule");
-        }(), member.span.sourceUrl!);
+      : this._(member, member.name, member.span.sourceUrl!);
 
   /// Creates a MemberDefinition for a member that was forwarded through at
   /// least one non-import-only module.
   ///
   /// The [forwarded] member is the member loaded by [forward].
-  ///
-  /// The [member] must be a [VariableDeclaration], [Argument], [MixinRule], or
-  /// [FunctionRule].
   ///
   /// If [forward] comes from an import-only file, this returns an
   /// [ImportOnlyMemberDeclaration].
@@ -104,7 +87,7 @@ class MemberDeclaration<T extends SassNode> {
 }
 
 /// A declaration for a member forwarded through an import-only file.
-class ImportOnlyMemberDeclaration<T extends SassNode>
+class ImportOnlyMemberDeclaration<T extends SassDeclaration>
     extends MemberDeclaration<T> {
   /// The prefix added to [name] by forwards through import-only files.
   final String importOnlyPrefix;

@@ -170,7 +170,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     _addNamespaceSpan(node.namespace, node.span);
-    var name = node.name.asPlain;
+    var name = node.name;
     if (name == 'get-function') {
       var moduleArg = node.arguments.named['module'];
       if (node.arguments.positional.length == 3) {

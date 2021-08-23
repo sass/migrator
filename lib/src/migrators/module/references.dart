@@ -35,8 +35,7 @@ class References {
   /// An unmodifiable map between variable references and their declarations.
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
-  final BidirectionalMap<VariableExpression,
-      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >> variables;
+  final BidirectionalMap<VariableExpression, MemberDeclaration> variables;
 
   /// An unmodifiable map between variable reassignments and the original
   /// declaration they override.
@@ -46,16 +45,14 @@ class References {
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
   final BidirectionalMap<MemberDeclaration<VariableDeclaration>,
-          MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
-      variableReassignments;
+      MemberDeclaration> variableReassignments;
 
   /// An unmodifiable map from variable declarations with the `!default` flag to
   /// the declaration they would override were it not for that flag.
   ///
   /// This only includes `!default` declarations for variables that already
   /// exist.
-  final Map<MemberDeclaration<VariableDeclaration>,
-          MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
+  final Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
       defaultVariableDeclarations;
 
   /// An unmodifiable map between mixin references and their declarations.
@@ -88,7 +85,7 @@ class References {
   /// This includes references to built-in functions, but it does not include
   /// functions referenced within `get-function` calls (those nodes instead
   /// map to the [ReferenceSource] for the `sass:meta` module).
-  final Map<SassNode, ReferenceSource> sources;
+  final Map<SassReference, ReferenceSource> sources;
 
   /// Map of import-only files that do not directly depend on their regular
   /// counterparts to the last forward appearing within it (or null, if no
@@ -100,7 +97,7 @@ class References {
       variables.values.followedBy(mixins.values).followedBy(functions.values);
 
   /// Returns all references to [declaration].
-  Iterable<SassNode> referencesTo(MemberDeclaration declaration) {
+  Iterable<SassReference> referencesTo(MemberDeclaration declaration) {
     if (declaration is MemberDeclaration<FunctionRule>) {
       return functions
           .keysForValue(declaration)
@@ -138,14 +135,11 @@ class References {
   }
 
   References._(
-      BidirectionalMap<VariableExpression,
-              MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
-          variables,
+      BidirectionalMap<VariableExpression, MemberDeclaration> variables,
       BidirectionalMap<MemberDeclaration<VariableDeclaration>,
-              MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
+              MemberDeclaration>
           variableReassignments,
-      Map<MemberDeclaration<VariableDeclaration>,
-              MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>
+      Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
           defaultVariableDeclarations,
       BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins,
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
@@ -154,7 +148,7 @@ class References {
           getFunctionReferences,
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
-      Map<SassNode, ReferenceSource> sources,
+      Map<SassReference, ReferenceSource> sources,
       Map<Uri, ForwardRule?> orphanImportOnlyFiles)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
@@ -182,13 +176,11 @@ class References {
 
 /// A visitor that builds a References object.
 class _ReferenceVisitor extends RecursiveAstVisitor {
-  final _variables = BidirectionalMap<VariableExpression,
-      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>();
+  final _variables = BidirectionalMap<VariableExpression, MemberDeclaration>();
   final _variableReassignments = BidirectionalMap<
-      MemberDeclaration<VariableDeclaration>,
-      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>();
-  final _defaultVariableDeclarations = <MemberDeclaration<VariableDeclaration>,
-      MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>{};
+      MemberDeclaration<VariableDeclaration>, MemberDeclaration>();
+  final _defaultVariableDeclarations =
+      <MemberDeclaration<VariableDeclaration>, MemberDeclaration>{};
   final _mixins = BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>>();
   final _functions =
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
@@ -196,7 +188,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>();
   final _globalDeclarations = <MemberDeclaration>{};
   final _libraries = <MemberDeclaration, Set<Uri>>{};
-  final _sources = <SassNode, ReferenceSource>{};
+  final _sources = <SassReference, ReferenceSource>{};
   final _orphanImportOnlyFiles = <Uri, ForwardRule?>{};
 
   /// The current global scope.
@@ -220,11 +212,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// Mapping between member references for which no definition was found and
   /// the scope the reference was contained in.
-  ///
-  /// Each key of this map should be a [VariableExpression], an [IncludeRule],
-  /// or a [FunctionExpression].
-  final _unresolvedReferences =
-      <SassNode /*VariableExpression|IncludeRule|FunctionExpression*/, Scope>{};
+  final _unresolvedReferences = <SassReference, Scope>{};
 
   /// Namespaces present within the current stylesheet.
   ///
@@ -245,7 +233,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   late Uri _currentUrl;
 
   /// The URL of the rule used to load the current stylesheet.
-  String? _currentRuleUrl;
+  Uri? _currentRuleUrl;
 
   /// The importer that's currently being used to resolve relative imports.
   ///
@@ -307,8 +295,8 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var functions = _unresolvedReferences.keys.whereType<FunctionExpression>();
     for (var function in functions) {
       if (_isCssCompatibilityOverload(function)) continue;
-      if (function.name.asPlain == null) continue;
-      var name = function.name.asPlain!.replaceAll('_', '-');
+      var name = function.name;
+      if (name == null) continue;
       var module = builtInFunctionModules[name];
       if (module != null) _sources[function] = BuiltInSource(module);
     }
@@ -319,7 +307,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// migrated to the module version.
   bool _isCssCompatibilityOverload(FunctionExpression node) {
     var argument = getOnlyArgument(node.arguments);
-    switch (node.name.asPlain) {
+    switch (node.name) {
       case 'grayscale':
       case 'invert':
       case 'opacity':
@@ -365,7 +353,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   void visitImportRule(ImportRule node) {
     super.visitImportRule(node);
     for (var import in node.imports.whereType<DynamicImport>()) {
-      var result = importCache.import(Uri.parse(import.url),
+      var result = importCache.import(import.url,
           baseImporter: _importer, baseUrl: _currentUrl, forImport: true);
       if (result == null) {
         throw MigrationSourceSpanException(
@@ -453,7 +441,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var oldLibraryUrl = _libraryUrl;
     _libraryUrl = null;
     var oldRuleUrl = _currentRuleUrl;
-    _currentRuleUrl = ruleUrl.toString();
+    _currentRuleUrl = ruleUrl;
     visitStylesheet(stylesheet);
     _checkUnresolvedReferences(_scope);
     _libraryUrl = oldLibraryUrl;
@@ -512,7 +500,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// Forwards [forwarding] into [declarations], adding the forwarded
   /// declaration to [_declarationSources].
-  void _forwardMember<T extends SassNode>(
+  void _forwardMember<T extends SassDeclaration>(
       MemberDeclaration<T> forwarding,
       ForwardRule forward,
       Uri forwardedUrl,
@@ -578,7 +566,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _linkUnresolvedReference(
             reference, reference.name, scope.mixins, _mixins);
       } else if (reference is FunctionExpression) {
-        var name = reference.name.asPlain?.replaceAll('_', '-');
+        var name = reference.name;
         if (name == null) continue;
         if (name == 'get-function') {
           var nameExpression = getStaticNameForGetFunctionCall(reference);
@@ -599,7 +587,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
   /// in [references] and removes it from [_unresolvedReferences].
   ///
   /// If [trackSources] is true, this also adds [reference] to [_sources].
-  void _linkUnresolvedReference<T extends SassNode>(
+  void _linkUnresolvedReference<T extends SassReference>(
       T reference,
       String name,
       Map<String, MemberDeclaration> declarations,
@@ -719,17 +707,13 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
       _sources[node] = BuiltInSource(urlForNamespace.path);
       return;
     }
-    var name = node.name.asPlain;
-    if (name == null) return;
-    name = name.replaceAll('_', '-');
-
-    var declaration = _scopeForNamespace(namespace).findFunction(name);
+    var declaration = _scopeForNamespace(namespace).findFunction(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _functions[node] = declaration;
       _sources[node] = _declarationSources[declaration]!;
       return;
     } else if (namespace == null) {
-      if (name == 'get-function') {
+      if (node.name == 'get-function') {
         _sources[node] = BuiltInSource("meta");
       } else {
         _unresolvedReferences[node] = _scope;
@@ -742,7 +726,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     if (nameExpression == null) return;
     var moduleExpression = getStaticModuleForGetFunctionCall(node);
     namespace = moduleExpression?.text;
-    name = nameExpression.text.replaceAll('_', '-');
+    var name = nameExpression.text.replaceAll('_', '-');
     declaration = _scopeForNamespace(namespace).findFunction(name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _getFunctionReferences[node] = declaration;
@@ -753,7 +737,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
 
   /// Registers the current library as a location from which [declaration] can
   /// be loaded.
-  void _registerLibraryUrl(MemberDeclaration<SassNode> declaration) {
+  void _registerLibraryUrl(MemberDeclaration declaration) {
     var libraryUrl = _libraryUrl;
     if (libraryUrl == null) return;
     _libraries.putIfAbsent(declaration, () => {}).add(libraryUrl);

@@ -31,7 +31,7 @@ class ImportSource extends ReferenceSource {
 
   /// The URL of the `@import` rule that loaded this member, or null if this
   /// is for an indirect dependency forwarded in an import-only file.
-  final String? originalRuleUrl;
+  final Uri? originalRuleUrl;
 
   /// Creates an [ImportSource] for [url] from [import].
   ///
@@ -158,7 +158,7 @@ class ImportOnlySource extends ReferenceSource {
   /// the URL of the `@import` rule that loaded that import-only file.
   ///
   /// Otherwise, this will be null.
-  final String? originalRuleUrl;
+  final Uri? originalRuleUrl;
 
   ImportOnlySource(this.url, this.realSourceUrl, this.originalRuleUrl);
 
