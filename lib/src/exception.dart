@@ -17,10 +17,13 @@ class MigrationException implements Exception {
   String toString() => "Error: $message";
 }
 
+// TODO(jathak): Stop extending [SassException] here.
+// ignore_for_file: subtype_of_sealed_class
+
 /// A [MigrationException] that has source span information associated with it.
-//
-// This extends [SassException] to ensure that migrator exceptions are formatted
-// the same way as the syntax errors Sass throws.
+///
+/// This extends [SassException] to ensure that migrator exceptions are
+/// formatted the same way as the syntax errors Sass throws.
 class MigrationSourceSpanException extends SassException
     implements MigrationException {
   MigrationSourceSpanException(String message, FileSpan span)

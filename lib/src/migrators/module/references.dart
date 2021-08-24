@@ -295,9 +295,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
     var functions = _unresolvedReferences.keys.whereType<FunctionExpression>();
     for (var function in functions) {
       if (_isCssCompatibilityOverload(function)) continue;
-      var name = function.name;
-      if (name == null) continue;
-      var module = builtInFunctionModules[name];
+      var module = builtInFunctionModules[function.name];
       if (module != null) _sources[function] = BuiltInSource(module);
     }
   }
@@ -566,9 +564,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
         _linkUnresolvedReference(
             reference, reference.name, scope.mixins, _mixins);
       } else if (reference is FunctionExpression) {
-        var name = reference.name;
-        if (name == null) continue;
-        if (name == 'get-function') {
+        if (reference.name == 'get-function') {
           var nameExpression = getStaticNameForGetFunctionCall(reference);
           if (nameExpression == null) continue;
           var staticName = nameExpression.text.replaceAll('_', '-');
@@ -577,7 +573,7 @@ class _ReferenceVisitor extends RecursiveAstVisitor {
               trackSources: false);
         } else {
           _linkUnresolvedReference(
-              reference, name, scope.functions, _functions);
+              reference, reference.name, scope.functions, _functions);
         }
       }
     }
