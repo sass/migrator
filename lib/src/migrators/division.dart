@@ -163,7 +163,6 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// for new-syntax color functions.
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    visitInterpolation(node.name);
     if (_tryColorFunction(node)) return;
     visitArgumentInvocation(node.arguments);
   }
@@ -226,7 +225,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Migrates [node] and returns true if it is a new-syntax color function or
   /// returns false if it is any other function.
   bool _tryColorFunction(FunctionExpression node) {
-    if (!["rgb", "rgba", "hsl", "hsla"].contains(node.name.asPlain)) {
+    if (!["rgb", "rgba", "hsl", "hsla"].contains(node.name)) {
       return false;
     }
 

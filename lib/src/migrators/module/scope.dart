@@ -21,8 +21,7 @@ class Scope {
   ///
   /// These are usually VariableDeclarations, but can also be Arguments from
   /// a CallableDeclaration.
-  final variables =
-      <String, MemberDeclaration<SassNode /*VariableDeclaration|Argument*/ >>{};
+  final variables = <String, MemberDeclaration>{};
 
   /// Mixins defined in this scope.
   final mixins = <String, MemberDeclaration<MixinRule>>{};

@@ -1,3 +1,7 @@
+## 1.5.2
+
+* No user-visible changes.
+
 ## 1.5.1
 
 ### Division Migrator
