@@ -1,0 +1,23 @@
+<==> input/entrypoint.scss
+a {
+  $x: 300px;
+  $y: 100%;
+  b: calc($x / 2);
+  c: clamp($x / 10, $y / 4, $x / 2);
+  d: min($x / 2, $y / 2);
+  e: calc(max($x / 2, $y / 2) / 2);
+  f: calc(#{$x / 2});
+  g: calc(fn($x / 2));
+}
+
+<==> output/entrypoint.scss
+a {
+  $x: 300px;
+  $y: 100%;
+  b: calc($x / 2);
+  c: clamp($x / 10, $y / 4, $x / 2);
+  d: min($x / 2, $y / 2);
+  e: calc(max($x / 2, $y / 2) / 2);
+  f: calc(#{$x * 0.5});
+  g: calc(fn($x * 0.5));
+}
