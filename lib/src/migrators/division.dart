@@ -69,6 +69,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// True when the current node is expected to evaluate to a number.
   var _expectsNumericResult = false;
 
+  /// True when the current node is in calc context, so division should be
+  /// left unchanged.
+  var _inCalcContext = false;
+
   /// The namespaces that already exist in the current stylesheet.
   Map<Uri, String?> get _existingNamespaces =>
       assertInStylesheet(__existingNamespaces, '_existingNamespaces');
@@ -140,7 +144,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   @override
   void visitArgumentInvocation(ArgumentInvocation invocation) {
     _withContext(() => super.visitArgumentInvocation(invocation),
-        isDivisionAllowed: true);
+        isDivisionAllowed: true, inCalcContext: false);
   }
 
   /// If this is a division operation, migrates it.
@@ -159,12 +163,29 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
   }
 
+  /// Visits calculations with [_inCalcContext] set to true.
+  @override
+  void visitCalculationExpression(CalculationExpression node) {
+    _withContext(() {
+      super.visitCalculationExpression(node);
+    }, inCalcContext: true);
+  }
+
   /// Allows division within a function call's arguments, with special handling
   /// for new-syntax color functions.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     if (_tryColorFunction(node)) return;
     visitArgumentInvocation(node.arguments);
+  }
+
+  /// Visits interpolation with [_isDivisionAllowed] and [_inCalcContext] set
+  /// to false.
+  @override
+  void visitInterpolation(Interpolation node) {
+    _withContext(() {
+      super.visitInterpolation(node);
+    }, isDivisionAllowed: false, inCalcContext: false);
   }
 
   /// Disallows division within this list.
@@ -271,6 +292,12 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true the `/` was migrated to either function call (indicating that
   /// parentheses surrounding this operation should be removed).
   bool _visitSlashOperation(BinaryOperationExpression node) {
+    if (_inCalcContext) {
+      node.left.accept(this);
+      node.right.accept(this);
+      return false;
+    }
+
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
         _isDefinitelyNotNumber(node)) {
       // Definitely not division
@@ -446,15 +473,18 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Runs [operation] with the given context.
   void _withContext(void operation(),
-      {bool? isDivisionAllowed, bool? expectsNumericResult}) {
+      {bool? isDivisionAllowed,
+      bool? expectsNumericResult,
+      bool? inCalcContext}) {
     var previousDivisionAllowed = _isDivisionAllowed;
     var previousNumericResult = _expectsNumericResult;
-    if (isDivisionAllowed != null) _isDivisionAllowed = isDivisionAllowed;
-    if (expectsNumericResult != null) {
-      _expectsNumericResult = expectsNumericResult;
-    }
+    var previousCalcContext = _inCalcContext;
+    _isDivisionAllowed = isDivisionAllowed ?? _isDivisionAllowed;
+    _expectsNumericResult = expectsNumericResult ?? _expectsNumericResult;
+    _inCalcContext = inCalcContext ?? _inCalcContext;
     operation();
     _isDivisionAllowed = previousDivisionAllowed;
     _expectsNumericResult = previousNumericResult;
+    _inCalcContext = previousCalcContext;
   }
 }

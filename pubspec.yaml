@@ -1,7 +1,6 @@
 name: sass_migrator
-version: 1.5.2
+version: 1.5.3
 description: A tool for running migrations on Sass files
-author: Jennifer Thakar <jathak@google.com>
 homepage: https://github.com/sass/migrator
 
 environment:
@@ -18,7 +17,7 @@ dependencies:
   node_interop: ^2.0.2
   node_io: ^2.1.0
   path: ^1.8.0
-  sass: ^1.38.1
+  sass: ^1.44.0
   source_span: ^1.8.1
   string_scanner: ^1.1.0
   term_glyph: ^1.2.0

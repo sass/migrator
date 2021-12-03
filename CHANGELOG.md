@@ -1,3 +1,9 @@
+## 1.5.3
+
+### Division Migrator
+
+* Fix a bug where division inside calc expressions was unnecessarily migrated.
+
 ## 1.5.2
 
 * No user-visible changes.
