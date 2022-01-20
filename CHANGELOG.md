@@ -1,3 +1,9 @@
+## 1.5.4
+
+### Module Migrator
+
+* Fix a bug where the built-in function `keywords` was incorrectly migrated.
+
 ## 1.5.3
 
 ### Division Migrator
