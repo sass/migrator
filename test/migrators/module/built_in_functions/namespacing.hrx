@@ -3,9 +3,18 @@ $a: mix(red, blue);
 $b: str-length("hello");
 $c: scale-color(blue, $lightness: -10%);
 
+@function fn($args...) {
+  @return keywords($args);
+}
+
 <==> output/entrypoint.scss
 @use "sass:color";
+@use "sass:meta";
 @use "sass:string";
 $a: color.mix(red, blue);
 $b: string.length("hello");
 $c: color.scale(blue, $lightness: -10%);
+
+@function fn($args...) {
+  @return meta.keywords($args);
+}
