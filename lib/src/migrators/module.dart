@@ -1321,7 +1321,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           prefix.length < identifier.length &&
           identifier.startsWith(prefix) &&
           Parser.isIdentifier(identifier.substring(prefix.length))),
-      (prefix) => prefix!.length);
+      (prefix) => prefix.length);
 
   /// Disallows `@use` after `@at-root` rules.
   @override
