@@ -1,4 +1,6 @@
-## 1.5.5-dev
+## 1.5.5
+
+* No user-visible changes.
 
 ## 1.5.4
 
