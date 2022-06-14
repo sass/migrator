@@ -4,13 +4,10 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-// The sass package's API is not necessarily stable. It is being imported with
-// the Sass team's explicit knowledge and approval. See
-// https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/ast/sass.dart';
-import 'package:sass_migrator/src/utils.dart';
-
 import 'package:path/path.dart' as p;
+import 'package:sass_api/sass_api.dart';
+
+import '../../utils.dart';
 
 /// A [ReferenceSource] is used to track where a referenced member came from.
 abstract class ReferenceSource {

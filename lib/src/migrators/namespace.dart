@@ -5,15 +5,8 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:args/args.dart';
-import 'package:sass/sass.dart';
+import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
-
-// The sass package's API is not necessarily stable. It is being imported with
-// the Sass team's explicit knowledge and approval. See
-// https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/exception.dart';
-import 'package:sass/src/import_cache.dart';
 
 import '../migration_visitor.dart';
 import '../migrator.dart';
@@ -107,7 +100,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
 
       // If there's still a conflict, fail unless --force is passed.
       if (!forceRename) {
-        throw MultiSpanSassException(
+        throw MultiSourceSpanException(
             'Rename failed. ${rules.length} rules would use namespace '
                 '"$newNamespace".\n'
                 'Run with --force to rename with numerical suffixes.',

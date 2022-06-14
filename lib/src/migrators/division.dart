@@ -5,18 +5,12 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:args/args.dart';
-import 'package:sass/sass.dart';
+import 'package:sass_api/sass_api.dart';
 
-// The sass package's API is not necessarily stable. It is being imported with
-// the Sass team's explicit knowledge and approval. See
-// https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/import_cache.dart';
-
-import 'package:sass_migrator/src/migration_visitor.dart';
-import 'package:sass_migrator/src/migrator.dart';
-import 'package:sass_migrator/src/patch.dart';
-import 'package:sass_migrator/src/utils.dart';
+import '../migration_visitor.dart';
+import '../migrator.dart';
+import '../patch.dart';
+import '../utils.dart';
 
 /// Migrates stylesheets that use the `/` operator for division to use the
 /// `divide` function instead.

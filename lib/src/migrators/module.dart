@@ -4,17 +4,10 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-// The sass package's API is not necessarily stable. It is being imported with
-// the Sass team's explicit knowledge and approval. See
-// https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/importer.dart';
-import 'package:sass/src/import_cache.dart';
-import 'package:sass/src/parse/parser.dart';
-
 import 'package:args/args.dart';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
 import 'package:tuple/tuple.dart';
 
@@ -1320,7 +1313,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       prefixesToRemove.where((prefix) =>
           prefix.length < identifier.length &&
           identifier.startsWith(prefix) &&
-          Parser.isIdentifier(identifier.substring(prefix.length))),
+          isIdentifier(identifier.substring(prefix.length))),
       (prefix) => prefix.length);
 
   /// Disallows `@use` after `@at-root` rules.
