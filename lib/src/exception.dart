@@ -4,7 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'package:sass/sass.dart';
+import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
 
 /// An exception thrown by a migrator.

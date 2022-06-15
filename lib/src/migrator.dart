@@ -4,23 +4,16 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-// The sass package's API is not necessarily stable. It is being imported with
-// the Sass team's explicit knowledge and approval. See
-// https://github.com/sass/dart-sass/issues/236.
-import 'package:sass/sass.dart';
-import 'package:sass/src/ast/sass.dart';
-import 'package:sass/src/importer.dart';
-import 'package:sass/src/import_cache.dart';
-
 import 'package:args/command_runner.dart';
 import 'package:glob/glob.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
-import 'package:sass_migrator/src/util/node_modules_importer.dart';
+import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
 
 import 'exception.dart';
 import 'io.dart';
+import 'util/node_modules_importer.dart';
 import 'utils.dart';
 
 /// A migrator is a command that migrates the entrypoints provided to it and
