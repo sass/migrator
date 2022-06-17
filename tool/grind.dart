@@ -14,7 +14,11 @@ main(List<String> args) {
   pkg.botEmail.value = "sass.bot.beep.boop@gmail.com";
   pkg.homebrewRepo.value = "sass/homebrew-sass";
   pkg.homebrewFormula.value = "migrator.rb";
-  pkg.jsRequires.value = {"fs": "fs", "os": "os", "path": "path"};
+  pkg.jsRequires.value = [
+    pkg.JSRequire('fs'),
+    pkg.JSRequire('os'),
+    pkg.JSRequire('path')
+  ];
   pkg.standaloneName.value = "sass-migrator";
   pkg.githubUser.fn = () => Platform.environment["GH_USER"]!;
   pkg.githubPassword.fn = () => Platform.environment["GH_TOKEN"]!;
