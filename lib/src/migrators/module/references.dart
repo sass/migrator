@@ -167,7 +167,7 @@ class References {
 }
 
 /// A visitor that builds a References object.
-class _ReferenceVisitor extends RecursiveAstVisitor {
+class _ReferenceVisitor with RecursiveStatementVisitor, RecursiveAstVisitor {
   final _variables = BidirectionalMap<VariableExpression, MemberDeclaration>();
   final _variableReassignments = BidirectionalMap<
       MemberDeclaration<VariableDeclaration>, MemberDeclaration>();

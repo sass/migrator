@@ -24,7 +24,8 @@ import 'patch.dart';
 /// If [migrateDependencies] is enabled, this visitor will construct and run a
 /// new instance of itself (using [newInstance]) each time it encounters an
 /// `@import` or `@use` rule.
-abstract class MigrationVisitor extends RecursiveAstVisitor {
+abstract class MigrationVisitor
+    with RecursiveStatementVisitor, RecursiveAstVisitor {
   /// A mapping from URLs to migrated contents for stylesheets already migrated.
   final _migrated = <Uri, String>{};
 
