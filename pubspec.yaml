@@ -10,7 +10,8 @@ dependencies:
   args: ^2.1.0
   charcode: ^1.2.0
   collection: ^1.16.0
-  file: ^6.1.0
+  # Workaround until pulyaevskiy/node-interop#110 is resolved
+  file: '>=6.1.0 <6.1.2'
   glob: ^2.0.1
   js: ^0.6.3
   meta: ^1.3.0
