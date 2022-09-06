@@ -56,7 +56,7 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
   await files.unpack();
 
   var process = await runMigrator([
-    migrator,
+    migrator.replaceAll('_', '-'),
     '--no-unicode',
     ...files.arguments,
     for (var path in files.input.keys)

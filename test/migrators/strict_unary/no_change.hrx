@@ -1,0 +1,20 @@
+<==> input/entrypoint.scss
+$x: 1;
+$y: 2;
+
+plus {
+  a: $x+$y;
+  b: $x + $y;
+  c: $x (+$y);
+  d: $x+ $y;
+}
+
+minus {
+  a: ($x)-$y;
+  b: $x - $y;
+  c: $x (-$y);
+  d: ($x)- $y;
+}
+
+<==> log.txt
+Nothing to migrate!

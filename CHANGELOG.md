@@ -1,3 +1,10 @@
+## 1.6.0
+
+### Strict Unary Migrator
+
+* Add a new migrator for eliminating ambiguous syntax for the `+` and `-`
+  operators that will soon be deprecated.
+
 ## 1.5.6
 
 * No user-visible changes.
