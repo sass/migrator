@@ -39,6 +39,7 @@ class MediaLogicMigrator extends Migrator {
 }
 
 class _MediaLogicVisitor extends MigrationVisitor {
+  /// For each stylesheet URL, the set of relevant spans that require migration.
   final Map<Uri, Set<FileSpan>> _expressionsToMigrate;
 
   _MediaLogicVisitor(ImportCache importCache, bool migrateDependencies,
