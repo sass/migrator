@@ -1,0 +1,25 @@
+<==> input/entrypoint.scss
+@media (not (foo)) {
+  a {b: c}
+}
+
+@media ((foo) and (bar)) {
+  d {e: f}
+}
+
+@media ((foo) or (bar)) {
+  g {h: i}
+}
+
+<==> output/entrypoint.scss
+@media (#{not (foo)}) {
+  a {b: c}
+}
+
+@media (#{(foo) and (bar)}) {
+  d {e: f}
+}
+
+@media (#{(foo) or (bar)}) {
+  g {h: i}
+}

@@ -1,3 +1,11 @@
+## 1.7.0
+
+### Media Logic Migrator
+
+* Adds a new migrator for migrating [deprecated `@media` query logic].
+
+[deprecated `@media` query logic]: https://sass-lang.com/d/media-logic
+
 ## 1.6.0
 
 ### Strict Unary Migrator

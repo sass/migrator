@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC
+// Copyright 2022 Google LLC
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file or at
@@ -8,9 +8,10 @@
 
 import 'package:test/test.dart';
 
+import 'migrator_dart_test.dart' as dart;
 import '../utils.dart';
 
 main() {
   runNodeTests = true;
-  testMigrator("module");
+  dart.main();
 }

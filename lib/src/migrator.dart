@@ -10,6 +10,7 @@ import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
+import 'package:stack_trace/stack_trace.dart';
 
 import 'exception.dart';
 import 'io.dart';
@@ -57,6 +58,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer);
 
+  /// This is called whenever a deprecation warning is emitted during parsing.
+  @protected
+  void handleDeprecation(String message, FileSpan? span) {}
+
   /// Runs this migrator.
   ///
   /// Each entrypoint is migrated separately. If a stylesheet is migrated more
@@ -70,7 +75,8 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     var importer = FilesystemImporter('.');
     var importCache = ImportCache(
         importers: [NodeModulesImporter()],
-        loadPaths: globalResults!['load-path']);
+        loadPaths: globalResults!['load-path'],
+        logger: _DeprecationLogger(this));
 
     var entrypoints = [
       for (var argument in argResults!.rest)
@@ -123,6 +129,25 @@ abstract class Migrator extends Command<Map<Uri, String>> {
         printStderr('  ${p.prettyUri(url)} '
             '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
       });
+    }
+  }
+}
+
+/// A silent logger that calls [Migrator.handleDeprecation] when it receives a
+/// deprecation warning
+class _DeprecationLogger implements Logger {
+  final Migrator migrator;
+
+  _DeprecationLogger(this.migrator);
+
+  @override
+  void debug(String message, SourceSpan span) {}
+
+  @override
+  void warn(String message,
+      {FileSpan? span, Trace? trace, bool deprecation = false}) {
+    if (deprecation) {
+      migrator.handleDeprecation(message, span);
     }
   }
 }
