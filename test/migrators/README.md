@@ -1,33 +1,10 @@
 # Migration Tests
 
-Each migrator should have:
+Each migrator should have a directory `<migrator-name>` that contains that
+migrator's HRX tests.
 
-* A `<migrator-name>_dart_test.dart` file that looks like:
-
-  ```dart
-  import '../utils.dart';
-
-  main() {
-    testMigrator("<migrator-name>");
-  }
-  ```
-
-* A `<migrator-name>_node_test.dart` file that looks like:
-
-  ```dart
-  @Tags("node")
-
-  import 'package:test/test.dart';
-
-  import '../utils.dart';
-
-  main() {
-    runNodeTests = true;
-    testMigrator("<migrator-name>");
-  }
-  ```
-
-* A directory `<migrator-name>` that contains that migrator's HRX tests,
+A line `testMigrator(<migrator-name>)` should then be added to the `main`
+function of `migrator_dart_test.dart`.
 
 ## HRX Format
 
