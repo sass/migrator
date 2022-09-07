@@ -1,0 +1,31 @@
+<==> input/entrypoint.scss
+$x: 1;
+$y: 2;
+
+plus {
+  a: $x +$y;
+  b: ($x) +($y);
+  c: $x +$y +$y;
+}
+
+minus {
+  a: $x -$y;
+  b: ($x) -($y);
+  c: $x -$y -$y;
+}
+
+<==> output/entrypoint.scss
+$x: 1;
+$y: 2;
+
+plus {
+  a: $x + $y;
+  b: ($x) + ($y);
+  c: $x + $y + $y;
+}
+
+minus {
+  a: $x - $y;
+  b: ($x) - ($y);
+  c: $x - $y - $y;
+}

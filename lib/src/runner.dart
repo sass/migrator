@@ -16,6 +16,7 @@ import 'io.dart';
 import 'migrators/division.dart';
 import 'migrators/module.dart';
 import 'migrators/namespace.dart';
+import 'migrators/strict_unary.dart';
 import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
@@ -55,6 +56,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
     addCommand(NamespaceMigrator());
+    addCommand(StrictUnaryMigrator());
   }
 
   /// Runs a migrator and then writes the migrated files to disk unless
