@@ -1,3 +1,8 @@
+## 1.7.1
+
+* Eliminates invalid warnings when running `--migrate-deps` on a file that
+  uses a built-in module.
+
 ## 1.7.0
 
 ### Media Logic Migrator
