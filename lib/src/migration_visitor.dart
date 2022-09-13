@@ -120,6 +120,7 @@ abstract class MigrationVisitor
   @protected
   void visitDependency(Uri dependency, FileSpan context,
       {bool forImport = false}) {
+    if (dependency.scheme == 'sass') return;
     var result = importCache.import(dependency,
         baseImporter: _importer, baseUrl: _currentUrl, forImport: forImport);
     if (result != null) {
