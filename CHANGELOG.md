@@ -1,3 +1,10 @@
+## 1.7.2
+
+### Module Migrator
+
+* Fixes a rare crash in certain cases involving reassignments of variables from
+  another module.
+
 ## 1.7.1
 
 * Eliminates invalid warnings when running `--migrate-deps` on a file that

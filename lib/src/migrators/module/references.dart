@@ -638,9 +638,8 @@ class _ReferenceVisitor with RecursiveStatementVisitor, RecursiveAstVisitor {
     var declaration = _scopeForNamespace(namespace).findVariable(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _variables[node] = declaration;
-      if (declaration.member is VariableDeclaration) {
-        _sources[node] = _declarationSources[declaration]!;
-      }
+      var source = _declarationSources[declaration];
+      if (source != null) _sources[node] = source;
     } else if (namespace == null) {
       _unresolvedReferences[node] = _scope;
     }
