@@ -58,6 +58,14 @@ void main() {
     ]).validate();
   });
 
+  test("treats file arguments as paths, not urls", () async {
+    await d.file("#file.scss", "a {b: (1 / 2)}").create();
+
+    await (await runMigrator(["division", "#file.scss"])).shouldExit(0);
+
+    await d.file("#file.scss", 'a {b: (1 * 0.5)}').validate();
+  });
+
   test("allows non-glob file arguments containing glob syntax", () async {
     await d.dir('[dir]', [d.file("test.scss", "a {b: (1 / 2)}")]).create();
 

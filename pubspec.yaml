@@ -1,5 +1,5 @@
 name: sass_migrator
-version: 1.7.2
+version: 1.7.3
 description: A tool for running migrations on Sass files
 homepage: https://github.com/sass/migrator
 

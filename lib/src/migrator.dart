@@ -88,7 +88,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     ];
     for (var entrypoint in entrypoints) {
       var tuple =
-          importCache.import(Uri.parse(entrypoint), baseImporter: importer);
+          importCache.import(p.toUri(entrypoint), baseImporter: importer);
       if (tuple == null) {
         throw MigrationException("Could not find Sass file at '$entrypoint'.");
       }
