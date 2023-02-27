@@ -1,3 +1,9 @@
+## 1.7.3
+
+* Fixes a bug where path arguments on the command line were incorrectly treated
+  as URLs, resulting in errors finding paths containing certain special
+  characters.
+
 ## 1.7.2
 
 ### Module Migrator
