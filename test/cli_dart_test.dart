@@ -5,16 +5,15 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:cli_pkg/testing.dart' as pkg;
+import 'package:sass_migrator/test/utils.dart';
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
-
-import 'utils.dart';
 
 void main() {
   pkg.ensureExecutableUpToDate('sass-migrator', node: runNodeTests);
 
   test("--version prints the migrator version", () async {
-    var migrator = await runMigrator(["--version"]);
+    var migrator = await runMigratorExecutable(["--version"]);
     expect(migrator.stdout, emits(matches(RegExp(r"^\d+\.\d+\.\d+"))));
     await migrator.shouldExit(0);
   });
@@ -22,7 +21,7 @@ void main() {
   test("--help prints the usage documentation", () async {
     // Checking the entire output is brittle, so just do a sanity check to make
     // sure it's not totally busted.
-    var migrator = await runMigrator(["--help"]);
+    var migrator = await runMigratorExecutable(["--help"]);
     expect(
         migrator.stdout, emits("Migrates stylesheets to new Sass versions."));
     expect(migrator.stdout,
@@ -35,7 +34,8 @@ void main() {
     await d.file("test-2.scss", "c {d: (1 / 2)}").create();
     await d.file("test-3.scss", "e {f: (1 / 2)}").create();
 
-    await (await runMigrator(["division", "test-*.scss"])).shouldExit(0);
+    await (await runMigratorExecutable(["division", "test-*.scss"]))
+        .shouldExit(0);
 
     await d.file("test-1.scss", 'a {b: (1 * 0.5)}').validate();
     await d.file("test-2.scss", 'c {d: (1 * 0.5)}').validate();
@@ -49,7 +49,7 @@ void main() {
       d.file("test-3.scss", "e {f: (1 / 2)}")
     ]).create();
 
-    await (await runMigrator(["division", "**.scss"])).shouldExit(0);
+    await (await runMigratorExecutable(["division", "**.scss"])).shouldExit(0);
 
     await d.dir('dir', [
       d.file("test-1.scss", 'a {b: (1 * 0.5)}'),
@@ -61,7 +61,8 @@ void main() {
   test("treats file arguments as paths, not urls", () async {
     await d.file("#file.scss", "a {b: (1 / 2)}").create();
 
-    await (await runMigrator(["division", "#file.scss"])).shouldExit(0);
+    await (await runMigratorExecutable(["division", "#file.scss"]))
+        .shouldExit(0);
 
     await d.file("#file.scss", 'a {b: (1 * 0.5)}').validate();
   });
@@ -69,7 +70,8 @@ void main() {
   test("allows non-glob file arguments containing glob syntax", () async {
     await d.dir('[dir]', [d.file("test.scss", "a {b: (1 / 2)}")]).create();
 
-    await (await runMigrator(["division", "[dir]/test.scss"])).shouldExit(0);
+    await (await runMigratorExecutable(["division", "[dir]/test.scss"]))
+        .shouldExit(0);
 
     await d.dir('[dir]', [d.file("test.scss", 'a {b: (1 * 0.5)}')]).validate();
   });
@@ -78,7 +80,8 @@ void main() {
     test("prints the name of a file that would be migrated", () async {
       await d.file("test.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
+      var migrator =
+          await runMigratorExecutable(["--dry-run", "module", "test.scss"]);
       expect(
           migrator.stdout,
           emitsInOrder([
@@ -95,8 +98,8 @@ void main() {
       await d.file("test.scss", "a {b: abs(-1)}").create();
       await d.file("other.scss", "a {b: c}").create();
 
-      var migrator =
-          await runMigrator(["--dry-run", "module", "test.scss", "other.scss"]);
+      var migrator = await runMigratorExecutable(
+          ["--dry-run", "module", "test.scss", "other.scss"]);
       expect(
           migrator.stdout,
           emitsInOrder([
@@ -113,7 +116,8 @@ void main() {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
+      var migrator =
+          await runMigratorExecutable(["--dry-run", "module", "test.scss"]);
       expect(
           migrator.stdout,
           emitsInOrder([
@@ -129,7 +133,7 @@ void main() {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(
+      var migrator = await runMigratorExecutable(
           ["--dry-run", "--migrate-deps", "module", "test.scss"]);
       expect(
           migrator.stdout,
@@ -146,7 +150,7 @@ void main() {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(
+      var migrator = await runMigratorExecutable(
           ["--dry-run", "--migrate-deps", "--verbose", "module", "test.scss"]);
       expect(
           migrator.stdout,
@@ -169,7 +173,7 @@ void main() {
 
   group("gracefully handles", () {
     test("an unknown command", () async {
-      var migrator = await runMigrator(["asdf"]);
+      var migrator = await runMigratorExecutable(["asdf"]);
       expect(migrator.stderr, emits('Could not find a command named "asdf".'));
       expect(migrator.stderr,
           emitsThrough(contains('for more information about a command.')));
@@ -177,7 +181,7 @@ void main() {
     });
 
     test("an unknown argument", () async {
-      var migrator = await runMigrator(["--asdf"]);
+      var migrator = await runMigratorExecutable(["--asdf"]);
       expect(migrator.stderr, emits('Could not find an option named "asdf".'));
       expect(migrator.stderr,
           emitsThrough(contains('for more information about a command.')));
@@ -185,8 +189,8 @@ void main() {
     });
 
     test("an invalid glob", () async {
-      var migrator =
-          await runMigrator(["--no-unicode", "module", "test.s{a,css"]);
+      var migrator = await runMigratorExecutable(
+          ["--no-unicode", "module", "test.s{a,css"]);
       expect(
           migrator.stderr,
           emitsInOrder([
@@ -203,7 +207,8 @@ void main() {
     test("a syntax error", () async {
       await d.file("test.scss", "a {b: }").create();
 
-      var migrator = await runMigrator(["--no-unicode", "module", "test.scss"]);
+      var migrator =
+          await runMigratorExecutable(["--no-unicode", "module", "test.scss"]);
       expect(
           migrator.stderr,
           emitsInOrder([
@@ -220,7 +225,8 @@ void main() {
     test("an error from a migrator", () async {
       await d.file("test.scss", "@import 'nonexistent';").create();
 
-      var migrator = await runMigrator(["--no-unicode", "module", "test.scss"]);
+      var migrator =
+          await runMigratorExecutable(["--no-unicode", "module", "test.scss"]);
       expect(
           migrator.stderr,
           emitsInOrder([
@@ -239,7 +245,7 @@ void main() {
       test("a syntax error", () async {
         await d.file("test.scss", "a {b: }").create();
 
-        var migrator = await runMigrator(
+        var migrator = await runMigratorExecutable(
             ["--no-unicode", "--color", "module", "test.scss"]);
         expect(
             migrator.stderr,
@@ -257,7 +263,7 @@ void main() {
       test("an error from a migrator", () async {
         await d.file("test.scss", "@import 'nonexistent';").create();
 
-        var migrator = await runMigrator(
+        var migrator = await runMigratorExecutable(
             ["--no-unicode", "--color", "module", "test.scss"]);
         expect(
             migrator.stderr,

@@ -4,7 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import '../utils.dart';
+import 'package:sass_migrator/test/utils.dart';
 
 main() {
   testMigrator("division");

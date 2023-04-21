@@ -6,10 +6,10 @@
 
 @Tags(["node"])
 
+import 'package:sass_migrator/test/utils.dart';
 import 'package:test/test.dart';
 
 import 'migrator_dart_test.dart' as dart;
-import '../utils.dart';
 
 main() {
   runNodeTests = true;
