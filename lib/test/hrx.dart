@@ -4,60 +4,22 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:cli_pkg/testing.dart' as pkg;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 import 'package:test_process/test_process.dart';
 
-/// Whether to run tests using the Node.js executable, as opposed to the Dart VM
-/// executable.
-///
-/// This is a global variable so that different test files can set it
-/// differently and run the same tests.
-var runNodeTests = false;
-
-/// Starts a Sass migrator process with the given [args].
-Future<TestProcess> runMigrator(List<String> args) =>
-    pkg.start('sass-migrator', args,
-        node: runNodeTests,
-        workingDirectory: d.sandbox,
-        description: "migrator",
-        encoding: utf8);
-
-/// Runs all tests for [migrator].
-///
-/// HRX files should be stored in `test/migrators/<migrator name>/`.
-void testMigrator(String migrator) {
-  setUpAll(() {
-    pkg.ensureExecutableUpToDate('sass-migrator', node: runNodeTests);
-  });
-
-  var dir = "test/migrators/$migrator";
-  group(migrator, () {
-    for (var file
-        in Directory(dir).listSync(recursive: true).whereType<File>()) {
-      if (file.path.endsWith(".hrx")) {
-        test(p.withoutExtension(p.relative(file.path, from: dir)),
-            () => _testHrx(file, migrator));
-      }
-    }
-  });
-}
-
-/// Run the migration test in [hrxFile].
+/// Run the migration test in [hrxFile] for the given [run] function.
 ///
 /// See migrations/README.md for details.
-Future<void> _testHrx(File hrxFile, String migrator) async {
+Future<void> hrxExecutableTest(File hrxFile,
+    Future<TestProcess> Function(List<String> arguments) run) async {
   var files = _HrxTestFiles(hrxFile.readAsStringSync());
   await files.unpack();
 
-  var process = await runMigrator([
-    migrator.replaceAll('_', '-'),
-    '--no-unicode',
+  var process = await run([
     ...files.arguments,
     for (var path in files.input.keys)
       if (path.startsWith("entrypoint")) path
@@ -100,7 +62,7 @@ class _HrxTestFiles {
     // TODO(jathak): Replace this with an actual HRX parser.
     String? filename;
     var contents = "";
-    for (var line in hrxText.substring(0, hrxText.length - 1).split("\n")) {
+    for (var line in hrxText.split("\n")) {
       if (line.startsWith("<==> ")) {
         if (filename != null) {
           _load(filename, contents.substring(0, contents.length - 1));
@@ -111,7 +73,9 @@ class _HrxTestFiles {
         contents += line + "\n";
       }
     }
-    if (filename != null) _load(filename, contents);
+    if (filename != null) {
+      _load(filename, contents.substring(0, contents.length - 1));
+    }
   }
 
   void _load(String filename, String? contents) {
