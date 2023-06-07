@@ -13,7 +13,7 @@ main(List<String> args) {
   pkg.botName.value = "Sass Bot";
   pkg.botEmail.value = "sass.bot.beep.boop@gmail.com";
   pkg.homebrewRepo.value = "sass/homebrew-sass";
-  pkg.homebrewFormula.value = "migrator.rb";
+  pkg.homebrewFormula.value = "Formula/migrator.rb";
   pkg.jsRequires.value = [
     pkg.JSRequire('fs'),
     pkg.JSRequire('os'),
