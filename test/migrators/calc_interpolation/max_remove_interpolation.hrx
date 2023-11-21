@@ -1,0 +1,7 @@
+<==> input/entrypoint.scss
+$c: 1;
+.a { .b: max(#{$c, 3}); }
+
+<==> output/entrypoint.scss
+$c: 1;
+.a { .b: max($c, 3); }

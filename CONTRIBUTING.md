@@ -54,5 +54,3 @@ review. In addition, because these models were trained indiscriminately and
 non-consensually on open-source code with a variety of licenses, it's not
 obvious that we have the moral or legal right to redistribute code they
 generate.
-
-

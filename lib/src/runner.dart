@@ -13,6 +13,7 @@ import 'package:source_span/source_span.dart';
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
 import 'io.dart';
+import 'migrators/calc_interpolation.dart';
 import 'migrators/division.dart';
 import 'migrators/media_logic.dart';
 import 'migrators/module.dart';
@@ -54,6 +55,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
           abbr: 'v', help: 'Print more information.', negatable: false)
       ..addFlag('version',
           help: 'Print the version of the Sass migrator.', negatable: false);
+    addCommand(CalculationInterpolationMigrator());
     addCommand(DivisionMigrator());
     addCommand(MediaLogicMigrator());
     addCommand(ModuleMigrator());
