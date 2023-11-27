@@ -28,3 +28,7 @@ not contain a file if it would not be changed by the migrator.
 The migration's expected standard output should be included in a file named
 `log.txt`. Its standard error should be included in a file called `error.txt` if
 the migration fails, or `warning.txt` if it completes successfully.
+
+## Testing
+Run `dart run grinder pkg-compile-snapshot-dev` for compiling the latest changes of code, 
+`dart test` for running all tests and `dart test -x node` to run all tests except the node tests.

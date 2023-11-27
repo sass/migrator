@@ -1,0 +1,7 @@
+<==> input/entrypoint.scss
+$c: 1;
+.a { .b: clamp(#{$c}); }
+
+<==> output/entrypoint.scss
+$c: 1;
+.a { .b: clamp($c); }

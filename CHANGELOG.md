@@ -1,3 +1,10 @@
+## 1.8.0
+
+### Calc Functions Interpolation Migrator
+
+* Removes interpolation in calculation functions `calc()`, `clamp()`, `min()`, and `max()`. 
+  See the [scss/function-calculation-no-interpolation](https://github.com/stylelint-scss/stylelint-scss/tree/master/src/rules/function-calculation-no-interpolation) rule for more information.
+
 ## 1.7.3
 
 * Fixes a bug where path arguments on the command line were incorrectly treated

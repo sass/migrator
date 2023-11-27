@@ -1,0 +1,13 @@
+<==> input/entrypoint.scss
+$c: 1;
+.a { .b: calc(#{$c + 1}); }
+
+// Nested
+.a { .b: calc(max(#{$c, 2})); }
+
+<==> output/entrypoint.scss
+$c: 1;
+.a { .b: calc($c + 1); }
+
+// Nested
+.a { .b: calc(max($c, 2)); }
