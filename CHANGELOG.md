@@ -1,3 +1,9 @@
+## 1.8.1
+
+### Calc Functions Interpolation Migrator
+
+* Migration for more than one interpolation or expressions in a calc function parameter.
+
 ## 1.8.0
 
 ### Calc Functions Interpolation Migrator
