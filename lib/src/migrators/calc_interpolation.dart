@@ -35,16 +35,22 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
   @override
   void visitCalculationExpression(CalculationExpression node) {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];
-    final interpolation = RegExp(r'^#{.*\s*}');
+    final interpolation = RegExp(r'\#{\s*[^}]+\s*}');
     if (calcFunctions.contains(node.name)) {
       for (var arg in node.arguments) {
+        var newArg = arg.toString();
         for (var match in interpolation.allMatches(arg.toString())) {
-          var noInterpolation = match[0].toString().substring(2, match.end - 1);
+          var noInterpolation =
+              match[0].toString().substring(2, match[0].toString().length - 1);
+          newArg = newArg
+              .toString()
+              .replaceAll(match[0].toString(), noInterpolation);
+        }
+        if (newArg != arg.toString()) {
           var interpolationSpan =
               node.span.file.span(arg.span.start.offset, arg.span.end.offset);
-          if (interpolationSpan.text == match[0].toString()) {
-            addPatch(Patch(interpolationSpan, noInterpolation));
-          }
+          addPatch(Patch(interpolationSpan, newArg));
+          return;
         }
       }
     }

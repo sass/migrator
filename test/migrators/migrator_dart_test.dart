@@ -7,6 +7,7 @@
 import '../utils.dart';
 
 main() {
+  testMigrator("calc_interpolation");
   testMigrator("division");
   testMigrator("media_logic");
   testMigrator("module");

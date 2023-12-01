@@ -1,13 +1,29 @@
 <==> input/entrypoint.scss
+$b: 10;
 $c: 1;
-.a { .b: calc(#{$c + 1}); }
+$d: 5;
+.a { .b: calc($b - #{$c + 1}); }
+
+// More than one interpolations
+.a { .b: calc($b - #{$c + 1} + #{$d}); }
 
 // Nested
-.a { .b: calc(max(#{$c, 2})); }
+.a { .b: calc(3 + max(#{$c, 2})); }
+
+// Nested and more interpolations
+.a { .b: calc(#{$b} + max(#{$c, 2})); }
 
 <==> output/entrypoint.scss
+$b: 10;
 $c: 1;
-.a { .b: calc($c + 1); }
+$d: 5;
+.a { .b: calc($b - $c + 1); }
+
+// More than one interpolations
+.a { .b: calc($b - $c + 1 + $d); }
 
 // Nested
-.a { .b: calc(max($c, 2)); }
+.a { .b: calc(3 + max($c, 2)); }
+
+// Nested and more interpolations
+.a { .b: calc($b + max($c, 2)); }
