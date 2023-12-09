@@ -2,10 +2,15 @@
 $b: 10;
 $c: 1;
 $d: 5;
-.a { .b: calc($b - #{$c + 1}); }
+
+// Single interpolation
+.a { .b: calc($b * #{$c + 1}); }
 
 // More than one interpolations
-.a { .b: calc($b - #{$c + 1} + #{$d}); }
+.a { 
+    .b: calc($b - #{$c + 1} + #{$d}); 
+    .c: calc(100% - #{$table_title_height + 2px});
+}
 
 // Nested
 .a { .b: calc(3 + max(#{$c, 2})); }
@@ -17,10 +22,15 @@ $d: 5;
 $b: 10;
 $c: 1;
 $d: 5;
-.a { .b: calc($b - $c + 1); }
+
+// Single interpolation
+.a { .b: calc($b * ($c + 1)); }
 
 // More than one interpolations
-.a { .b: calc($b - $c + 1 + $d); }
+.a { 
+    .b: calc($b - ($c + 1) + $d); 
+    .c: calc(100% - ($table-title-height + 2px));
+}
 
 // Nested
 .a { .b: calc(3 + max($c, 2)); }

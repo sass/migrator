@@ -36,12 +36,16 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
   void visitCalculationExpression(CalculationExpression node) {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];
     final interpolation = RegExp(r'\#{\s*[^}]+\s*}');
+    final hasOperation = RegExp(r'[-+*/]+');
     if (calcFunctions.contains(node.name)) {
       for (var arg in node.arguments) {
         var newArg = arg.toString();
         for (var match in interpolation.allMatches(arg.toString())) {
           var noInterpolation =
               match[0].toString().substring(2, match[0].toString().length - 1);
+          if (hasOperation.hasMatch(noInterpolation)) {
+            noInterpolation = '(' + noInterpolation + ')';
+          }
           newArg = newArg
               .toString()
               .replaceAll(match[0].toString(), noInterpolation);

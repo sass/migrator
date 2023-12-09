@@ -1,3 +1,9 @@
+## 1.8.2
+
+### Calc Functions Interpolation Migrator
+
+* Add parentheses in place of interpolation when necessary to preserve the evaluation order.
+
 ## 1.8.1
 
 ### Calc Functions Interpolation Migrator
