@@ -1,0 +1,21 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@import "ejemplo";
+$var: $value;
+
+<==> input/_ejemplo.scss
+$value: blue;
+a {
+  color: $var;
+}
+
+<==> error.txt
+Error: Error: Dependency loop detected: entrypoint -> ejemplo
+  ,
+1 | $value: blue;
+  | ^^^^^^^^^^^^
+  '
+  _ejemplo.scss 1:1  root stylesheet
+Migration failed!

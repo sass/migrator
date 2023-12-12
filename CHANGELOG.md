@@ -1,3 +1,7 @@
+## 1.8.2
+
+* Detect dependency loops in module migrator fix.
+
 ## 1.8.1
 
 ### Calc Functions Interpolation Migrator
