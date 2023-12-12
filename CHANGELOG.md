@@ -1,3 +1,7 @@
+## 2.5.8
+
+* Detect dependency loops in module migrator fix.
+
 ## 2.5.7
 
 * Fix a bug where the `--migrate-deps` flag would not apply to dependencies

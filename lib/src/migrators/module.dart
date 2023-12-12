@@ -16,6 +16,7 @@ import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
 import '../utils.dart';
+import '../util/dependency_graph.dart';
 import '../util/member_declaration.dart';
 import '../util/node_modules_importer.dart';
 
@@ -238,6 +239,33 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// CSS at rules that should be considered to not emit CSS for the purpose
   /// of hoisting late `@import` rules.
   final Set<String> safeAtRules;
+
+  /// Dependencies where keys represent source URIs and values represent imported URIs.
+  final DependencyGraph _dependencies = DependencyGraph();
+
+  /// Checks for dependency loops between source and imported paths.
+  ///
+  /// This method verifies whether importing a path introduces a circular dependency
+  /// by checking if the imported path is already mapped as a dependency of the source path.
+  ///
+  /// Throws a [MigrationException] if a dependency loop is detected.
+  ///
+  /// The [source] parameter is the path where the dependency is checked.
+  /// The [importedPath] parameter is the path being imported.
+  void _checkDependency(Uri source, Uri importedPath, FileSpan span) {
+    if (_dependencies.hasDependency(importedPath, source)) {
+      // Throw an error indicating a potential loop.
+      var (sourceUrl, _) = _absoluteUrlToDependency(source);
+      var (importedPathUrl, _) = _absoluteUrlToDependency(importedPath);
+      throw MigrationSourceSpanException(
+          'Dependency loop detected: ${sourceUrl} -> ${importedPathUrl}.\n'
+          'To resolve this issue, consider either of the following:\n'
+          '1. Remove the import statement that causes the dependency loop.\n'
+          '2. Declare the variables used in the other stylesheet within the same stylesheet.\n',
+          span);
+    }
+    _dependencies.add(source, importedPath);
+  }
 
   /// Constructs a new module migration visitor.
   ///
@@ -943,6 +971,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         withClause.isNotEmpty ||
         references.anyMemberReferenced(canonicalUrl, currentUrl)) {
       if (_usedUrls.add(canonicalUrl)) {
+        _checkDependency(currentUrl, canonicalUrl, context);
         rules.add('@use $quotedUrl$asClause$withClause');
       }
     }
@@ -1354,6 +1383,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   String? _namespaceForDeclaration(MemberDeclaration declaration) {
     var url = declaration.sourceUrl;
     if (url == currentUrl) return null;
+    // Trace dependencies for loop detection.
+    _checkDependency(currentUrl, url, declaration.member.span);
 
     // If we can load [declaration] from a library entrypoint URL, do so. Choose
     // the shortest one if there are multiple options.
