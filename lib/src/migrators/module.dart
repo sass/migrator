@@ -200,6 +200,21 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// The values of the --forward flag.
   final Set<ForwardType> forwards;
 
+  //  Maps direct and indirect dependencies to prevent any potential loops.
+  final Map<Uri, Uri> _dependencies = {};
+
+  void _addDependency(Uri source, Uri importedPath) {
+    if (_dependencies.containsKey(importedPath) &&
+        _dependencies[importedPath] == source) {
+      // Throw an error indicating a potential loop.
+      var sourceUrl = _absoluteUrlToDependency(source);
+      var importedPathUrl = _absoluteUrlToDependency(importedPath);
+      throw MigrationException(
+          'Dependency loop detected: ${sourceUrl.item1} -> ${importedPathUrl.item1}');
+    }
+    _dependencies[source] = importedPath;
+  }
+
   /// Constructs a new module migration visitor.
   ///
   /// [importCache] must be the same one used by [references].
@@ -1238,6 +1253,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   String? _namespaceForDeclaration(MemberDeclaration declaration) {
     var url = declaration.sourceUrl;
     if (url == currentUrl) return null;
+
+    // Trace dependencies for loop detection.
+    try {
+      _addDependency(currentUrl, url);
+    } on Exception catch (e) {
+      throw MigrationSourceSpanException(e.toString(), declaration.member.span);
+    }
 
     // If we can load [declaration] from a library entrypoint URL, do so. Choose
     // the shortest one if there are multiple options.
