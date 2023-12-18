@@ -21,6 +21,9 @@ $d: 5;
 // CSS Custom properties keep interpolation
 .a { --test: calc(#{$b} + 1);}
 
+// var() nested
+.a { .b: calc(var(#{$b}) + #{$c + 2} + var(--a-#{$d}-b)); }
+
 <==> output/entrypoint.scss
 $b: 10;
 $c: 1;
@@ -43,3 +46,6 @@ $d: 5;
 
 // CSS Custom properties keep interpolation
 .a { --test: calc(#{$b} + 1);}
+
+// var() nested
+.a { .b: calc(var(#{$b}) + ($c + 2) + var(--a-#{$d}-b)); }

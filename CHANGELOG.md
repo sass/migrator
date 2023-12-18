@@ -1,3 +1,10 @@
+## 2.0.1
+
+### Calc Functions Interpolation Migrator
+
+* Add parentheses in place of interpolation when necessary to preserve the evaluation order.
+* Keep interpolation in `var()` CSS functions.
+
 ## 2.0.0
 
 * **Breaking change**: The `media-logic` migrator has been removed as the
@@ -7,11 +14,6 @@
   [media logic]: https://sass-lang.com/documentation/breaking-changes/media-logic/
 
 * Update to be compatible with the latest version of the Dart Sass AST.
-
-### Calc Functions Interpolation Migrator
-
-* Add parentheses in place of interpolation when necessary to preserve the
-  evaluation order.
 
 ### Division Migrator
 
