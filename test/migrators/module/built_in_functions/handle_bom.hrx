@@ -1,0 +1,6 @@
+<==> input/entrypoint.scss
+﻿$variable: mix(red, blue);
+
+<==> output/entrypoint.scss
+﻿@use "sass:color";
+$variable: color.mix(red, blue);

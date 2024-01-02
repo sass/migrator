@@ -96,7 +96,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void beforePatch(Stylesheet node) {
     if (_useRulesToInsert.isEmpty) return;
     var useRules = _useRulesToInsert.join('\n');
-    var insertionPoint = node.span.start;
+    var insertionPoint = node.span.startSkipBom;
     for (var child in node.children) {
       if (child is LoudComment || child is SilentComment) continue;
       insertionPoint = child.span.start;

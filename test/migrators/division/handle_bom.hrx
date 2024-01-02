@@ -1,0 +1,7 @@
+<==> input/entrypoint.scss
+﻿$variable: 4 / 3;
+
+<==> output/entrypoint.scss
+﻿@use "sass:math";
+
+$variable: math.div(4, 3);

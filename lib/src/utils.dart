@@ -47,6 +47,13 @@ extension ExtendSpan on FileSpan {
     if (start.offset - text.length < 0) return false;
     return file.getText(start.offset - text.length, start.offset) == text;
   }
+
+  /// The start of this span, unless this span starts with a [byte order mark],
+  /// in which case this is the location immediately after the BOM.
+  ///
+  /// [byte order mark]: https://en.wikipedia.org/wiki/Byte_order_mark
+  FileLocation get startSkipBom =>
+      text.startsWith('\uFEFF') ? subspan(1).start : start;
 }
 
 extension NullableExtension<T> on T? {
