@@ -13,6 +13,7 @@ import 'package:source_span/source_span.dart';
 
 import 'exception.dart';
 import 'patch.dart';
+import 'util/scope.dart';
 import 'util/scoped_ast_visitor.dart';
 
 /// A visitor that migrates a stylesheet.
@@ -117,6 +118,9 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
 
   /// Visits the stylesheet at [dependency], resolved based on the current
   /// stylesheet's URL and importer.
+  ///
+  /// When [forImport] is true, this preserves the [currentScope]. Otherwise,
+  /// the dependency is visited with a new global scope for the new module.
   @protected
   void visitDependency(Uri dependency, FileSpan context,
       {bool forImport = false}) {
@@ -133,9 +137,12 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
       if (newImporter != _importer) return;
 
       var oldImporter = _importer;
+      var oldScope = currentScope;
       _importer = newImporter;
+      if (!forImport) currentScope = Scope();
       visitStylesheet(stylesheet);
       _importer = oldImporter;
+      currentScope = oldScope;
     } else {
       _missingDependencies.putIfAbsent(
           context.sourceUrl!.resolveUri(dependency), () => context);

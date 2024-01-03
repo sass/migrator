@@ -63,4 +63,6 @@ class Scope {
   /// if it does not.
   MemberDeclaration<FunctionRule>? findFunction(String name) =>
       functions[name] ?? parent?.findFunction(name);
+
+  String toString() => '${functions.keys}->$parent';
 }

@@ -15,11 +15,11 @@ import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
 import '../utils.dart';
+import '../util/member_declaration.dart';
 import '../util/node_modules_importer.dart';
 
 import 'module/built_in_functions.dart';
 import 'module/forward_type.dart';
-import '../util/member_declaration.dart';
 import 'module/reference_source.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
@@ -592,10 +592,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Visits [children] with a new scope for tracking unreferencable members.
   @override
-  void visitChildren(List<Statement> children) {
+  void visitChildren(List<Statement> children, {bool withScope = true}) {
     var oldUnreferencable = _unreferencable;
     _unreferencable = UnreferencableMembers(_unreferencable);
-    super.visitChildren(children);
+    super.visitChildren(children, withScope: withScope);
     _unreferencable = oldUnreferencable;
   }
 
