@@ -13,6 +13,7 @@ import 'package:source_span/source_span.dart';
 
 import 'exception.dart';
 import 'patch.dart';
+import 'util/scoped_ast_visitor.dart';
 
 /// A visitor that migrates a stylesheet.
 ///
@@ -24,8 +25,7 @@ import 'patch.dart';
 /// If [migrateDependencies] is enabled, this visitor will construct and run a
 /// new instance of itself (using [newInstance]) each time it encounters an
 /// `@import` or `@use` rule.
-abstract class MigrationVisitor
-    with RecursiveStatementVisitor, RecursiveAstVisitor {
+abstract class MigrationVisitor extends ScopedAstVisitor {
   /// A mapping from URLs to migrated contents for stylesheets already migrated.
   final _migrated = <Uri, String>{};
 
@@ -123,18 +123,17 @@ abstract class MigrationVisitor
     if (dependency.scheme == 'sass') return;
     var result = importCache.import(dependency,
         baseImporter: _importer, baseUrl: _currentUrl, forImport: forImport);
-    if (result != null) {
+    if (result case (var newImporter, var stylesheet)) {
       // If [dependency] comes from a non-relative import, don't migrate it,
       // because it's likely to be outside the user's repository and may even be
       // authored by a different person.
       //
       // TODO(nweiz): Add a flag to override this behavior for load paths
       // (#104).
-      if (result.item1 != _importer) return;
+      if (newImporter != _importer) return;
 
       var oldImporter = _importer;
-      _importer = result.item1;
-      var stylesheet = result.item2;
+      _importer = newImporter;
       visitStylesheet(stylesheet);
       _importer = oldImporter;
     } else {

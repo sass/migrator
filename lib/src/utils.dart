@@ -7,7 +7,6 @@
 import 'package:charcode/charcode.dart';
 import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
-import 'package:tuple/tuple.dart';
 
 import 'io.dart';
 import 'patch.dart';
@@ -220,7 +219,7 @@ bool isImportOnlyFile(Uri url) =>
 ///
 /// This asserts that every element in [iterable] is either an `F` or a `G`, and
 /// returns one list containing all the `F`s and one containing all the `G`s.
-Tuple2<List<F>, List<G>> partitionOnType<E, F extends E, G extends E>(
+(List<F>, List<G>) partitionOnType<E, F extends E, G extends E>(
     Iterable<E> iterable) {
   var fs = <F>[];
   var gs = <G>[];
@@ -233,5 +232,5 @@ Tuple2<List<F>, List<G>> partitionOnType<E, F extends E, G extends E>(
     }
   }
 
-  return Tuple2(fs, gs);
+  return (fs, gs);
 }

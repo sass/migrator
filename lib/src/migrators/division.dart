@@ -10,7 +10,34 @@ import 'package:sass_api/sass_api.dart';
 import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
+import '../util/scope.dart';
 import '../utils.dart';
+
+/// The CSS calculation functions where slash-division is allowed (unless
+/// there's a user-defined function with the same name).
+const _calcFunctions = {
+  'calc',
+  'clamp',
+  'min',
+  'max',
+  'round',
+  'mod',
+  'rem',
+  'sin',
+  'cos',
+  'tan',
+  'asin',
+  'acos',
+  'atan',
+  'atan2',
+  'pow',
+  'sqrt',
+  'hypot',
+  'log',
+  'exp',
+  'abs',
+  'sign',
+};
 
 /// Migrates stylesheets that use the `/` operator for division to use the
 /// `divide` function instead.
@@ -81,13 +108,16 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void visitStylesheet(Stylesheet node) {
     var oldNamespaces = __existingNamespaces;
     var oldUseRules = __useRulesToInsert;
+    var oldScope = currentScope;
     __existingNamespaces = {
       for (var rule in node.uses) rule.url: rule.namespace
     };
     __useRulesToInsert = [];
+    currentScope = Scope();
     super.visitStylesheet(node);
     __existingNamespaces = oldNamespaces;
     __useRulesToInsert = oldUseRules;
+    currentScope = oldScope;
   }
 
   /// Inserts [_useRulesToInsert] before the first existing dependency (or at
@@ -136,9 +166,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Allows division within this argument invocation.
   @override
-  void visitArgumentInvocation(ArgumentInvocation invocation) {
+  void visitArgumentInvocation(ArgumentInvocation invocation,
+      {bool inCalcContext = false}) {
     _withContext(() => super.visitArgumentInvocation(invocation),
-        isDivisionAllowed: true, inCalcContext: false);
+        isDivisionAllowed: true, inCalcContext: inCalcContext);
   }
 
   /// If this is a division operation, migrates it.
@@ -157,20 +188,15 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  /// Visits calculations with [_inCalcContext] set to true.
-  @override
-  void visitCalculationExpression(CalculationExpression node) {
-    _withContext(() {
-      super.visitCalculationExpression(node);
-    }, inCalcContext: true);
-  }
-
   /// Allows division within a function call's arguments, with special handling
-  /// for new-syntax color functions.
+  /// for calc functions and new-syntax color functions.
   @override
   void visitFunctionExpression(FunctionExpression node) {
     if (_tryColorFunction(node)) return;
-    visitArgumentInvocation(node.arguments);
+    var validCalcs = _calcFunctions.difference(currentScope.allFunctionNames);
+    visitArgumentInvocation(node.arguments,
+        inCalcContext:
+            node.namespace == null && validCalcs.contains(node.name));
   }
 
   /// Visits interpolation with [_isDivisionAllowed] and [_inCalcContext] set
@@ -198,9 +224,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void visitParenthesizedExpression(ParenthesizedExpression node,
       {bool negated = false}) {
     _withContext(() {
-      var expression = node.expression;
-      if (expression is BinaryOperationExpression &&
-          expression.operator == BinaryOperator.dividedBy) {
+      if (node.expression
+          case BinaryOperationExpression(operator: BinaryOperator.dividedBy) &&
+              var expression) {
         if (_visitSlashOperation(expression) && !negated) {
           addPatch(patchDelete(node.span, end: 1));
           addPatch(patchDelete(node.span, start: node.span.length - 1));
@@ -215,9 +241,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// parenthesized expression.
   @override
   void visitUnaryOperationExpression(UnaryOperationExpression node) {
-    var operand = node.operand;
-    if (node.operator == UnaryOperator.minus &&
-        operand is ParenthesizedExpression) {
+    if (node
+        case UnaryOperationExpression(
+          operator: UnaryOperator.minus,
+          :ParenthesizedExpression operand
+        )) {
       visitParenthesizedExpression(operand, negated: true);
       return;
     }
@@ -244,40 +272,45 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       return false;
     }
 
-    ListExpression? channels;
-    if (node.arguments.positional.length == 1 &&
-        node.arguments.named.isEmpty &&
-        node.arguments.positional.first is ListExpression) {
-      channels = node.arguments.positional.first as ListExpression?;
-    } else if (node.arguments.positional.isEmpty &&
-        node.arguments.named.containsKey(r'$channels') &&
-        node.arguments.named.length == 1 &&
-        node.arguments.named[r'$channels'] is ListExpression) {
-      channels = node.arguments.named[r'$channels'] as ListExpression?;
-    }
-    if (channels == null ||
-        channels.hasBrackets ||
-        channels.separator != ListSeparator.space ||
-        channels.contents.length != 3 ||
-        channels.contents.last is! BinaryOperationExpression) {
-      return false;
-    }
+    var channels = switch (node.arguments) {
+      ArgumentInvocation(positional: [ListExpression arg, ...], named: Map()) =>
+        arg,
+      ArgumentInvocation(
+        positional: [],
+        named: {r'$channels': ListExpression arg}
+      ) =>
+        arg,
+      _ => null,
+    };
 
-    var last = channels.contents.last as BinaryOperationExpression;
-    if (last.left is! NumberExpression || last.right is! NumberExpression) {
-      // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2` to
-      // `divide(30, 20)` would cause `/ 0.5` to be interpreted as division.
-      _patchSpacesToCommas(channels);
-      _patchOperatorToComma(last);
+    if (channels
+        case ListExpression(
+          hasBrackets: false,
+          separator: ListSeparator.space,
+          contents: [_, _, BinaryOperationExpression last]
+        )) {
+      // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2`
+      // to `div(30, 20)` would cause `/ 0.5` to be interpreted as division.
+      switch (last) {
+        case BinaryOperationExpression(
+            left: NumberExpression _,
+            right: NumberExpression _
+          ):
+          break;
+        default:
+          _patchSpacesToCommas(channels);
+          _patchOperatorToComma(last);
+      }
+      _withContext(() {
+        // Non-null assertion is required because of dart-lang/language#1536.
+        channels.contents[0].accept(this);
+        channels.contents[1].accept(this);
+        last.left.accept(this);
+      }, isDivisionAllowed: true);
+      last.right.accept(this);
+      return true;
     }
-    _withContext(() {
-      // Non-null assertion is required because of dart-lang/language#1536.
-      channels!.contents[0].accept(this);
-      channels.contents[1].accept(this);
-      last.left.accept(this);
-    }, isDivisionAllowed: true);
-    last.right.accept(this);
-    return true;
+    return false;
   }
 
   /// Visits a `/` operation [node] and migrates it to either the `division`
@@ -291,9 +324,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       node.right.accept(this);
       return false;
     }
+    var status = _NumberStatus.of(node);
 
     if ((!_isDivisionAllowed && _onlySlash(node)) ||
-        _isDefinitelyNotNumber(node)) {
+        status == _NumberStatus.no) {
       // Definitely not division
       if (_isDivisionAllowed || _containsInterpolation(node)) {
         // We only want to convert a non-division slash operation to a
@@ -305,7 +339,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       }
       return true;
     }
-    if (_expectsNumericResult || _isDefinitelyNumber(node) || !isPessimistic) {
+    if (_expectsNumericResult ||
+        status == _NumberStatus.yes ||
+        !isPessimistic) {
       // Definitely division
       _withContext(() => super.visitBinaryOperationExpression(node),
           expectsNumericResult: true);
@@ -330,110 +366,81 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if patched and false otherwise.
   bool _tryMultiplication(BinaryOperationExpression node) {
     if (!useMultiplication) return false;
-    var divisor = node.right;
-    if (divisor is! NumberExpression) return false;
-    if (divisor.unit != null) return false;
-    if (!_allowedDivisors.contains(divisor.value)) return false;
-    var operatorSpan = node.left.span
-        .extendThroughWhitespace()
-        .end
-        .pointSpan()
-        .extendIfMatches('/');
-    addPatch(Patch(operatorSpan, '*'));
-    addPatch(Patch(node.right.span, '${1 / divisor.value}'));
-    return true;
+    if (node.right case NumberExpression(unit: null, value: var divisor)) {
+      if (!_allowedDivisors.contains(divisor)) return false;
+      var operatorSpan = node.left.span
+          .extendThroughWhitespace()
+          .end
+          .pointSpan()
+          .extendIfMatches('/');
+      addPatch(Patch(operatorSpan, '*'));
+      addPatch(Patch(node.right.span, '${1 / divisor}'));
+      return true;
+    }
+    return false;
   }
 
   /// Visits the arguments of a `/` operation that is being converted into a
   /// call to `slash-list`, converting slashes to commas and removing
   /// unnecessary interpolation.
   void _visitSlashListArguments(Expression node) {
-    if (node is BinaryOperationExpression &&
-        node.operator == BinaryOperator.dividedBy) {
-      _visitSlashListArguments(node.left);
-      _patchOperatorToComma(node);
-      _visitSlashListArguments(node.right);
-    } else if (node is StringExpression &&
-        node.text.contents.length == 1 &&
-        node.text.contents.first is Expression) {
-      // Remove `#{` and `}`
-      addPatch(patchDelete(node.span, end: 2));
-      addPatch(patchDelete(node.span, start: node.span.length - 1));
-      (node.text.contents.first as Expression).accept(this);
-    } else {
-      node.accept(this);
+    switch (node) {
+      case BinaryOperationExpression(operator: BinaryOperator.dividedBy):
+        _visitSlashListArguments(node.left);
+        _patchOperatorToComma(node);
+        _visitSlashListArguments(node.right);
+      case StringExpression(text: Interpolation(contents: [Expression item])):
+        // Remove `#{` and `}`
+        addPatch(patchDelete(node.span, end: 2));
+        addPatch(patchDelete(node.span, start: node.span.length - 1));
+        item.accept(this);
+      default:
+        node.accept(this);
     }
   }
-
-  /// Returns true if we assume that [operator] always returns a number.
-  ///
-  /// This is true for `*` and `%`.
-  bool _returnsNumbers(BinaryOperator operator) =>
-      operator == BinaryOperator.times || operator == BinaryOperator.modulo;
 
   /// Returns true if we assume that [operator] always operators on numbers.
   ///
   /// This is true for `*`, `%`, `<`, `<=`, `>`, and `>=`.
-  bool _operatesOnNumbers(BinaryOperator operator) =>
-      _returnsNumbers(operator) ||
-      operator == BinaryOperator.lessThan ||
-      operator == BinaryOperator.lessThanOrEquals ||
-      operator == BinaryOperator.greaterThan ||
-      operator == BinaryOperator.greaterThanOrEquals;
+  bool _operatesOnNumbers(BinaryOperator operator) => {
+        BinaryOperator.times,
+        BinaryOperator.modulo,
+        BinaryOperator.lessThan,
+        BinaryOperator.lessThanOrEquals,
+        BinaryOperator.greaterThan,
+        BinaryOperator.greaterThanOrEquals
+      }.contains(operator);
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
   bool _onlySlash(Expression node) {
-    if (node is NumberExpression) return true;
-    if (node is BinaryOperationExpression) {
-      return node.operator == BinaryOperator.dividedBy &&
-          _onlySlash(node.left) &&
-          _onlySlash(node.right);
+    switch (node) {
+      case NumberExpression():
+        return true;
+      case BinaryOperationExpression(
+          operator: BinaryOperator.dividedBy,
+          :var left,
+          :var right
+        ):
+        return _onlySlash(left) && _onlySlash(right);
+      default:
+        return false;
     }
-    return false;
-  }
-
-  /// Returns true if [node] is known to always evaluate to a number.
-  bool _isDefinitelyNumber(Expression node) {
-    if (node is NumberExpression) return true;
-    if (node is ParenthesizedExpression) {
-      return _isDefinitelyNumber(node.expression);
-    } else if (node is UnaryOperationExpression) {
-      return _isDefinitelyNumber(node.operand);
-    } else if (node is BinaryOperationExpression) {
-      return _returnsNumbers(node.operator) ||
-          (_isDefinitelyNumber(node.left) && _isDefinitelyNumber(node.right));
-    }
-    return false;
-  }
-
-  /// Returns true if [node] contains a subexpression known to not be a number.
-  bool _isDefinitelyNotNumber(Expression node) {
-    if (node is ParenthesizedExpression) {
-      return _isDefinitelyNotNumber(node.expression);
-    }
-    if (node is BinaryOperationExpression) {
-      return _isDefinitelyNotNumber(node.left) ||
-          _isDefinitelyNotNumber(node.right);
-    }
-    return node is BooleanExpression ||
-        node is ColorExpression ||
-        node is ListExpression ||
-        node is MapExpression ||
-        node is NullExpression ||
-        node is StringExpression;
   }
 
   /// Returns true if [node] contains an interpolation.
   bool _containsInterpolation(Expression node) {
-    if (node is ParenthesizedExpression) {
-      return _containsInterpolation(node.expression);
+    switch (node) {
+      case ParenthesizedExpression(:var expression):
+      case UnaryOperationExpression(operand: var expression):
+        return _containsInterpolation(expression);
+      case BinaryOperationExpression(:var left, :var right):
+        return _containsInterpolation(left) || _containsInterpolation(right);
+      case StringExpression(text: Interpolation(asPlain: null)):
+        return true;
+      default:
+        return false;
     }
-    if (node is BinaryOperationExpression) {
-      return _containsInterpolation(node.left) ||
-          _containsInterpolation(node.right);
-    }
-    return node is StringExpression && node.text.asPlain == null;
   }
 
   /// Converts a space-separated list [node] to a comma-separated list.
@@ -456,9 +463,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// ParenthesizedExpression.
   void _patchParensIfAny(SassNode node) {
     if (node is! ParenthesizedExpression) return;
-    var expression = node.expression;
-    if (expression is BinaryOperationExpression &&
-        expression.operator == BinaryOperator.dividedBy) {
+    if (node.expression
+        case BinaryOperationExpression(operator: BinaryOperator.dividedBy)) {
       return;
     }
     addPatch(patchDelete(node.span, end: 1));
@@ -480,5 +486,43 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     _isDivisionAllowed = previousDivisionAllowed;
     _expectsNumericResult = previousNumericResult;
     _inCalcContext = previousCalcContext;
+  }
+}
+
+/// Represents whether an expression is definitely a number, definitely not a
+/// number, or unknown.
+enum _NumberStatus {
+  yes,
+  no,
+  maybe;
+
+  /// Returns [yes] if [node] is definitely a number, [no] if [node] is
+  /// definitely not a number, and [maybe] otherwise.
+  static _NumberStatus of(Expression node) {
+    switch (node) {
+      case NumberExpression():
+      case BinaryOperationExpression(
+          operator: BinaryOperator.times || BinaryOperator.modulo
+        ):
+        return yes;
+      case BooleanExpression():
+      case ColorExpression():
+      case ListExpression():
+      case MapExpression():
+      case NullExpression():
+      case StringExpression():
+        return no;
+      case ParenthesizedExpression(:var expression):
+      case UnaryOperationExpression(operand: var expression):
+        return of(expression);
+      case BinaryOperationExpression(:var left, :var right):
+        return switch ((of(left), of(right))) {
+          (yes, yes) => yes,
+          (no, _) || (_, no) => no,
+          _ => maybe
+        };
+      default:
+        return maybe;
+    }
   }
 }

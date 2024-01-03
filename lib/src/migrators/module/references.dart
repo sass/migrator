@@ -13,9 +13,9 @@ import '../../util/bidirectional_map.dart';
 import '../../util/unmodifiable_bidirectional_map_view.dart';
 import '../../utils.dart';
 import 'built_in_functions.dart';
-import 'member_declaration.dart';
+import '../../util/member_declaration.dart';
 import 'reference_source.dart';
-import 'scope.dart';
+import '../../util/scope.dart';
 
 /// A bidirectional mapping between member declarations and references to those
 /// members.
@@ -350,17 +350,18 @@ class _ReferenceVisitor with RecursiveStatementVisitor, RecursiveAstVisitor {
             "Could not find Sass file at '${p.prettyUri(import.url)}'.",
             import.span);
       }
+      var (newImporter, stylesheet) = result;
 
       var oldImporter = _importer;
-      _importer = result.item1;
+      _importer = newImporter;
       var oldLibraryUrl = _libraryUrl;
-      var url = result.item2.span.sourceUrl!;
+      var url = stylesheet.span.sourceUrl!;
       if (_importer != oldImporter && !isImportOnlyFile(url)) {
         _libraryUrl ??= url;
       }
       var oldRuleUrl = _currentRuleUrl;
       _currentRuleUrl = import.url;
-      visitStylesheet(result.item2);
+      visitStylesheet(stylesheet);
       var importSource = ImportSource(url, import);
       for (var entry in _declarationSources.entries.toList()) {
         var declaration = entry.key;
@@ -415,8 +416,8 @@ class _ReferenceVisitor with RecursiveStatementVisitor, RecursiveAstVisitor {
           "Could not find Sass file at '${p.prettyUri(ruleUrl)}'.",
           nodeForSpan.span);
     }
+    var (newImporter, stylesheet) = result;
 
-    var stylesheet = result.item2;
     var canonicalUrl = stylesheet.span.sourceUrl!;
     if (_moduleScopes.containsKey(canonicalUrl)) return canonicalUrl;
 
@@ -427,7 +428,7 @@ class _ReferenceVisitor with RecursiveStatementVisitor, RecursiveAstVisitor {
     _declarationSources = {};
     _moduleSources[canonicalUrl] = _declarationSources;
     var oldImporter = _importer;
-    _importer = result.item1;
+    _importer = newImporter;
     var oldLibraryUrl = _libraryUrl;
     _libraryUrl = null;
     var oldRuleUrl = _currentRuleUrl;

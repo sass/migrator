@@ -33,12 +33,12 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
       : super(importCache, migrateDependencies);
 
   @override
-  void visitCalculationExpression(CalculationExpression node) {
+  void visitFunctionExpression(FunctionExpression node) {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];
     final interpolation = RegExp(r'\#{\s*[^}]+\s*}');
     final hasOperation = RegExp(r'[-+*/]+');
     if (calcFunctions.contains(node.name)) {
-      for (var arg in node.arguments) {
+      for (var arg in node.arguments.positional) {
         var newArg = arg.toString();
         for (var match in interpolation.allMatches(arg.toString())) {
           var noInterpolation =
@@ -58,6 +58,6 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
         }
       }
     }
-    super.visitCalculationExpression(node);
+    super.visitFunctionExpression(node);
   }
 }

@@ -7,7 +7,7 @@
 import 'package:path/path.dart' as p;
 import 'package:sass_api/sass_api.dart';
 
-import '../../utils.dart';
+import '../utils.dart';
 
 /// A wrapper class for nodes that declare a variable, function, or mixin.
 class MemberDeclaration<T extends SassDeclaration> {

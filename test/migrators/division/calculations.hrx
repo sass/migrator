@@ -1,23 +1,37 @@
 <==> input/entrypoint.scss
+@function sqrt($a) {
+  @return $a;
+}
+
 a {
   $x: 300px;
   $y: 100%;
+  $z: 200;
   b: calc($x / 2);
   c: clamp($x / 10, $y / 4, $x / 2);
   d: min($x / 2, $y / 2);
   e: calc(max($x / 2, $y / 2) / 2);
   f: calc(#{$x / 2});
   g: calc(fn($x / 2));
+  h: sqrt($z / 2);
+  i: log($z / 2);
 }
 
 <==> output/entrypoint.scss
+@function sqrt($a) {
+  @return $a;
+}
+
 a {
   $x: 300px;
   $y: 100%;
+  $z: 200;
   b: calc($x / 2);
   c: clamp($x / 10, $y / 4, $x / 2);
   d: min($x / 2, $y / 2);
   e: calc(max($x / 2, $y / 2) / 2);
   f: calc(#{$x * 0.5});
   g: calc(fn($x * 0.5));
+  h: sqrt($z * 0.5);
+  i: log($z / 2);
 }
