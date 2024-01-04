@@ -14,8 +14,8 @@ import 'scope.dart';
 /// current scope.
 abstract class ScopedAstVisitor
     with RecursiveStatementVisitor, RecursiveAstVisitor {
-  /// The current scope, containing any visible without a namespace to the
-  /// current point in the AST.
+  /// The current scope, containing any visible Sass members without a namespace
+  /// to the current point in the AST.
   ///
   /// Subclasses that visit multiple modules should update this when changing
   /// the module being visited.
@@ -64,8 +64,9 @@ abstract class ScopedAstVisitor
     scoped(() {
       for (var argument in node.arguments.arguments) {
         currentScope.variables[argument.name] = MemberDeclaration(argument);
-        var defaultValue = argument.defaultValue;
-        if (defaultValue != null) visitExpression(defaultValue);
+        if (argument.defaultValue case var defaultValue?) {
+          visitExpression(defaultValue);
+        }
       }
       visitChildren(node.children, withScope: false);
     });

@@ -273,7 +273,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
 
     var channels = switch (node.arguments) {
-      ArgumentInvocation(positional: [ListExpression arg, ...], named: Map()) =>
+      ArgumentInvocation(
+        positional: [ListExpression arg],
+        named: Map(isEmpty: true)
+      ) =>
         arg,
       ArgumentInvocation(
         positional: [],
@@ -291,15 +294,15 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         )) {
       // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2`
       // to `div(30, 20)` would cause `/ 0.5` to be interpreted as division.
-      switch (last) {
-        case BinaryOperationExpression(
-            left: NumberExpression _,
-            right: NumberExpression _
-          ):
-          break;
-        default:
-          _patchSpacesToCommas(channels);
-          _patchOperatorToComma(last);
+      if (last
+          case BinaryOperationExpression(
+            left: NumberExpression(),
+            right: NumberExpression()
+          )) {
+        // Nothing to patch
+      } else {
+        _patchSpacesToCommas(channels);
+        _patchOperatorToComma(last);
       }
       _withContext(() {
         // Non-null assertion is required because of dart-lang/language#1536.
@@ -366,8 +369,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if patched and false otherwise.
   bool _tryMultiplication(BinaryOperationExpression node) {
     if (!useMultiplication) return false;
-    if (node.right case NumberExpression(unit: null, value: var divisor)) {
-      if (!_allowedDivisors.contains(divisor)) return false;
+    if (node.right case NumberExpression(unit: null, value: var divisor)
+        when _allowedDivisors.contains(divisor)) {
       var operatorSpan = node.left.span
           .extendThroughWhitespace()
           .end
@@ -413,35 +416,27 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
-  bool _onlySlash(Expression node) {
-    switch (node) {
-      case NumberExpression():
-        return true;
-      case BinaryOperationExpression(
+  bool _onlySlash(Expression node) => switch (node) {
+        NumberExpression() => true,
+        BinaryOperationExpression(
           operator: BinaryOperator.dividedBy,
           :var left,
           :var right
-        ):
-        return _onlySlash(left) && _onlySlash(right);
-      default:
-        return false;
-    }
-  }
+        ) =>
+          _onlySlash(left) && _onlySlash(right),
+        _ => false
+      };
 
   /// Returns true if [node] contains an interpolation.
-  bool _containsInterpolation(Expression node) {
-    switch (node) {
-      case ParenthesizedExpression(:var expression):
-      case UnaryOperationExpression(operand: var expression):
-        return _containsInterpolation(expression);
-      case BinaryOperationExpression(:var left, :var right):
-        return _containsInterpolation(left) || _containsInterpolation(right);
-      case StringExpression(text: Interpolation(asPlain: null)):
-        return true;
-      default:
-        return false;
-    }
-  }
+  bool _containsInterpolation(Expression node) => switch (node) {
+        ParenthesizedExpression(:var expression) ||
+        UnaryOperationExpression(operand: var expression) =>
+          _containsInterpolation(expression),
+        BinaryOperationExpression(:var left, :var right) =>
+          _containsInterpolation(left) || _containsInterpolation(right),
+        StringExpression(text: Interpolation(asPlain: null)) => true,
+        _ => false
+      };
 
   /// Converts a space-separated list [node] to a comma-separated list.
   void _patchSpacesToCommas(ListExpression node) {
@@ -498,31 +493,30 @@ enum _NumberStatus {
 
   /// Returns [yes] if [node] is definitely a number, [no] if [node] is
   /// definitely not a number, and [maybe] otherwise.
-  static _NumberStatus of(Expression node) {
-    switch (node) {
-      case NumberExpression():
-      case BinaryOperationExpression(
+  static _NumberStatus of(Expression node) => switch (node) {
+        NumberExpression() ||
+        BinaryOperationExpression(
           operator: BinaryOperator.times || BinaryOperator.modulo
-        ):
-        return yes;
-      case BooleanExpression():
-      case ColorExpression():
-      case ListExpression():
-      case MapExpression():
-      case NullExpression():
-      case StringExpression():
-        return no;
-      case ParenthesizedExpression(:var expression):
-      case UnaryOperationExpression(operand: var expression):
-        return of(expression);
-      case BinaryOperationExpression(:var left, :var right):
-        return switch ((of(left), of(right))) {
-          (yes, yes) => yes,
-          (no, _) || (_, no) => no,
-          _ => maybe
-        };
-      default:
-        return maybe;
-    }
-  }
+        ) =>
+          yes,
+        BooleanExpression() ||
+        ColorExpression() ||
+        ListExpression() ||
+        MapExpression() ||
+        NullExpression() ||
+        StringExpression() =>
+          no,
+        ParenthesizedExpression(:var expression) ||
+        UnaryOperationExpression(operand: var expression) =>
+          of(expression),
+        BinaryOperationExpression(:var left, :var right) => switch ((
+            of(left),
+            of(right)
+          )) {
+            (yes, yes) => yes,
+            (no, _) || (_, no) => no,
+            _ => maybe
+          },
+        _ => maybe,
+      };
 }

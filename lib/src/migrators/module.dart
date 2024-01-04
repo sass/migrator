@@ -315,18 +315,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var entrypointForwards = forwards != null
         ? _forwardRulesForShown(entrypoint, '"$dependency"', forwards, {})
         : ['@forward "$dependency"'];
-    var tuples = [
-      for (var entry in forwardsByUrl.entries)
-        (
-          entry.key,
-          _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl).$1,
-          entry.value
-        )
-    ];
     var forwardLines = [
-      for (var (url, ruleUrl, shownByPrefix) in tuples)
-        ..._forwardRulesForShown(
-            url, '"${ruleUrl}"', shownByPrefix, hiddenByUrl[url] ?? {}),
+      for (var MapEntry(key: url, value: shownByPrefix)
+          in forwardsByUrl.entries)
+        ...switch (_absoluteUrlToDependency(url, relativeTo: importOnlyUrl)) {
+          (var ruleUrl, _) => _forwardRulesForShown(
+              url, '"$ruleUrl"', shownByPrefix, hiddenByUrl[url] ?? {})
+        },
       ...entrypointForwards
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
@@ -377,10 +372,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         .map((declaration) => declaration.sourceUrl)
         .toSet()) {
       if (url == currentUrl || _forwardedUrls.contains(url)) continue;
-      var forwards =
-          _makeForwardRules(url, '"${_absoluteUrlToDependency(url).$1}"');
+      var (ruleUrl, isRelative) = _absoluteUrlToDependency(url);
+      var forwards = _makeForwardRules(url, '"$ruleUrl"');
       if (forwards == null) continue;
-      var (_, isRelative) = _absoluteUrlToDependency(url);
       (isRelative ? relativeForwards : loadPathForwards)
           .addAll([for (var rule in forwards) '$rule$semicolon\n']);
     }
@@ -766,22 +760,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     for (var import in dynamicImports) {
       Uri? ruleUrl = import.url;
-      var tuple = importCache.canonicalize(ruleUrl,
-          baseImporter: importer, baseUrl: currentUrl, forImport: true);
-      var canonicalImport = tuple?.$2;
-      if (canonicalImport != null &&
-          references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
+      if (importCache.canonicalize(ruleUrl,
+              baseImporter: importer, baseUrl: currentUrl, forImport: true)
+          case (var newImporter, var canonicalImport, originalUrl: _)?
+          when references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
         ruleUrl = null;
-        var url = references.orphanImportOnlyFiles[canonicalImport]?.url;
-        if (url != null && tuple != null) {
-          var canonicalRedirect = importCache
-              .canonicalize(url,
-                  baseImporter: tuple.$1, baseUrl: canonicalImport)!
-              .$2;
-          (ruleUrl, _) = _absoluteUrlToDependency(canonicalRedirect);
+        if (references.orphanImportOnlyFiles[canonicalImport]
+            case ForwardRule(:var url)) {
+          if (importCache.canonicalize(url,
+                  baseImporter: newImporter, baseUrl: canonicalImport)
+              case (_, var canonicalRedirect, originalUrl: _)?) {
+            (ruleUrl, _) = _absoluteUrlToDependency(canonicalRedirect);
+          }
         }
       }
-
       if (ruleUrl != null) {
         if (_useAllowed) {
           migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
@@ -1266,8 +1258,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// false when it's resolved relative to a load path.
   (Uri, bool) _absoluteUrlToDependency(Uri url, {Uri? relativeTo}) {
     relativeTo ??= currentUrl;
-    var tuple = _originalImports[url];
-    if (tuple case (var url, NodeModulesImporter _)) {
+    if (_originalImports[url] case (var url, NodeModulesImporter _)) {
       return (url, false);
     }
 
