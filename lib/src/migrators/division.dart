@@ -457,13 +457,17 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Adds patches removing unnecessary parentheses around [node] if it is a
   /// ParenthesizedExpression.
   void _patchParensIfAny(SassNode node) {
-    if (node is! ParenthesizedExpression) return;
-    if (node.expression
-        case BinaryOperationExpression(operator: BinaryOperator.dividedBy)) {
-      return;
+    switch (node) {
+      case ParenthesizedExpression(
+          expression: BinaryOperationExpression(
+            operator: BinaryOperator.dividedBy
+          )
+        ):
+        return;
+      case ParenthesizedExpression():
+        addPatch(patchDelete(node.span, end: 1));
+        addPatch(patchDelete(node.span, start: node.span.length - 1));
     }
-    addPatch(patchDelete(node.span, end: 1));
-    addPatch(patchDelete(node.span, start: node.span.length - 1));
   }
 
   /// Runs [operation] with the given context.

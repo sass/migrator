@@ -318,10 +318,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var forwardLines = [
       for (var MapEntry(key: url, value: shownByPrefix)
           in forwardsByUrl.entries)
-        ...switch (_absoluteUrlToDependency(url, relativeTo: importOnlyUrl)) {
-          (var ruleUrl, _) => _forwardRulesForShown(
-              url, '"$ruleUrl"', shownByPrefix, hiddenByUrl[url] ?? {})
-        },
+        ..._forwardRulesForShown(
+            url,
+            '"${_absoluteUrlToDependency(url, relativeTo: importOnlyUrl).$1}"',
+            shownByPrefix,
+            hiddenByUrl[url] ?? {}),
       ...entrypointForwards
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
