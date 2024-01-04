@@ -93,7 +93,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
         throw MigrationException("Could not find Sass file at '$entrypoint'.");
       }
 
-      var migrated = migrateFile(importCache, tuple.item2, tuple.item1);
+      var migrated = migrateFile(importCache, tuple.$2, tuple.$1);
       migrated.forEach((file, contents) {
         if (allMigrated.containsKey(file) && contents != allMigrated[file]) {
           throw MigrationException(

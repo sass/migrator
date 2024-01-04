@@ -1,21 +1,40 @@
-## 1.8.2
+## 2.0.0
+
+* **Breaking change**: The `media-logic` migrator has been removed as the
+  [corresponding breaking change][media logic] has been completed in Dart Sass.
+  If you still need to migrate legacy code, use migrator version 1.8.1.
+
+  [media logic]: https://sass-lang.com/documentation/breaking-changes/media-logic/
+
+* Update to be compatible with the latest version of the Dart Sass AST.
 
 ### Calc Functions Interpolation Migrator
 
-* Add parentheses in place of interpolation when necessary to preserve the evaluation order.
+* Add parentheses in place of interpolation when necessary to preserve the
+  evaluation order.
+
+### Division Migrator
+
+* `/` division should now be left untouched in all CSS calculation functions.
+  This was already the case for `calc`, `clamp`, `min`, and `max`, but it now
+  applies to the new functions that Dart Sass 1.67.0 added support for.
 
 ## 1.8.1
 
 ### Calc Functions Interpolation Migrator
 
-* Migration for more than one interpolation or expressions in a calc function parameter.
+* Migration for more than one interpolation or expressions in a calc function
+  parameter.
 
 ## 1.8.0
 
 ### Calc Functions Interpolation Migrator
 
-* Removes interpolation in calculation functions `calc()`, `clamp()`, `min()`, and `max()`. 
-  See the [scss/function-calculation-no-interpolation](https://github.com/stylelint-scss/stylelint-scss/tree/master/src/rules/function-calculation-no-interpolation) rule for more information.
+* Removes interpolation in calculation functions `calc()`, `clamp()`, `min()`,
+  and `max()`. See the [scss/function-calculation-no-interpolation] rule for
+  more information.
+
+  [scss/function-calculation-no-interpolation]: https://github.com/stylelint-scss/stylelint-scss/tree/master/src/rules/function-calculation-no-interpolation
 
 ## 1.7.3
 

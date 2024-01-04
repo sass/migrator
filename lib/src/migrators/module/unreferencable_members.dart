@@ -6,7 +6,7 @@
 
 import 'package:sass_api/sass_api.dart';
 
-import 'member_declaration.dart';
+import '../../util/member_declaration.dart';
 import 'unreferencable_type.dart';
 
 /// Tracks members that are unreferencable in the current scope.

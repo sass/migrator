@@ -9,18 +9,17 @@ import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
-import 'package:tuple/tuple.dart';
 
 import '../exception.dart';
 import '../migration_visitor.dart';
 import '../migrator.dart';
 import '../patch.dart';
 import '../utils.dart';
+import '../util/member_declaration.dart';
 import '../util/node_modules_importer.dart';
 
 import 'module/built_in_functions.dart';
 import 'module/forward_type.dart';
-import 'module/member_declaration.dart';
 import 'module/reference_source.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
@@ -117,7 +116,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Maps canonical URLs to the original URL and importer from the `@import`
   /// rule that last imported that URL.
-  final _originalImports = <Uri, Tuple2<Uri, Importer>>{};
+  final _originalImports = <Uri, (Uri, Importer)>{};
 
   /// Tracks members that are unreferencable in the current scope.
   var _unreferencable = UnreferencableMembers();
@@ -310,24 +309,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // If entrypoint exposes no members, it should still be forwarded to ensure
     // that the import-only file still includes its CSS.
-    var dependency =
-        _absoluteUrlToDependency(entrypoint, relativeTo: importOnlyUrl).item1;
+    var (dependency, _) =
+        _absoluteUrlToDependency(entrypoint, relativeTo: importOnlyUrl);
     var forwards = forwardsByUrl.remove(entrypoint);
     var entrypointForwards = forwards != null
         ? _forwardRulesForShown(entrypoint, '"$dependency"', forwards, {})
         : ['@forward "$dependency"'];
-    var tuples = [
-      for (var entry in forwardsByUrl.entries)
-        Tuple3(
-            entry.key,
-            _absoluteUrlToDependency(entry.key, relativeTo: importOnlyUrl)
-                .item1,
-            entry.value)
-    ];
     var forwardLines = [
-      for (var tuple in tuples)
-        ..._forwardRulesForShown(tuple.item1, '"${tuple.item2}"', tuple.item3,
-            hiddenByUrl[tuple.item1] ?? {}),
+      for (var MapEntry(key: url, value: shownByPrefix)
+          in forwardsByUrl.entries)
+        ..._forwardRulesForShown(
+            url,
+            '"${_absoluteUrlToDependency(url, relativeTo: importOnlyUrl).$1}"',
+            shownByPrefix,
+            hiddenByUrl[url] ?? {}),
       ...entrypointForwards
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
@@ -378,10 +373,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         .map((declaration) => declaration.sourceUrl)
         .toSet()) {
       if (url == currentUrl || _forwardedUrls.contains(url)) continue;
-      var forwards =
-          _makeForwardRules(url, '"${_absoluteUrlToDependency(url).item1}"');
+      var (ruleUrl, isRelative) = _absoluteUrlToDependency(url);
+      var forwards = _makeForwardRules(url, '"$ruleUrl"');
       if (forwards == null) continue;
-      var isRelative = _absoluteUrlToDependency(url).item2;
       (isRelative ? relativeForwards : loadPathForwards)
           .addAll([for (var rule in forwards) '$rule$semicolon\n']);
     }
@@ -407,7 +401,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         importCache
                 .canonicalize(rule.url,
                     baseImporter: importer, baseUrl: node.span.sourceUrl)
-                ?.item2 ??
+                ?.$2 ??
             rule.url: rule.namespace
     };
     _determineNamespaces(node.span.sourceUrl!, _namespaces);
@@ -511,7 +505,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var ruleUrlsForSources = {
       for (var source in sources.whereType<ImportSource>())
         source: source.originalRuleUrl ??
-            _absoluteUrlToDependency(source.url, relativeTo: currentUrl).item1
+            _absoluteUrlToDependency(source.url, relativeTo: currentUrl).$1
     };
     // Then handle `@import` rules, in order of path segment count.
     for (var sources in _orderSources(ruleUrlsForSources)) {
@@ -593,10 +587,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Visits [children] with a new scope for tracking unreferencable members.
   @override
-  void visitChildren(List<Statement> children) {
+  void visitChildren(List<Statement> children, {bool withScope = true}) {
     var oldUnreferencable = _unreferencable;
     _unreferencable = UnreferencableMembers(_unreferencable);
-    super.visitChildren(children);
+    super.visitChildren(children, withScope: withScope);
     _unreferencable = oldUnreferencable;
   }
 
@@ -753,10 +747,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `meta.load-css`, or static `@import` rules
   @override
   void visitImportRule(ImportRule node) {
-    var imports =
+    var (staticImports, dynamicImports) =
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
-    var staticImports = imports.item1;
-    var dynamicImports = imports.item2;
     if (dynamicImports.isEmpty) {
       _useAllowed = false;
       return;
@@ -769,22 +761,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     for (var import in dynamicImports) {
       Uri? ruleUrl = import.url;
-      var tuple = importCache.canonicalize(ruleUrl,
-          baseImporter: importer, baseUrl: currentUrl, forImport: true);
-      var canonicalImport = tuple?.item2;
-      if (canonicalImport != null &&
-          references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
+      if (importCache.canonicalize(ruleUrl,
+              baseImporter: importer, baseUrl: currentUrl, forImport: true)
+          case (var newImporter, var canonicalImport, originalUrl: _)?
+          when references.orphanImportOnlyFiles.containsKey(canonicalImport)) {
         ruleUrl = null;
-        var url = references.orphanImportOnlyFiles[canonicalImport]?.url;
-        if (url != null && tuple != null) {
-          var canonicalRedirect = importCache
-              .canonicalize(url,
-                  baseImporter: tuple.item1, baseUrl: canonicalImport)!
-              .item2;
-          ruleUrl = _absoluteUrlToDependency(canonicalRedirect).item1;
+        if (references.orphanImportOnlyFiles[canonicalImport]
+            case ForwardRule(:var url)) {
+          if (importCache.canonicalize(url,
+                  baseImporter: newImporter, baseUrl: canonicalImport)
+              case (_, var canonicalRedirect, originalUrl: _)?) {
+            (ruleUrl, _) = _absoluteUrlToDependency(canonicalRedirect);
+          }
         }
       }
-
       if (ruleUrl != null) {
         if (_useAllowed) {
           migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
@@ -829,10 +819,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// corresponding regular file. This allows imports of import-only files that
   /// redirect to a different path to be migrated in-place.
   List<String> _migrateImportToRules(Uri ruleUrl, FileSpan context) {
-    var tuple = _migrateImportCommon(ruleUrl, context);
-    var canonicalUrl = tuple.item1;
-    var config = tuple.item2;
-    var forwardForConfig = tuple.item3;
+    var (canonicalUrl, config, forwardForConfig) =
+        _migrateImportCommon(ruleUrl, context);
 
     var asClause = '';
     var defaultNamespace = namespaceForPath(ruleUrl.path);
@@ -879,10 +867,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       _unreferencable.add(declaration, UnreferencableType.fromImporter);
     }
 
-    var tuple = _migrateImportCommon(ruleUrl, context);
-    var canonicalUrl = tuple.item1;
-    var config = tuple.item2;
-    if (tuple.item3 != null) {
+    var (canonicalUrl, config, forwardForConfig) =
+        _migrateImportCommon(ruleUrl, context);
+    if (forwardForConfig != null) {
       throw MigrationSourceSpanException(
           "This declaration attempts to override a default value in an "
           "indirect, nested import of ${p.prettyUri(canonicalUrl)}, which is "
@@ -912,8 +899,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `meta.load-css`. The third is a string of variables that should be added
   /// to a `show` clause of a `@forward` rule so that they can be configured by
   /// an upstream file.
-  Tuple3<Uri, String?, String?> _migrateImportCommon(
-      Uri ruleUrl, FileSpan context) {
+  (Uri, String?, String?) _migrateImportCommon(Uri ruleUrl, FileSpan context) {
     var oldConfiguredVariables = __configuredVariables;
     __configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
@@ -930,9 +916,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     // Associate the importer for this URL with the resolved URL so that we can
     // re-use this import URL later on.
-    var canonicalUrl = tuple.item2;
-    _originalImports.putIfAbsent(
-        canonicalUrl, () => Tuple2(ruleUrl, tuple.item1));
+    var canonicalUrl = tuple.$2;
+    _originalImports.putIfAbsent(canonicalUrl, () => (ruleUrl, tuple.$1));
 
     // Pass the variables that were configured by the importing file to `with`,
     // and forward the rest and add them to `oldConfiguredVariables` because
@@ -990,7 +975,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else if (configured.isNotEmpty) {
       normalConfig = "(\n  " + configured.join(',\n  ') + "\n)";
     }
-    return Tuple3(canonicalUrl, normalConfig, extraForward);
+    return (canonicalUrl, normalConfig, extraForward);
   }
 
   /// If [url] contains any member declarations that should be forwarded from
@@ -1115,7 +1100,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitUseRule(UseRule node) {
     _usedUrls.add(importCache
             .canonicalize(node.url, baseImporter: importer, baseUrl: currentUrl)
-            ?.item2 ??
+            ?.$2 ??
         node.url);
   }
 
@@ -1126,7 +1111,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void visitForwardRule(ForwardRule node) {
     _forwardedUrls.add(importCache
             .canonicalize(node.url, baseImporter: importer, baseUrl: currentUrl)
-            ?.item2 ??
+            ?.$2 ??
         node.url);
   }
 
@@ -1249,8 +1234,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     if (!_usedUrls.contains(url)) {
       // Add new `@use` rule for indirect dependency
-      var tuple = _absoluteUrlToDependency(url);
-      var defaultNamespace = namespaceForPath(tuple.item1.path);
+      var (dependency, isRelative) = _absoluteUrlToDependency(url);
+      var defaultNamespace = namespaceForPath(dependency.path);
       // There are a few edge cases where the reference in [declaration] wasn't
       // tracked by [references.sources], so we add a namespace with simple
       // conflict resolution if one for this URL doesn't already exist.
@@ -1259,8 +1244,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var namespace = _namespaces[url];
       var asClause = defaultNamespace == namespace ? '' : ' as $namespace';
       _usedUrls.add(url);
-      (tuple.item2 ? _additionalRelativeUseRules : _additionalLoadPathUseRules)
-          .add('@use "${tuple.item1}"$asClause');
+      (isRelative ? _additionalRelativeUseRules : _additionalLoadPathUseRules)
+          .add('@use "$dependency"$asClause');
     }
     return _namespaces[url];
   }
@@ -1272,11 +1257,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// The first item of the returned tuple is the dependency, the second item
   /// is true when this dependency is resolved relative to the current URL and
   /// false when it's resolved relative to a load path.
-  Tuple2<Uri, bool> _absoluteUrlToDependency(Uri url, {Uri? relativeTo}) {
+  (Uri, bool) _absoluteUrlToDependency(Uri url, {Uri? relativeTo}) {
     relativeTo ??= currentUrl;
-    var tuple = _originalImports[url];
-    if (tuple != null && tuple.item2 is NodeModulesImporter) {
-      return Tuple2(tuple.item1, false);
+    if (_originalImports[url] case (var url, NodeModulesImporter _)) {
+      return (url, false);
     }
 
     var basename = p.url.basenameWithoutExtension(url.path);
@@ -1298,11 +1282,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     ];
     var relativePath = minBy<String, int>(potentialUrls, (url) => url.length)!;
     var isRelative = relativePath == potentialUrls.first;
-    return Tuple2(
-        Uri(
-            path: p.url
-                .relative(p.url.join(p.url.dirname(relativePath), basename))),
-        isRelative);
+    return (
+      Uri(
+          path: p.url
+              .relative(p.url.join(p.url.dirname(relativePath), basename))),
+      isRelative
+    );
   }
 
   /// Returns the longest prefix in [prefixesToRemove] such that [identifier]

@@ -34,6 +34,17 @@ class Scope {
   /// Returns true if this scope is global, and false otherwise.
   bool get isGlobal => parent == null;
 
+  /// The set of all variable names defined in this scope or its ancestors.
+  Set<String> get allVariableNames =>
+      {...variables.keys, ...?parent?.allVariableNames};
+
+  /// The set of all mixin names defined in this scope or its ancestors.
+  Set<String> get allMixinNames => {...mixins.keys, ...?parent?.allMixinNames};
+
+  /// The set of all function names defined in this scope or its ancestors.
+  Set<String> get allFunctionNames =>
+      {...functions.keys, ...?parent?.allFunctionNames};
+
   /// Returns true if this scope is [ancestor] or one of its descendents.
   bool isDescendentOf(Scope ancestor) =>
       this == ancestor || (parent?.isDescendentOf(ancestor) ?? false);
@@ -52,4 +63,6 @@ class Scope {
   /// if it does not.
   MemberDeclaration<FunctionRule>? findFunction(String name) =>
       functions[name] ?? parent?.findFunction(name);
+
+  String toString() => '${functions.keys}->$parent';
 }
