@@ -1,3 +1,9 @@
+## 2.0.2
+
+### Calc Functions Interpolation Migrator
+
+* Fix the interpretation of a dash in a variable name as a minus sign.
+
 ## 2.0.1
 
 ### Calc Functions Interpolation Migrator
