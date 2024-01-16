@@ -1,4 +1,5 @@
 <==> input/entrypoint.scss
+$a-b: 5;
 $b: 10;
 $c: 1;
 $d: 5;
@@ -9,14 +10,14 @@ $d: 5;
 // More than one interpolations
 .a { 
     .b: calc($b - #{$c + 1} + #{$d}); 
-    .c: calc(100% - #{$table_title_height + 2px});
+    .c: calc(100% - #{$TABLE_TITLE + 2px});
 }
 
 // Nested
 .a { .b: calc(3 + max(#{$c, 2})); }
 
 // Nested and more interpolations
-.a { .b: calc(#{$b} + max(#{$c, 2})); }
+.a { .b: calc(#{$a-b} + max(#{$c, 2})); }
 
 // CSS Custom properties keep interpolation
 .a { --test: calc(#{$b} + 1);}
@@ -25,6 +26,7 @@ $d: 5;
 .a { .b: calc(var(#{$b}) + #{$c + 2} + var(--a-#{$d}-b)); }
 
 <==> output/entrypoint.scss
+$a-b: 5;
 $b: 10;
 $c: 1;
 $d: 5;
@@ -35,14 +37,14 @@ $d: 5;
 // More than one interpolations
 .a { 
     .b: calc($b - ($c + 1) + $d); 
-    .c: calc(100% - ($table-title-height + 2px));
+    .c: calc(100% - ($TABLE-TITLE + 2px));
 }
 
 // Nested
 .a { .b: calc(3 + max($c, 2)); }
 
 // Nested and more interpolations
-.a { .b: calc($b + max($c, 2)); }
+.a { .b: calc($a-b + max($c, 2)); }
 
 // CSS Custom properties keep interpolation
 .a { --test: calc(#{$b} + 1);}

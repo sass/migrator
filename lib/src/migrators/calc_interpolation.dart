@@ -36,7 +36,7 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];
     final interpolation = RegExp(r'\#{\s*[^}]+\s*}');
-    final hasOperation = RegExp(r'[-+*/]+');
+    final hasOperation = RegExp(r'\s+[-+*/]+\s+');
     final isVarFunc = RegExp(
         r'var\(#{[a-zA-Z0-9#{$}-]+}\)|var\(\-\-[a-zA-Z0-9\$\#\{\}\-]+\)');
     if (calcFunctions.contains(node.name)) {
