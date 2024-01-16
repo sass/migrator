@@ -9,7 +9,7 @@ Easily upgrade your Sass stylesheets!
       <a href="https://www.npmjs.com/package/sass-migrator"><img width="100%" alt="npm statistics" src="https://nodei.co/npm/sass-migrator.png?downloads=true"></a>
     </td>
     <td valign="middle">
-      <a href="https://travis-ci.org/sass/migrator"><img alt="Travis build status" src="https://api.travis-ci.org/sass/migrator.svg?branch=master"></a>
+      <a href="https://github.com/sass/migrator/actions/workflows/ci.yml"><img alt="build status" src="https://github.com/sass/migrator/actions/workflows/ci.yml/badge.svg"></a>
     </td>
   </tr>
 </table>
