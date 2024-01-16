@@ -18,6 +18,9 @@ $d: 5;
 // Nested and more interpolations
 .a { .b: calc(#{$b} + max(#{$c, 2})); }
 
+// CSS Custom properties keep interpolation
+.a { --test: calc(#{$b} + 1);}
+
 <==> output/entrypoint.scss
 $b: 10;
 $c: 1;
@@ -37,3 +40,6 @@ $d: 5;
 
 // Nested and more interpolations
 .a { .b: calc($b + max($c, 2)); }
+
+// CSS Custom properties keep interpolation
+.a { --test: calc(#{$b} + 1);}
