@@ -37,19 +37,28 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];
     final interpolation = RegExp(r'\#{\s*[^}]+\s*}');
     final hasOperation = RegExp(r'[-+*/]+');
+    final isVarFunc = RegExp(
+        r'var\(#{[a-zA-Z0-9#{$}-]+}\)|var\(\-\-[a-zA-Z0-9\$\#\{\}\-]+\)');
     if (calcFunctions.contains(node.name)) {
       for (var arg in node.arguments.positional) {
         var newArg = arg.toString();
-        for (var match in interpolation.allMatches(arg.toString())) {
-          var noInterpolation =
-              match[0].toString().substring(2, match[0].toString().length - 1);
+        var varFuncArgs = isVarFunc.allMatches(newArg);
+        if (varFuncArgs.isNotEmpty) {
+          newArg = newArg.replaceAll(isVarFunc, 'var()');
+        }
+
+        for (var match in interpolation.allMatches(newArg)) {
+          var noInterpolation = match[0]!.substring(2, match[0]!.length - 1);
           if (hasOperation.hasMatch(noInterpolation)) {
             noInterpolation = '(' + noInterpolation + ')';
           }
-          newArg = newArg
-              .toString()
-              .replaceAll(match[0].toString(), noInterpolation);
+          newArg = newArg.toString().replaceAll(match[0]!, noInterpolation);
         }
+
+        for (var match in varFuncArgs) {
+          newArg = newArg.replaceFirst('var()', match[0]!);
+        }
+
         if (newArg != arg.toString()) {
           var interpolationSpan =
               node.span.file.span(arg.span.start.offset, arg.span.end.offset);
