@@ -1,3 +1,9 @@
+## 2.0.3
+
+### Module Migrator
+
+* Fixes some crashes due to null pointer errors.
+
 ## 2.0.2
 
 ### Calc Functions Interpolation Migrator
