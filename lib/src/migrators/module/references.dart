@@ -616,8 +616,9 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     var declaration = _scopeForNamespace(namespace).findVariable(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _variables[node] = declaration;
-      var source = _declarationSources[declaration];
-      if (source != null) _sources[node] = source;
+      if (_declarationSources[declaration] case var source?) {
+        _sources[node] = source;
+      }
     } else if (namespace == null) {
       _unresolvedReferences[node] = currentScope;
     }
@@ -645,7 +646,9 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     var declaration = _scopeForNamespace(namespace).findMixin(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _mixins[node] = declaration;
-      _sources[node] = _declarationSources[declaration]!;
+      if (_declarationSources[declaration] case var source?) {
+        _sources[node] = source;
+      }
     } else if (namespace == null) {
       _unresolvedReferences[node] = currentScope;
     }
@@ -673,7 +676,9 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     var declaration = _scopeForNamespace(namespace).findFunction(node.name);
     if (declaration != null && !_fromForwardRuleInCurrent(declaration)) {
       _functions[node] = declaration;
-      _sources[node] = _declarationSources[declaration]!;
+      if (_declarationSources[declaration] case var source?) {
+        _sources[node] = source;
+      }
       return;
     } else if (namespace == null) {
       if (node.name == 'get-function') {
