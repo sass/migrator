@@ -1,3 +1,6 @@
+## 2.0.4
+* Detect dependency loops in module migrator fix.
+
 ## 2.0.3
 
 ### Module Migrator
