@@ -1,0 +1,27 @@
+<==> input/entrypoint.scss
+@import "definition1";
+@import "upstream";
+@import "direct";
+
+<==> input/_direct.scss
+@import "definition2";
+@import "upstream";
+
+<==> input/definition1.scss
+@mixin fn {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+<==> input/definition2.scss
+@mixin fn {
+  color: blue;
+}
+
+<==> input/upstream.scss
+@include fn;
+
+<==> error.txt
+Error: Mixin `fn` has been previously declared in definition1.scss and is later on defined in definition2.scss.
+Migration failed!

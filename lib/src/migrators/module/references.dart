@@ -630,6 +630,15 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     super.visitMixinRule(node);
     var member = MemberDeclaration(node);
     _declarationSources[member] = CurrentSource(_currentUrl);
+    _mixins.forEach((declaredMixins, reference) {
+      if (declaredMixins.name == node.name &&
+          reference.sourceUrl != _currentUrl) {
+        throw new MigrationException(
+            'Mixin `${node.name}` has been previously declared' +
+                ' in ${reference.sourceUrl.pathSegments.last} and is' +
+                ' later on defined in ${_currentUrl.pathSegments.last}.');
+      }
+    });
     _registerLibraryUrl(member);
   }
 
@@ -660,6 +669,15 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     super.visitFunctionRule(node);
     var member = MemberDeclaration(node);
     _declarationSources[member] = CurrentSource(_currentUrl);
+    _functions.forEach((declaredFunction, reference) {
+      if (declaredFunction.name == node.name &&
+          reference.sourceUrl != _currentUrl) {
+        throw new MigrationException(
+            'Function `${node.name}` has been previously declared' +
+                ' in ${reference.sourceUrl.pathSegments.last} and is' +
+                ' later on defined in ${_currentUrl.pathSegments.last}.');
+      }
+    });
     _registerLibraryUrl(member);
   }
 

@@ -1,0 +1,21 @@
+<==> input/entrypoint.scss
+@import "definition1";
+@import "upstream";
+@import "direct";
+
+<==> input/_direct.scss
+@import "definition2";
+@import "upstream";
+
+<==> input/definition1.scss
+@function fn() {@return 1}
+
+<==> input/definition2.scss
+@function fn() {@return 2}
+
+<==> input/upstream.scss
+a { b: fn() }
+
+<==> error.txt
+Error: Function `fn` has been previously declared in definition1.scss and is later on defined in definition2.scss.
+Migration failed!
