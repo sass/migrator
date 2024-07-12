@@ -32,6 +32,8 @@ class ModuleMigrator extends Migrator {
 
   @override
   final argParser = ArgParser()
+    ..addFlag('builtin-only',
+        help: 'Migrates global functions without migrating @import.')
     ..addMultiOption('remove-prefix',
         abbr: 'p',
         help: 'Removes PREFIX from all migrated member names.\n'
@@ -77,6 +79,13 @@ class ModuleMigrator extends Migrator {
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forwards = {for (var arg in argResults!['forward']) ForwardType(arg)};
+    var builtInOnly = argResults!['builtin-only'] as bool;
+    if (builtInOnly &&
+        (argResults!.wasParsed('forward') ||
+            argResults!.wasParsed('remove-prefix'))) {
+      throw MigrationException('--forward and --remove-prefix may not be '
+          'passed with --builtin-only.');
+    }
     if (forwards.contains(ForwardType.prefixed) &&
         !argResults!.wasParsed('remove-prefix')) {
       throw MigrationException(
@@ -85,8 +94,10 @@ class ModuleMigrator extends Migrator {
     }
 
     var references = References(importCache, stylesheet, importer);
-    var visitor = _ModuleMigrationVisitor(importCache, references,
-        globalResults!['load-path'] as List<String>, migrateDependencies,
+    var visitor = _ModuleMigrationVisitor(
+        importCache, references, globalResults!['load-path'] as List<String>,
+        migrateDependencies: migrateDependencies,
+        builtInOnly: builtInOnly,
         prefixesToRemove: (argResults!['remove-prefix'] as List<String>)
             .map((prefix) => prefix.replaceAll('_', '-')),
         forwards: forwards);
@@ -186,9 +197,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// main migration pass is used.
   final References references;
 
-  /// Cache used to load stylesheets.
-  final ImportCache importCache;
-
   /// List of paths that stylesheets can be loaded from.
   final List<String> loadPaths;
 
@@ -198,6 +206,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// The values of the --forward flag.
   final Set<ForwardType> forwards;
+
+  /// Whether to migrate only global functions, leaving `@import` rules as-is.
+  final bool builtInOnly;
 
   /// Constructs a new module migration visitor.
   ///
@@ -210,22 +221,25 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   ///
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
-  _ModuleMigrationVisitor(this.importCache, this.references,
-      List<String> loadPaths, bool migrateDependencies,
-      {Iterable<String> prefixesToRemove = const [], this.forwards = const {}})
+  _ModuleMigrationVisitor(
+      super.importCache, this.references, List<String> loadPaths,
+      {required super.migrateDependencies,
+      required this.builtInOnly,
+      Iterable<String> prefixesToRemove = const [],
+      this.forwards = const {}})
       : loadPaths = List.unmodifiable(
             loadPaths.map((path) => p.toUri(p.absolute(path)).path)),
-        prefixesToRemove = UnmodifiableSetView(prefixesToRemove.toSet()),
-        super(importCache, migrateDependencies);
+        prefixesToRemove = UnmodifiableSetView(prefixesToRemove.toSet());
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.
   @override
   Map<Uri, String> run(Stylesheet stylesheet, Importer importer) {
-    references.globalDeclarations.forEach(_renameDeclaration);
+    if (!builtInOnly) references.globalDeclarations.forEach(_renameDeclaration);
     var migrated = super.run(stylesheet, importer);
 
-    if (forwards.contains(ForwardType.importOnly) || _needsImportOnly) {
+    if (!builtInOnly &&
+        (forwards.contains(ForwardType.importOnly) || _needsImportOnly)) {
       var url = stylesheet.span.sourceUrl!;
       var importOnlyUrl = getImportOnlyUrl(url);
       var results = _generateImportOnly(url, importOnlyUrl);
@@ -597,7 +611,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    if (node.namespace != null) {
+    if (node.namespace != null ||
+        (builtInOnly && references.sources[node] is! BuiltInSource)) {
       super.visitFunctionExpression(node);
       return;
     }
@@ -613,7 +628,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       });
     }
 
-    if (node.name == "get-function") {
+    if (node.name == "get-function" && !builtInOnly) {
       var declaration = references.getFunctionReferences[node];
       if (declaration != null) {
         _unreferencable.check(declaration, node);
@@ -776,7 +791,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
       }
       if (ruleUrl != null) {
-        if (_useAllowed) {
+        if (builtInOnly) {
+          _upstreamStylesheets.add(currentUrl);
+          if (migrateDependencies) visitDependency(ruleUrl, import.span);
+          _upstreamStylesheets.remove(currentUrl);
+          return;
+        } else if (_useAllowed) {
           migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else {
           migratedRules.add(_migrateImportToLoadCss(ruleUrl, import.span)
@@ -1071,6 +1091,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _useAllowed = false;
     super.visitIncludeRule(node);
     if (node.namespace != null) return;
+    if (builtInOnly && references.sources[node] is! BuiltInSource) return;
 
     var declaration = references.mixins[node];
     if (declaration == null) {
@@ -1089,7 +1110,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitMixinRule(MixinRule node) {
     _useAllowed = false;
-    _renameReference(nameSpan(node), MemberDeclaration(node));
+    if (!builtInOnly) _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitMixinRule(node);
   }
 
@@ -1119,6 +1140,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitVariableExpression(VariableExpression node) {
     if (node.namespace != null) return;
+    if (builtInOnly && references.sources[node] is! BuiltInSource) return;
     var declaration = references.variables[node];
     if (declaration == null) {
       // TODO(jathak): Error here as part of fixing #182.
@@ -1145,6 +1167,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// renaming or namespacing if necessary.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
+    if (builtInOnly) {
+      super.visitVariableDeclaration(node);
+      return;
+    }
     var declaration = MemberDeclaration(node);
     var defaultDeclaration =
         references.defaultVariableDeclarations[declaration];

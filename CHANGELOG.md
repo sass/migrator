@@ -1,3 +1,13 @@
+## 2.1.0
+
+### Module Migrator
+
+* Add a new `--builtin-only` flag, which migrates global functions to their
+  `sass:` module equivalents, while leaving `@import` rules unchanged.
+
+* Fix bug where some functions (`opacity`, `is-bracketed`, and
+  `selector-extend`) would not be migrated.
+
 ## 2.0.3
 
 ### Module Migrator

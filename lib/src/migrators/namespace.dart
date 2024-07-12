@@ -38,8 +38,9 @@ class NamespaceMigrator extends Migrator {
     var renamer = Renamer<UseRule>(argResults!['rename'].join('\n'),
         {'': ((rule) => rule.namespace!), 'url': (rule) => rule.url.toString()},
         sourceUrl: '--rename');
-    var visitor = _NamespaceMigrationVisitor(renamer,
-        argResults!['force'] as bool, importCache, migrateDependencies);
+    var visitor = _NamespaceMigrationVisitor(
+        renamer, argResults!['force'] as bool, importCache,
+        migrateDependencies: migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -62,9 +63,8 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
       assertInStylesheet(__usedNamespaces, '_usedNamespaces');
   Set<String>? __usedNamespaces;
 
-  _NamespaceMigrationVisitor(this.renamer, this.forceRename,
-      ImportCache importCache, bool migrateDependencies)
-      : super(importCache, migrateDependencies);
+  _NamespaceMigrationVisitor(this.renamer, this.forceRename, super.importCache,
+      {required super.migrateDependencies});
 
   @override
   void visitStylesheet(Stylesheet node) {
