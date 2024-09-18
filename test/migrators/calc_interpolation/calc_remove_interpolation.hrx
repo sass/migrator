@@ -8,8 +8,8 @@ $d: 5;
 .a { .b: calc($b * #{$c + 1}); }
 
 // More than one interpolations
-.a { 
-    .b: calc($b - #{$c + 1} + #{$d}); 
+.a {
+    .b: calc($b - #{$c + 1} + #{$d});
     .c: calc(100% - #{$TABLE_TITLE + 2px});
 }
 
@@ -35,9 +35,9 @@ $d: 5;
 .a { .b: calc($b * ($c + 1)); }
 
 // More than one interpolations
-.a { 
-    .b: calc($b - ($c + 1) + $d); 
-    .c: calc(100% - ($TABLE-TITLE + 2px));
+.a {
+    .b: calc($b - ($c + 1) + $d);
+    .c: calc(100% - ($TABLE_TITLE + 2px));
 }
 
 // Nested

@@ -1,0 +1,29 @@
+<==> input/entrypoint.scss
+@use "sass:color";
+
+a {
+  b: color.red(gold);
+  c: color.green(gold);
+  d: color.blue(gold);
+  e: color.hue(gold);
+  f: color.saturation(gold);
+  g: color.lightness(gold);
+  h: color.whiteness(gold);
+  i: color.blackness(gold);
+  j: color.alpha(gold);
+}
+
+<==> output/entrypoint.scss
+@use "sass:color";
+
+a {
+  b: color.channel(gold, 'red', rgb);
+  c: color.channel(gold, 'green', rgb);
+  d: color.channel(gold, 'blue', rgb);
+  e: color.channel(gold, 'hue', hsl);
+  f: color.channel(gold, 'saturation', hsl);
+  g: color.channel(gold, 'lightness', hsl);
+  h: color.channel(gold, 'whiteness', hwb);
+  i: color.channel(gold, 'blackness', hwb);
+  j: color.channel(gold, 'alpha');
+}

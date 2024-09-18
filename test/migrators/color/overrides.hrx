@@ -1,0 +1,21 @@
+<==> input/entrypoint.scss
+@use "color";
+@import "color";
+
+@function red($color) {
+  @return 1;
+}
+
+a {
+  b: red(gold);
+  c: color.blue(gold);
+  d: blue(gold);
+}
+
+<==> input/color.scss
+@function blue($color) {
+  @return 1;
+}
+
+<==> log.txt
+Nothing to migrate!

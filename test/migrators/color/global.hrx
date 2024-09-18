@@ -1,0 +1,39 @@
+<==> input/entrypoint.scss
+a {
+  b: red(gold);
+  c: green(gold);
+  d: blue(gold);
+  e: hue(gold);
+  f: saturation(gold);
+  g: lightness(gold);
+  h: adjust-hue(gold, 20deg);
+  i: saturate(gold, 10%);
+  j: desaturate(gold, 10%);
+  k: transparentize(gold, 0.1);
+  l: fade-out(gold, 0.1);
+  m: opacify(gold, 0.1);
+  n: fade-in(gold, 0.1);
+  o: lighten(gold, 10%);
+  p: darken(gold, 10%);
+}
+
+<==> output/entrypoint.scss
+@use "sass:color";
+
+a {
+  b: color.channel(gold, 'red', rgb);
+  c: color.channel(gold, 'green', rgb);
+  d: color.channel(gold, 'blue', rgb);
+  e: color.channel(gold, 'hue', hsl);
+  f: color.channel(gold, 'saturation', hsl);
+  g: color.channel(gold, 'lightness', hsl);
+  h: color.adjust(gold, $hue: 20deg, $space: hsl);
+  i: color.adjust(gold, $saturation: 10%, $space: hsl);
+  j: color.adjust(gold, $saturation: -10%, $space: hsl);
+  k: color.adjust(gold, $alpha: -0.1);
+  l: color.adjust(gold, $alpha: -0.1);
+  m: color.adjust(gold, $alpha: 0.1);
+  n: color.adjust(gold, $alpha: 0.1);
+  o: color.adjust(gold, $lightness: 10%, $space: hsl);
+  p: color.adjust(gold, $lightness: -10%, $space: hsl);
+}
