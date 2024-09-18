@@ -21,12 +21,12 @@ a {
 @use "sass:color";
 
 a {
-  b: color.channel(gold, 'red', rgb);
-  c: color.channel(gold, 'green', rgb);
-  d: color.channel(gold, 'blue', rgb);
-  e: color.channel(gold, 'hue', hsl);
-  f: color.channel(gold, 'saturation', hsl);
-  g: color.channel(gold, 'lightness', hsl);
+  b: color.channel(gold, 'red', $space: rgb);
+  c: color.channel(gold, 'green', $space: rgb);
+  d: color.channel(gold, 'blue', $space: rgb);
+  e: color.channel(gold, 'hue', $space: hsl);
+  f: color.channel(gold, 'saturation', $space: hsl);
+  g: color.channel(gold, 'lightness', $space: hsl);
   h: color.adjust(gold, $hue: 20deg, $space: hsl);
   i: color.adjust(gold, $saturation: 10%, $space: hsl);
   j: color.adjust(gold, $saturation: -10%, $space: hsl);

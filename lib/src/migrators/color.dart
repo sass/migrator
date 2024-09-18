@@ -6,6 +6,7 @@
 
 import 'package:sass_api/sass_api.dart';
 import 'package:sass_migrator/src/migrators/module/reference_source.dart';
+import 'package:source_span/source_span.dart';
 
 import 'module/references.dart';
 import '../migration_visitor.dart';
@@ -30,6 +31,7 @@ class ColorMigrator extends Migrator {
   }
 }
 
+/// URL for the sass:color module.
 final _colorUrl = Uri(scheme: 'sass', path: 'color');
 
 class _ColorMigrationVisitor extends MigrationVisitor {
@@ -38,7 +40,11 @@ class _ColorMigrationVisitor extends MigrationVisitor {
   _ColorMigrationVisitor(
       this.references, super.importCache, super.migrateDependencies);
 
+  /// The namespace of an existing `@use "sass:color"` rule in the current
+  /// file, if any.
   String? _colorModuleNamespace;
+
+  /// The set of all other namespaces already used in the current file.
   Set<String> _usedNamespaces = {};
 
   @override
@@ -67,7 +73,6 @@ class _ColorMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     var source = references.sources[node];
     if (source is! BuiltInSource || source.url != _colorUrl) return;
-    var isMigrating = true;
     switch (node.name) {
       case 'red' || 'green' || 'blue':
         _patchChannel(node, 'rgb');
@@ -94,24 +99,31 @@ class _ColorMigrationVisitor extends MigrationVisitor {
       case 'darken':
         _patchAdjust(node, channel: 'lightness', negate: true, space: 'hsl');
       default:
-        isMigrating == false;
+        return;
     }
-    if (isMigrating && node.namespace == null) {
-      if (_colorModuleNamespace == null) {
-        _colorModuleNamespace = _findColorModuleNamespace();
-        var asClause = _colorModuleNamespace == 'color'
-            ? ''
-            : ' as $_colorModuleNamespace';
-        addPatch(Patch.insert(
-            node.span.file.location(0), '@use "sass:color"$asClause;\n\n'));
-      }
-      addPatch(patchBefore(node, '$_colorModuleNamespace.'),
+    if (node.namespace == null) {
+      addPatch(
+          patchBefore(
+              node, '${_getOrAddColorModuleNamespace(node.span.file)}.'),
           beforeExisting: true);
     }
   }
 
+  /// Returns the namespace used for the color module, adding a new `@use` rule
+  /// if necessary.
+  String _getOrAddColorModuleNamespace(SourceFile file) {
+    if (_colorModuleNamespace == null) {
+      _colorModuleNamespace = _chooseColorModuleNamespace();
+      var asClause =
+          _colorModuleNamespace == 'color' ? '' : ' as $_colorModuleNamespace';
+      addPatch(
+          Patch.insert(file.location(0), '@use "sass:color"$asClause;\n\n'));
+    }
+    return _colorModuleNamespace!;
+  }
+
   /// Find an unused namespace for the sass:color module.
-  String _findColorModuleNamespace() {
+  String _chooseColorModuleNamespace() {
     if (!_usedNamespaces.contains('color')) return 'color';
     if (!_usedNamespaces.contains('sass-color')) return 'sass-color';
     var count = 2;
@@ -127,8 +139,10 @@ class _ColorMigrationVisitor extends MigrationVisitor {
     addPatch(Patch(node.nameSpan, 'channel'));
 
     if (node.arguments.named.isEmpty) {
-      addPatch(patchAfter(node.arguments.positional.last,
-          ", '${node.name}'${colorSpace == null ? '' : ', $colorSpace'}"));
+      addPatch(patchAfter(
+          node.arguments.positional.last,
+          ", '${node.name}'"
+          "${colorSpace == null ? '' : ', \$space: $colorSpace'}"));
     } else {
       addPatch(patchAfter(
           [...node.arguments.positional, ...node.arguments.named.values].last,
@@ -151,6 +165,7 @@ class _ColorMigrationVisitor extends MigrationVisitor {
         if (space != null) {
           addPatch(patchAfter(adjustment, ', \$space: $space'));
         }
+
       case ArgumentInvocation(
           named: {'amount': var adjustment} || {'degrees': var adjustment}
         ):
@@ -174,6 +189,7 @@ class _ColorMigrationVisitor extends MigrationVisitor {
         if (space != null) {
           addPatch(patchAfter(adjustment, ', \$space: $space'));
         }
+
       default:
         warn(node.span.message('Cannot migrate unexpected arguments.'));
     }

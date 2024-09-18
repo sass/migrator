@@ -13,7 +13,7 @@ a {
 @use "sass:math" as color;
 
 a {
-  b: sass-color.channel(gold, 'red', rgb);
-  c: sass-color.channel(gold, 'green', rgb);
-  d: sass-color.channel(gold, 'blue', rgb);
+  b: sass-color.channel(gold, 'red', $space: rgb);
+  c: sass-color.channel(gold, 'green', $space: rgb);
+  d: sass-color.channel(gold, 'blue', $space: rgb);
 }

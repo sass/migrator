@@ -17,13 +17,13 @@ a {
 @use "sass:color";
 
 a {
-  b: color.channel(gold, 'red', rgb);
-  c: color.channel(gold, 'green', rgb);
-  d: color.channel(gold, 'blue', rgb);
-  e: color.channel(gold, 'hue', hsl);
-  f: color.channel(gold, 'saturation', hsl);
-  g: color.channel(gold, 'lightness', hsl);
-  h: color.channel(gold, 'whiteness', hwb);
-  i: color.channel(gold, 'blackness', hwb);
+  b: color.channel(gold, 'red', $space: rgb);
+  c: color.channel(gold, 'green', $space: rgb);
+  d: color.channel(gold, 'blue', $space: rgb);
+  e: color.channel(gold, 'hue', $space: hsl);
+  f: color.channel(gold, 'saturation', $space: hsl);
+  g: color.channel(gold, 'lightness', $space: hsl);
+  h: color.channel(gold, 'whiteness', $space: hwb);
+  i: color.channel(gold, 'blackness', $space: hwb);
   j: color.channel(gold, 'alpha');
 }
