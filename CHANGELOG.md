@@ -1,3 +1,10 @@
+## 2.1.0
+
+### Color Function Migrator
+
+* Adds a new `color` migrator that migrates off of legacy color functions that
+  were deprecated in Dart Sass 1.79.0.
+
 ## 2.0.3
 
 ### Module Migrator

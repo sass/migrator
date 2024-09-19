@@ -1,0 +1,19 @@
+<==> input/entrypoint.scss
+a {
+  b: red($color: gold);
+  c: adjust-hue(gold, $degrees: 20deg);
+  d: saturate(gold, $amount: 10%);
+  e: desaturate($color: gold, $amount: 10%);
+  f: lighten($amount: 10%, $color: gold);
+}
+
+<==> output/entrypoint.scss
+@use "sass:color";
+
+a {
+  b: color.channel($color: gold, $channel: 'red', $space: rgb);
+  c: color.adjust(gold, $hue: 20deg, $space: hsl);
+  d: color.adjust(gold, $saturation: 10%, $space: hsl);
+  e: color.adjust($color: gold, $saturation: -10%, $space: hsl);
+  f: color.adjust($lightness: 10%, $space: hsl, $color: gold);
+}

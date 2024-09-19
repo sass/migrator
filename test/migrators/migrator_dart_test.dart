@@ -8,6 +8,7 @@ import '../utils.dart';
 
 main() {
   testMigrator("calc_interpolation");
+  testMigrator("color");
   testMigrator("division");
   testMigrator("module");
   testMigrator("namespace");

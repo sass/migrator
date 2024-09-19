@@ -9,6 +9,7 @@ import 'dart:isolate';
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
+import 'package:sass_migrator/src/migrators/color.dart';
 import 'package:source_span/source_span.dart';
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
@@ -55,6 +56,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       ..addFlag('version',
           help: 'Print the version of the Sass migrator.', negatable: false);
     addCommand(CalculationInterpolationMigrator());
+    addCommand(ColorMigrator());
     addCommand(DivisionMigrator());
     addCommand(ModuleMigrator());
     addCommand(NamespaceMigrator());
