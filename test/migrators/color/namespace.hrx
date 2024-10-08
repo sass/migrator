@@ -1,0 +1,19 @@
+<==> input/entrypoint.scss
+@use "sass:math" as color;
+
+a {
+  b: red(gold);
+  c: green(gold);
+  d: blue(gold);
+}
+
+<==> output/entrypoint.scss
+@use "sass:color" as sass-color;
+
+@use "sass:math" as color;
+
+a {
+  b: sass-color.channel(gold, 'red', $space: rgb);
+  c: sass-color.channel(gold, 'green', $space: rgb);
+  d: sass-color.channel(gold, 'blue', $space: rgb);
+}

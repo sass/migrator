@@ -1,4 +1,4 @@
-## 2.1.0
+## 2.2.0
 
 ### Module Migrator
 
@@ -7,6 +7,13 @@
 
 * Fix bug where some functions (`opacity`, `is-bracketed`, and
   `selector-extend`) would not be migrated.
+
+## 2.1.0
+
+### Color Function Migrator
+
+* Adds a new `color` migrator that migrates off of legacy color functions that
+  were deprecated in Dart Sass 1.79.0.
 
 ## 2.0.3
 
