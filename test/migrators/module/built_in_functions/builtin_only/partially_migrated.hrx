@@ -1,0 +1,19 @@
+<==> arguments
+--builtin-only
+
+<==> input/entrypoint.scss
+@use "sass:math";
+@import "library";
+a {
+  b: round(math.sqrt($c));
+}
+
+<==> input/_library.scss
+$c: 7;
+
+<==> output/entrypoint.scss
+@use "sass:math";
+@import "library";
+a {
+  b: math.round(math.sqrt($c));
+}

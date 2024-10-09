@@ -1,0 +1,20 @@
+<==> arguments
+--builtin-only
+
+<==> input/entrypoint.scss
+@import "library";
+
+@function mix($a, $b) {
+  @return $a;
+}
+
+a {
+  color: mix($red, $blue);
+}
+
+<==> input/_library.scss
+$red: red;
+$blue: blue;
+
+<==> log.txt
+Nothing to migrate!

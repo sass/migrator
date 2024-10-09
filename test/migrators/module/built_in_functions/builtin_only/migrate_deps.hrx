@@ -1,0 +1,24 @@
+<==> arguments
+--builtin-only --migrate-deps
+
+<==> input/entrypoint.scss
+@import "library";
+a {
+  color: mix($red, $blue);
+}
+
+<==> input/_library.scss
+$red: invert(red);
+$blue: invert(blue);
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@import "library";
+a {
+  color: color.mix($red, $blue);
+}
+
+<==> output/_library.scss
+@use "sass:color";
+$red: color.invert(red);
+$blue: color.invert(blue);

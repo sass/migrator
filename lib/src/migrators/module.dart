@@ -611,8 +611,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any function call that requires it.
   @override
   void visitFunctionExpression(FunctionExpression node) {
+    var source = references.sources[node];
     if (node.namespace != null ||
-        (builtInOnly && references.sources[node] is! BuiltInSource)) {
+        source is UseSource ||
+        builtInOnly && source is! BuiltInSource) {
       super.visitFunctionExpression(node);
       return;
     }
@@ -795,7 +797,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           _upstreamStylesheets.add(currentUrl);
           if (migrateDependencies) visitDependency(ruleUrl, import.span);
           _upstreamStylesheets.remove(currentUrl);
-          return;
         } else if (_useAllowed) {
           migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else {
@@ -804,6 +805,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
       }
     }
+    if (builtInOnly) return;
 
     rulesText = migratedRules.join('$semicolon\n$indent');
     if (rulesText.isEmpty) {
