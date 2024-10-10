@@ -19,7 +19,8 @@ class StrictUnaryMigrator extends Migrator {
   @override
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var visitor = _UnaryMigrationVisitor(importCache, migrateDependencies);
+    var visitor = _UnaryMigrationVisitor(importCache,
+        migrateDependencies: migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -27,8 +28,8 @@ class StrictUnaryMigrator extends Migrator {
 }
 
 class _UnaryMigrationVisitor extends MigrationVisitor {
-  _UnaryMigrationVisitor(ImportCache importCache, bool migrateDependencies)
-      : super(importCache, migrateDependencies);
+  _UnaryMigrationVisitor(super.importCache,
+      {required super.migrateDependencies});
 
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {

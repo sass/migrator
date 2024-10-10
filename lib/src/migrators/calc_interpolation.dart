@@ -19,8 +19,8 @@ class CalculationInterpolationMigrator extends Migrator {
   @override
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var visitor =
-        _CalculationInterpolationVisitor(importCache, migrateDependencies);
+    var visitor = _CalculationInterpolationVisitor(importCache,
+        migrateDependencies: migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -28,9 +28,8 @@ class CalculationInterpolationMigrator extends Migrator {
 }
 
 class _CalculationInterpolationVisitor extends MigrationVisitor {
-  _CalculationInterpolationVisitor(
-      ImportCache importCache, bool migrateDependencies)
-      : super(importCache, migrateDependencies);
+  _CalculationInterpolationVisitor(super.importCache,
+      {required super.migrateDependencies});
 
   @override
   void visitFunctionExpression(FunctionExpression node) {

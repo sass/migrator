@@ -66,7 +66,8 @@ More info: https://sass-lang.com/d/slash-div""";
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var visitor = _DivisionMigrationVisitor(
-        importCache, isPessimistic, useMultiplication, migrateDependencies);
+        importCache, isPessimistic, useMultiplication,
+        migrateDependencies: migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -80,9 +81,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   final bool isPessimistic;
   final bool useMultiplication;
 
-  _DivisionMigrationVisitor(ImportCache importCache, this.isPessimistic,
-      this.useMultiplication, bool migrateDependencies)
-      : super(importCache, migrateDependencies);
+  _DivisionMigrationVisitor(
+      super.importCache, this.isPessimistic, this.useMultiplication,
+      {required super.migrateDependencies});
 
   /// True when division is allowed by the context the current node is in.
   var _isDivisionAllowed = false;

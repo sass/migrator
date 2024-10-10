@@ -1,0 +1,25 @@
+<==> arguments
+--built-in-only
+
+<==> input/entrypoint.scss
+@import "library";
+
+a {
+  b: call(get-function(mix), red, blue);
+  c: call(get-function(fn), green);
+}
+
+<==> input/_library.scss
+@function fn($x) {
+  @return $x;
+}
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@use "sass:meta";
+@import "library";
+
+a {
+  b: meta.call(meta.get-function(mix, $module: "color"), red, blue);
+  c: meta.call(meta.get-function(fn), green);
+}

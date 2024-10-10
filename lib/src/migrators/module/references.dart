@@ -383,13 +383,19 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   void visitUseRule(UseRule node) {
     super.visitUseRule(node);
     var namespace = node.namespace;
-    if (namespace == null) return;
     if (node.url.scheme == 'sass') {
-      _namespaces[namespace] = node.url;
+      if (namespace != null) _namespaces[namespace] = node.url;
       return;
     }
     var canonicalUrl = _loadUseOrForward(node.url, node);
-    _namespaces[namespace] = canonicalUrl;
+    if (namespace != null) {
+      _namespaces[namespace] = canonicalUrl;
+    } else {
+      var moduleScope = _moduleScopes[canonicalUrl]!;
+      currentScope.variables.addAll(moduleScope.variables);
+      currentScope.mixins.addAll(moduleScope.mixins);
+      currentScope.functions.addAll(moduleScope.functions);
+    }
 
     // `_moduleSources[canonicalUrl]` is set in `_loadUseOrForward`.
     var moduleSources = _moduleSources[canonicalUrl]!;
