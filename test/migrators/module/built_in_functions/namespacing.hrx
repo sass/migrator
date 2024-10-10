@@ -2,6 +2,7 @@
 $a: mix(red, blue);
 $b: str-length("hello");
 $c: scale-color(blue, $lightness: -10%);
+$d: call(get-function(mix), red, blue);
 
 @function fn($args...) {
   @return keywords($args);
@@ -14,6 +15,7 @@ $c: scale-color(blue, $lightness: -10%);
 $a: color.mix(red, blue);
 $b: string.length("hello");
 $c: color.scale(blue, $lightness: -10%);
+$d: meta.call(meta.get-function(mix, $module: "color"), red, blue);
 
 @function fn($args...) {
   @return meta.keywords($args);

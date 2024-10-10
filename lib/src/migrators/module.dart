@@ -32,7 +32,7 @@ class ModuleMigrator extends Migrator {
 
   @override
   final argParser = ArgParser()
-    ..addFlag('builtin-only',
+    ..addFlag('built-in-only',
         help: 'Migrates global functions without migrating @import.')
     ..addMultiOption('remove-prefix',
         abbr: 'p',
@@ -79,12 +79,12 @@ class ModuleMigrator extends Migrator {
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var forwards = {for (var arg in argResults!['forward']) ForwardType(arg)};
-    var builtInOnly = argResults!['builtin-only'] as bool;
+    var builtInOnly = argResults!['built-in-only'] as bool;
     if (builtInOnly &&
         (argResults!.wasParsed('forward') ||
             argResults!.wasParsed('remove-prefix'))) {
       throw MigrationException('--forward and --remove-prefix may not be '
-          'passed with --builtin-only.');
+          'passed with --built-in-only.');
     }
     if (forwards.contains(ForwardType.prefixed) &&
         !argResults!.wasParsed('remove-prefix')) {
@@ -630,7 +630,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       });
     }
 
-    if (node.name == "get-function" && !builtInOnly) {
+    if (node.name == "get-function") {
       var declaration = references.getFunctionReferences[node];
       if (declaration != null) {
         _unreferencable.check(declaration, node);
@@ -648,11 +648,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // Warn for get-function calls without a static name.
       var nameArg =
           node.arguments.named['name'] ?? node.arguments.positional.first;
-      if (nameArg is! StringExpression || nameArg.text.asPlain == null) {
+      if ((nameArg is! StringExpression || nameArg.text.asPlain == null) &&
+          !builtInOnly) {
         emitWarning(
             "get-function call may require \$module parameter", nameArg.span);
         return;
       }
+
+      if (builtInOnly && declaration != null) return;
 
       _patchNamespaceForFunction(node, declaration, (namespace) {
         var beforeParen = node.span.end.offset - 1;
@@ -794,9 +797,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
       if (ruleUrl != null) {
         if (builtInOnly) {
-          _upstreamStylesheets.add(currentUrl);
-          if (migrateDependencies) visitDependency(ruleUrl, import.span);
-          _upstreamStylesheets.remove(currentUrl);
+          if (migrateDependencies) {
+            _upstreamStylesheets.add(currentUrl);
+            visitDependency(ruleUrl, import.span);
+            _upstreamStylesheets.remove(currentUrl);
+          }
         } else if (_useAllowed) {
           migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else {

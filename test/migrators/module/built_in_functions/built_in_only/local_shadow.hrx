@@ -1,20 +1,18 @@
 <==> arguments
---builtin-only
+--built-in-only
 
 <==> input/entrypoint.scss
-@use "library" as *;
-@import "colors";
+@import "library";
+
+@function mix($a, $b) {
+  @return $a;
+}
 
 a {
   color: mix($red, $blue);
 }
 
 <==> input/_library.scss
-@function mix($a, $b) {
-  @return $a;
-}
-
-<==> input/_colors.scss
 $red: red;
 $blue: blue;
 

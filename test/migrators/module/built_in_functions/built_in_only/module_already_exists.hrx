@@ -1,7 +1,8 @@
 <==> arguments
---builtin-only
+--built-in-only
 
 <==> input/entrypoint.scss
+@use "sass:color";
 @import "library";
 a {
   color: mix($red, $blue);
