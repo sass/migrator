@@ -23,8 +23,8 @@ class ColorMigrator extends Migrator {
   Map<Uri, String> migrateFile(
       ImportCache importCache, Stylesheet stylesheet, Importer importer) {
     var references = References(importCache, stylesheet, importer);
-    var visitor =
-        _ColorMigrationVisitor(references, importCache, migrateDependencies);
+    var visitor = _ColorMigrationVisitor(references, importCache,
+        migrateDependencies: migrateDependencies);
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -37,8 +37,8 @@ final _colorUrl = Uri(scheme: 'sass', path: 'color');
 class _ColorMigrationVisitor extends MigrationVisitor {
   final References references;
 
-  _ColorMigrationVisitor(
-      this.references, super.importCache, super.migrateDependencies);
+  _ColorMigrationVisitor(this.references, super.importCache,
+      {required super.migrateDependencies});
 
   /// The namespace of an existing `@use "sass:color"` rule in the current
   /// file, if any.

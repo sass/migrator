@@ -1,0 +1,20 @@
+<==> input/entrypoint.scss
+@use "library" as *;
+
+a {
+  @include test(fn($x));
+}
+
+<==> input/_library.scss
+@mixin test($arg) {
+  b: $arg;
+}
+
+@function fn($arg) {
+  @return $arg;
+}
+
+$x: red;
+
+<==> log.txt
+Nothing to migrate!

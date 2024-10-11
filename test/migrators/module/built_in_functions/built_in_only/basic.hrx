@@ -1,0 +1,19 @@
+<==> arguments
+--built-in-only
+
+<==> input/entrypoint.scss
+@import "library";
+a {
+  color: mix($red, $blue);
+}
+
+<==> input/_library.scss
+$red: red;
+$blue: blue;
+
+<==> output/entrypoint.scss
+@use "sass:color";
+@import "library";
+a {
+  color: color.mix($red, $blue);
+}

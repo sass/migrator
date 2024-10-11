@@ -1,0 +1,24 @@
+<==> input/entrypoint.scss
+@use "library" as *;
+@import "colors";
+
+a {
+  color: mix($red, $blue);
+}
+
+<==> input/_library.scss
+@function mix($a, $b) {
+  @return $a;
+}
+
+<==> input/_colors.scss
+$red: red;
+$blue: blue;
+
+<==> output/entrypoint.scss
+@use "library" as *;
+@use "colors";
+
+a {
+  color: mix(colors.$red, colors.$blue);
+}

@@ -66,7 +66,7 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
   /// syntax, in which case this returns an empty string.
   String get semicolon => currentUrl.path.endsWith('.sass') ? "" : ";";
 
-  MigrationVisitor(this.importCache, this.migrateDependencies);
+  MigrationVisitor(this.importCache, {required this.migrateDependencies});
 
   /// Runs a new migration on [stylesheet] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.
