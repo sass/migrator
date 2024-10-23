@@ -178,7 +178,8 @@ void main() {
 
     test("an unknown argument", () async {
       var migrator = await runMigrator(["--asdf"]);
-      expect(migrator.stderr, emits('Could not find an option named "asdf".'));
+      expect(
+          migrator.stderr, emits('Could not find an option named "--asdf".'));
       expect(migrator.stderr,
           emitsThrough(contains('for more information about a command.')));
       await migrator.shouldExit(64);
