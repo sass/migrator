@@ -1,3 +1,10 @@
+## 2.2.1
+
+### Module Migrator
+
+* Fix a bug where plain CSS `min()` and `max()` functions would incorrectly
+  be migrated to `math.min()` and `math.max()`.
+
 ## 2.2.0
 
 ### Module Migrator

@@ -5,6 +5,8 @@ $c: opacity(25%);
 $d: saturate(0.5);
 $e: alpha(opacity=50);
 $f: alpha(g=h, i=j, k=l);
+$g: min(var(--test), 5px);
+$h: max(1 + 2 * 3, 3 / 4 - 5);
 
 <==> log.txt
 Nothing to migrate!

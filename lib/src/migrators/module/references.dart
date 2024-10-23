@@ -294,9 +294,9 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   bool _isCssCompatibilityOverload(FunctionExpression node) {
     var argument = getOnlyArgument(node.arguments);
     switch (node.name) {
-      case 'grayscale':
-      case 'invert':
-      case 'opacity':
+      case 'min' || 'max':
+        return node.arguments.positional.every((arg) => arg.isCalculationSafe);
+      case 'grayscale' || 'invert' || 'opacity':
         return argument is NumberExpression;
       case 'saturate':
         return argument != null;

@@ -3,6 +3,7 @@ $a: mix(red, blue);
 $b: str-length("hello");
 $c: scale-color(blue, $lightness: -10%);
 $d: call(get-function(mix), red, blue);
+$e: min(10 % 2, 4 + 3);
 
 @function fn($args...) {
   @return keywords($args);
@@ -10,12 +11,14 @@ $d: call(get-function(mix), red, blue);
 
 <==> output/entrypoint.scss
 @use "sass:color";
+@use "sass:math";
 @use "sass:meta";
 @use "sass:string";
 $a: color.mix(red, blue);
 $b: string.length("hello");
 $c: color.scale(blue, $lightness: -10%);
 $d: meta.call(meta.get-function(mix, $module: "color"), red, blue);
+$e: math.min(10 % 2, 4 + 3);
 
 @function fn($args...) {
   @return meta.keywords($args);
