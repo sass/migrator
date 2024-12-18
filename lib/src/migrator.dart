@@ -70,8 +70,8 @@ abstract class Migrator extends Command<Map<Uri, String>> {
     var importer = FilesystemImporter('.');
     var importCache = ImportCache(importers: [
       NodeModulesImporter(),
-      if ((globalResults!['pkg-importer'] as List<String>).contains('node'))
-        NodePackageImporter('.')
+      for (var item in globalResults!['pkg-importer'] as List<String>)
+        if (item == 'node') NodePackageImporter('.')
     ], loadPaths: globalResults!['load-path']);
 
     var entrypoints = [
