@@ -9,12 +9,12 @@ import 'dart:isolate';
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
-import 'package:sass_migrator/src/migrators/color.dart';
 import 'package:source_span/source_span.dart';
 import 'package:term_glyph/term_glyph.dart' as glyph;
 
 import 'io.dart';
 import 'migrators/calc_interpolation.dart';
+import 'migrators/color.dart';
 import 'migrators/division.dart';
 import 'migrators/module.dart';
 import 'migrators/namespace.dart';
@@ -42,6 +42,12 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
           abbr: 'd',
           help: 'Migrate dependencies in addition to entrypoints.',
           negatable: false)
+      ..addMultiOption('pkg-importer',
+          abbr: 'p',
+          valueHelp: 'TYPE',
+          allowed: ['node'],
+          help: 'Built-in importer(s) to use for pkg: URLs.',
+          allowedHelp: {'node': 'Load files like Node.js package resolution.'})
       ..addFlag('dry-run',
           abbr: 'n',
           help: 'Show which files would be migrated but make no changes.',

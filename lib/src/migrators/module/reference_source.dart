@@ -49,8 +49,8 @@ class ImportSource extends ReferenceSource {
   /// Returns the preferred namespace to use for this module, based on
   /// [originalRuleUrl].
   String get preferredNamespace {
-    var path = url.path;
-    var basename = p.url.basenameWithoutExtension(url.path);
+    var path = (originalRuleUrl ?? url).path;
+    var basename = p.url.basenameWithoutExtension(path);
     if (basename == 'index' || basename == '_index') path = p.url.dirname(path);
     return namespaceForPath(path);
   }

@@ -1,3 +1,10 @@
+## 2.3.0
+
+* Add a `--pkg-importer` flag to enable loading dependencies from `pkg:` URLs
+  with the same behavior as the compiler. Currently this only supports the
+  Node.js package resolution algorithm, via `--pkg-importer=node`. For example,
+  `@use "pkg:bootstrap"` will load `node_modules/bootstrap/scss/bootstrap.scss`.
+
 ## 2.2.1
 
 ### Module Migrator
