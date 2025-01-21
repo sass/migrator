@@ -1,3 +1,10 @@
+## 2.3.1
+
+### Color Function Migrator
+
+* Fix a bug where deprecated color functions nested inside other functions would
+  not be migrated.
+
 ## 2.3.0
 
 * Add a `--pkg-importer` flag to enable loading dependencies from `pkg:` URLs
