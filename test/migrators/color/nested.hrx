@@ -1,0 +1,21 @@
+<==> input/entrypoint.scss
+$color: gold;
+
+a {
+  b: saturate(desaturate($color, 10%), 10%);
+  c: rgba(red($color), green($color), blue($color), 0.5);
+  d: lighten($color, red($color));
+  e: darken($color, blue($color));
+}
+
+<==> output/entrypoint.scss
+@use "sass:color";
+
+$color: gold;
+
+a {
+  b: color.adjust(color.adjust($color, $saturation: -10%, $space: hsl), $saturation: 10%, $space: hsl);
+  c: rgba(color.channel($color, 'red', $space: rgb), color.channel($color, 'green', $space: rgb), color.channel($color, 'blue', $space: rgb), 0.5);
+  d: color.adjust($color, $lightness: color.channel($color, 'red', $space: rgb), $space: hsl);
+  e: color.adjust($color, $lightness: -(color.channel($color, 'blue', $space: rgb)), $space: hsl);
+}

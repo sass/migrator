@@ -72,40 +72,49 @@ class _ColorMigrationVisitor extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     var source = references.sources[node];
-    if (source is! BuiltInSource || source.url != _colorUrl) return;
+    if (source is BuiltInSource && source.url == _colorUrl) {
+      var colorPatches = _makeColorPatches(node);
+      if (colorPatches.isNotEmpty && node.namespace == null) {
+        addPatch(patchBefore(
+            node, '${_getOrAddColorModuleNamespace(node.span.file)}.'));
+      }
+      colorPatches.forEach(addPatch);
+    }
+    super.visitFunctionExpression(node);
+  }
+
+  /// Returns the patches necessary to convert legacy color functions to
+  /// `color.adjust` or `color.channel`.
+  Iterable<Patch> _makeColorPatches(FunctionExpression node) {
     switch (node.name) {
       case 'red' || 'green' || 'blue':
-        _patchChannel(node, 'rgb');
+        return _makeChannelPatches(node, 'rgb');
       case 'hue' || 'saturation' || 'lightness':
-        _patchChannel(node, 'hsl');
+        return _makeChannelPatches(node, 'hsl');
       case 'whiteness' || 'blackness':
-        _patchChannel(node, 'hwb');
+        return _makeChannelPatches(node, 'hwb');
       case 'alpha':
-        _patchChannel(node);
+        return _makeChannelPatches(node);
       case 'adjust-hue':
-        _patchAdjust(node, channel: 'hue', space: 'hsl');
+        return _makeAdjustPatches(node, channel: 'hue', space: 'hsl');
       case 'saturate'
           when node.arguments.named.length + node.arguments.positional.length !=
               1:
-        _patchAdjust(node, channel: 'saturation', space: 'hsl');
+        return _makeAdjustPatches(node, channel: 'saturation', space: 'hsl');
       case 'desaturate':
-        _patchAdjust(node, channel: 'saturation', negate: true, space: 'hsl');
+        return _makeAdjustPatches(node,
+            channel: 'saturation', negate: true, space: 'hsl');
       case 'transparentize' || 'fade-out':
-        _patchAdjust(node, channel: 'alpha', negate: true);
+        return _makeAdjustPatches(node, channel: 'alpha', negate: true);
       case 'opacify' || 'fade-in':
-        _patchAdjust(node, channel: 'alpha');
+        return _makeAdjustPatches(node, channel: 'alpha');
       case 'lighten':
-        _patchAdjust(node, channel: 'lightness', space: 'hsl');
+        return _makeAdjustPatches(node, channel: 'lightness', space: 'hsl');
       case 'darken':
-        _patchAdjust(node, channel: 'lightness', negate: true, space: 'hsl');
+        return _makeAdjustPatches(node,
+            channel: 'lightness', negate: true, space: 'hsl');
       default:
-        return;
-    }
-    if (node.namespace == null) {
-      addPatch(
-          patchBefore(
-              node, '${_getOrAddColorModuleNamespace(node.span.file)}.'),
-          beforeExisting: true);
+        return [];
     }
   }
 
@@ -134,36 +143,38 @@ class _ColorMigrationVisitor extends MigrationVisitor {
     return namespace;
   }
 
-  /// Patches a deprecated channel function to use `color.channel` instead.
-  void _patchChannel(FunctionExpression node, [String? colorSpace]) {
-    addPatch(Patch(node.nameSpan, 'channel'));
-
+  /// Returns the patches to make a deprecated channel function use
+  /// `color.channel` instead.
+  Iterable<Patch> _makeChannelPatches(FunctionExpression node,
+      [String? colorSpace]) sync* {
+    yield Patch(node.nameSpan, 'channel');
     if (node.arguments.named.isEmpty) {
-      addPatch(patchAfter(
+      yield patchAfter(
           node.arguments.positional.last,
           ", '${node.name}'"
-          "${colorSpace == null ? '' : ', \$space: $colorSpace'}"));
+          "${colorSpace == null ? '' : ', \$space: $colorSpace'}");
     } else {
-      addPatch(patchAfter(
+      yield patchAfter(
           [...node.arguments.positional, ...node.arguments.named.values].last,
           ", \$channel: '${node.name}'"
-          "${colorSpace == null ? '' : ', \$space: $colorSpace'}"));
+          "${colorSpace == null ? '' : ', \$space: $colorSpace'}");
     }
   }
 
-  /// Patches a deprecated adjustment function to use `color.adjust` instead.
-  void _patchAdjust(FunctionExpression node,
-      {required String channel, bool negate = false, String? space}) {
-    addPatch(Patch(node.nameSpan, 'adjust'));
+  /// Returns the patches to make a deprecated adjustment function use
+  /// `color.adjust` instead.
+  Iterable<Patch> _makeAdjustPatches(FunctionExpression node,
+      {required String channel, bool negate = false, String? space}) sync* {
+    yield Patch(node.nameSpan, 'adjust');
     switch (node.arguments) {
       case ArgumentInvocation(positional: [_, var adjustment]):
-        addPatch(patchBefore(adjustment, '\$$channel: ${negate ? '-' : ''}'));
+        yield patchBefore(adjustment, '\$$channel: ${negate ? '-' : ''}');
         if (negate && adjustment.needsParens) {
-          addPatch(patchBefore(adjustment, '('));
-          addPatch(patchAfter(adjustment, ')'));
+          yield patchBefore(adjustment, '(');
+          yield patchAfter(adjustment, ')');
         }
         if (space != null) {
-          addPatch(patchAfter(adjustment, ', \$space: $space'));
+          yield patchAfter(adjustment, ', \$space: $space');
         }
 
       case ArgumentInvocation(
@@ -178,16 +189,16 @@ class _ColorMigrationVisitor extends MigrationVisitor {
             .pointSpan()
             .extendIfMatches('amount')
             .extendIfMatches('degrees');
-        addPatch(Patch(argNameSpan, channel));
+        yield Patch(argNameSpan, channel);
         if (negate) {
-          addPatch(patchBefore(adjustment, '-'));
+          yield patchBefore(adjustment, '-');
           if (adjustment.needsParens) {
-            addPatch(patchBefore(adjustment, '('));
-            addPatch(patchAfter(adjustment, ')'));
+            yield patchBefore(adjustment, '(');
+            yield patchAfter(adjustment, ')');
           }
         }
         if (space != null) {
-          addPatch(patchAfter(adjustment, ', \$space: $space'));
+          yield patchAfter(adjustment, ', \$space: $space');
         }
 
       default:
