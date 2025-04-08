@@ -263,7 +263,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var forwardsByUrl = <Uri, Map<String, Set<MemberDeclaration>>>{};
     var hiddenByUrl = <Uri, Set<MemberDeclaration>>{};
     for (var declaration in references.globalDeclarations) {
-      var private = declaration.name.startsWith('-');
+      var private = _isPrivate(declaration.name);
 
       // Whether this member will be exposed by the regular entrypoint.
       var visibleAtEntrypoint = !private &&
@@ -352,7 +352,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration.isForwarded) return;
 
     var name = declaration.name;
-    if (name.startsWith('-') &&
+    if (_isPrivate(name)
         references.referencedOutsideDeclaringStylesheet(declaration)) {
       // Remove leading `-` since private members can't be accessed outside
       // the module they're declared in.
@@ -363,6 +363,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       renamedMembers[declaration] = name;
       if (_upstreamStylesheets.isEmpty) _needsImportOnly = true;
     }
+  }
+
+  bool _isPrivate(String name) {
+    return name.startsWith('-') && !name.startsWith('--');
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1026,7 +1030,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
 
       if (_shouldForward(declaration.name) &&
-          !declaration.name.startsWith('-')) {
+          !_isPrivate(declaration.name)) {
         var subprefix = "";
         if (importOnlyPrefix != null) {
           var prefix = _prefixFor(declaration.name);
@@ -1036,7 +1040,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
         if (declaration.name != newName) _needsImportOnly = true;
         shownByPrefix.putIfAbsent(subprefix, () => {}).add(declaration);
-      } else if (!newName.startsWith('-')) {
+      } else if (!_isPrivate(newName)) {
         hidden.add(declaration);
       }
     }
@@ -1076,7 +1080,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        if (name.startsWith('-')) name = name.substring(1);
+        if (_isPrivate(name)) name = name.substring(1);
         name = _unprefix(name);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
@@ -1205,7 +1209,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _renameReference(FileSpan span, MemberDeclaration declaration) {
     var newName = renamedMembers[declaration];
     if (newName != null) {
-      if (newName.startsWith('-') &&
+      if (_isPrivate(newName) &&
           declaration.name.endsWith(newName.substring(1))) {
         addPatch(patchDelete(span,
             start: 1, end: declaration.name.length - newName.length + 1));
@@ -1228,7 +1232,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// Otherwise, returns [name] unaltered.
   String _unprefix(String name) {
-    var isPrivate = name.startsWith('-');
+    var isPrivate = _isPrivate(name);
     var unprivateName = isPrivate ? name.substring(1) : name;
     var prefix = _prefixFor(unprivateName);
     if (prefix == null) return name;
