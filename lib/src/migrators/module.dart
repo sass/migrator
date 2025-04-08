@@ -352,7 +352,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration.isForwarded) return;
 
     var name = declaration.name;
-    if (_isPrivate(name)
+    if (_isPrivate(name) &&
         references.referencedOutsideDeclaringStylesheet(declaration)) {
       // Remove leading `-` since private members can't be accessed outside
       // the module they're declared in.
@@ -365,8 +365,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
   }
 
-  bool _isPrivate(String name) {
-    return name.startsWith('-') && !name.startsWith('--');
+  /// Returns whether [identifier] is a private member name.
+  ///
+  /// Assumes [identifier] is a valid CSS identifier.
+  bool _isPrivate(String identifier) {
+    return identifier.startsWith('-') || identifier.startsWith('_');
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1029,8 +1032,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         newName = declaration.name.substring(importOnlyPrefix.length);
       }
 
-      if (_shouldForward(declaration.name) &&
-          !_isPrivate(declaration.name)) {
+      if (_shouldForward(declaration.name) && !_isPrivate(declaration.name)) {
         var subprefix = "";
         if (importOnlyPrefix != null) {
           var prefix = _prefixFor(declaration.name);
