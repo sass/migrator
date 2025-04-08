@@ -6,6 +6,7 @@
 
 import 'package:args/args.dart';
 import 'package:collection/collection.dart';
+import 'package:charcode/charcode.dart';
 import 'package:path/path.dart' as p;
 import 'package:sass_api/sass_api.dart';
 import 'package:source_span/source_span.dart';
@@ -191,6 +192,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Can't access _configuredVariables when not visiting a dependency."));
   Set<MemberDeclaration<VariableDeclaration>>? __configuredVariables;
 
+  /// The number of variables that have been generated from whole cloth.
+  var _generatedVariables = 0;
+
   /// A mapping between member declarations and references.
   ///
   /// This performs an initial pass to determine how a declaration seen in the
@@ -354,9 +358,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var name = declaration.name;
     if (_isPrivate(name) &&
         references.referencedOutsideDeclaringStylesheet(declaration)) {
-      // Remove leading `-` since private members can't be accessed outside
-      // the module they're declared in.
-      name = name.substring(1);
+      // Private members can't be accessed outside the module they're declared
+      // in.
+      name = _privateToPublic(name);
     }
     name = _unprefix(name);
     if (name != declaration.name) {
@@ -370,6 +374,20 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Assumes [identifier] is a valid CSS identifier.
   bool _isPrivate(String identifier) {
     return identifier.startsWith('-') || identifier.startsWith('_');
+  }
+
+  /// Converts a private identifier to a public one.
+  String _privateToPublic(String identifier) {
+    assert(_isPrivate(identifier));
+    for (var i = 0; i < identifier.length; i++) {
+      var char = identifier.codeUnitAt(i);
+      if (char != $dash && char != $underscore) {
+        return identifier.substring(i);
+      }
+    }
+
+    _generatedVariables++;
+    return 'var${_generatedVariables}';
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1082,7 +1100,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        if (_isPrivate(name)) name = name.substring(1);
+        if (_isPrivate(name)) name = _privateToPublic(name);
         name = _unprefix(name);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
@@ -1235,7 +1253,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Otherwise, returns [name] unaltered.
   String _unprefix(String name) {
     var isPrivate = _isPrivate(name);
-    var unprivateName = isPrivate ? name.substring(1) : name;
+    var unprivateName = isPrivate ? _privateToPublic(name) : name;
     var prefix = _prefixFor(unprivateName);
     if (prefix == null) return name;
     return (isPrivate ? '-' : '') + unprivateName.substring(prefix.length);
