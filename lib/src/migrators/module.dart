@@ -267,7 +267,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var forwardsByUrl = <Uri, Map<String, Set<MemberDeclaration>>>{};
     var hiddenByUrl = <Uri, Set<MemberDeclaration>>{};
     for (var declaration in references.globalDeclarations) {
-      var private = _isPrivate(declaration.name);
+      var private = isPrivate(declaration.name);
 
       // Whether this member will be exposed by the regular entrypoint.
       var visibleAtEntrypoint = !private &&
@@ -356,38 +356,27 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration.isForwarded) return;
 
     var name = declaration.name;
-    if (_isPrivate(name) &&
-        references.referencedOutsideDeclaringStylesheet(declaration)) {
-      // Private members can't be accessed outside the module they're declared
-      // in.
-      name = _privateToPublic(name);
-    }
-    name = _unprefix(name);
+    name = _unprefix(name, forcePublic: references.referencedOutsideDeclaringStylesheet(declaration));
     if (name != declaration.name) {
       renamedMembers[declaration] = name;
       if (_upstreamStylesheets.isEmpty) _needsImportOnly = true;
     }
   }
 
-  /// Returns whether [identifier] is a private member name.
-  ///
-  /// Assumes [identifier] is a valid CSS identifier.
-  bool _isPrivate(String identifier) {
-    return identifier.startsWith('-') || identifier.startsWith('_');
-  }
-
   /// Converts a private identifier to a public one.
   String _privateToPublic(String identifier) {
-    assert(_isPrivate(identifier));
-    for (var i = 0; i < identifier.length; i++) {
-      var char = identifier.codeUnitAt(i);
-      if (char != $dash && char != $underscore) {
-        return identifier.substring(i);
+    if (isPrivate(identifier)) {
+      for (var i = 0; i < identifier.length; i++) {
+        var char = identifier.codeUnitAt(i);
+        if (char != $dash && char != $underscore) {
+          return identifier.substring(i);
+        }
       }
-    }
 
-    _generatedVariables++;
-    return 'var${_generatedVariables}';
+      _generatedVariables++;
+      return 'var${_generatedVariables}';
+    }
+    return identifier;
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1050,7 +1039,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         newName = declaration.name.substring(importOnlyPrefix.length);
       }
 
-      if (_shouldForward(declaration.name) && !_isPrivate(declaration.name)) {
+      if (_shouldForward(declaration.name) && !isPrivate(declaration.name)) {
         var subprefix = "";
         if (importOnlyPrefix != null) {
           var prefix = _prefixFor(declaration.name);
@@ -1060,7 +1049,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
         if (declaration.name != newName) _needsImportOnly = true;
         shownByPrefix.putIfAbsent(subprefix, () => {}).add(declaration);
-      } else if (!_isPrivate(newName)) {
+      } else if (!isPrivate(newName)) {
         hidden.add(declaration);
       }
     }
@@ -1100,8 +1089,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        if (_isPrivate(name)) name = _privateToPublic(name);
-        name = _unprefix(name);
+        name = _unprefix(name, forcePublic: true);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
         allHidden.add(name);
@@ -1229,7 +1217,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _renameReference(FileSpan span, MemberDeclaration declaration) {
     var newName = renamedMembers[declaration];
     if (newName != null) {
-      if (_isPrivate(newName) &&
+      if (isPrivate(newName) &&
           declaration.name.endsWith(newName.substring(1))) {
         addPatch(patchDelete(span,
             start: 1, end: declaration.name.length - newName.length + 1));
@@ -1249,19 +1237,32 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// If [name] starts with any of [prefixesToRemove], returns it with the
   /// longest matching prefix removed.
+  /// If forcePublic is true, any leading dash or underscore will be removed.
   ///
   /// Otherwise, returns [name] unaltered.
-  String _unprefix(String name) {
-    var isPrivate = _isPrivate(name);
-    var unprivateName = isPrivate ? _privateToPublic(name) : name;
-    var prefix = _prefixFor(unprivateName);
-    if (prefix == null) return name;
-
-    var withoutPrefix = unprivateName.substring(prefix.length);
-    if (_isPrivate(withoutPrefix)) {
-      withoutPrefix = _privateToPublic(withoutPrefix);
+  String _unprefix(String name, {bool forcePublic = false}) {
+    var unprivateName = _privateToPublic(name);
+    var wasPrivate = unprivateName != name;
+    var prefix = _prefixFor(name);
+    var withoutPrefix = '';
+    var privatePrefix = '';
+    if (wasPrivate && prefix == null) {
+      prefix = _prefixFor(unprivateName);
+      if (prefix != null) {
+        privatePrefix = name.substring(0, name.length - unprivateName.length);
+        withoutPrefix = _privateToPublic(unprivateName.substring(prefix.length));
+      }
+    } else if (prefix != null) {
+      withoutPrefix = name.substring(prefix.length);
+      var withoutPrefixPublic = _privateToPublic(withoutPrefix);
+      if (wasPrivate && withoutPrefixPublic != withoutPrefix) {
+        privatePrefix = withoutPrefix.substring(0, withoutPrefix.length - withoutPrefixPublic.length);
+      }
+      withoutPrefix = withoutPrefixPublic;
     }
-    return (isPrivate ? '-' : '') + withoutPrefix;
+    if (prefix == null) return forcePublic ? unprivateName : name;
+
+    return forcePublic ? _privateToPublic(withoutPrefix) : privatePrefix + withoutPrefix;
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.

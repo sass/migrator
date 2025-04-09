@@ -59,6 +59,13 @@ extension NullableExtension<T> on T? {
   }
 }
 
+/// Returns whether [identifier] is a private member name.
+///
+/// Assumes [identifier] is a valid CSS identifier.
+bool isPrivate(String identifier) {
+    return identifier.startsWith('-') || identifier.startsWith('_');
+}
+
 /// Returns the default namespace for a use rule with [path].
 String namespaceForPath(String path) {
   // TODO(jathak): Confirm that this is a valid Sass identifier
