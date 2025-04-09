@@ -1256,7 +1256,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var unprivateName = isPrivate ? _privateToPublic(name) : name;
     var prefix = _prefixFor(unprivateName);
     if (prefix == null) return name;
-    return (isPrivate ? '-' : '') + unprivateName.substring(prefix.length);
+
+    var withoutPrefix = unprivateName.substring(prefix.length);
+    if (_isPrivate(withoutPrefix)) {
+      withoutPrefix = _privateToPublic(withoutPrefix);
+    }
+    return (isPrivate ? '-' : '') + withoutPrefix;
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.
