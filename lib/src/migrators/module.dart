@@ -267,7 +267,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var forwardsByUrl = <Uri, Map<String, Set<MemberDeclaration>>>{};
     var hiddenByUrl = <Uri, Set<MemberDeclaration>>{};
     for (var declaration in references.globalDeclarations) {
-      var private = _isPrivate(declaration.name);
+      var private = isPrivate(declaration.name);
 
       // Whether this member will be exposed by the regular entrypoint.
       var visibleAtEntrypoint = !private &&
@@ -356,38 +356,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration.isForwarded) return;
 
     var name = declaration.name;
-    if (_isPrivate(name) &&
-        references.referencedOutsideDeclaringStylesheet(declaration)) {
-      // Private members can't be accessed outside the module they're declared
-      // in.
-      name = _privateToPublic(name);
-    }
-    name = _unprefix(name);
+    name = _unprefix(name, isReferenced: isPrivate(name) && references.referencedOutsideDeclaringStylesheet(declaration));
     if (name != declaration.name) {
       renamedMembers[declaration] = name;
       if (_upstreamStylesheets.isEmpty) _needsImportOnly = true;
     }
-  }
-
-  /// Returns whether [identifier] is a private member name.
-  ///
-  /// Assumes [identifier] is a valid CSS identifier.
-  bool _isPrivate(String identifier) {
-    return identifier.startsWith('-') || identifier.startsWith('_');
-  }
-
-  /// Converts a private identifier to a public one.
-  String _privateToPublic(String identifier) {
-    assert(_isPrivate(identifier));
-    for (var i = 0; i < identifier.length; i++) {
-      var char = identifier.codeUnitAt(i);
-      if (char != $dash && char != $underscore) {
-        return identifier.substring(i);
-      }
-    }
-
-    _generatedVariables++;
-    return 'var${_generatedVariables}';
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1050,7 +1023,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         newName = declaration.name.substring(importOnlyPrefix.length);
       }
 
-      if (_shouldForward(declaration.name) && !_isPrivate(declaration.name)) {
+      if (_shouldForward(declaration.name) && !isPrivate(declaration.name)) {
         var subprefix = "";
         if (importOnlyPrefix != null) {
           var prefix = _prefixFor(declaration.name);
@@ -1060,7 +1033,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
         if (declaration.name != newName) _needsImportOnly = true;
         shownByPrefix.putIfAbsent(subprefix, () => {}).add(declaration);
-      } else if (!_isPrivate(newName)) {
+      } else if (!isPrivate(newName)) {
         hidden.add(declaration);
       }
     }
@@ -1100,7 +1073,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        if (_isPrivate(name)) name = _privateToPublic(name);
+        name = _privateToPublic(name);
         name = _unprefix(name);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
@@ -1229,7 +1202,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _renameReference(FileSpan span, MemberDeclaration declaration) {
     var newName = renamedMembers[declaration];
     if (newName != null) {
-      if (_isPrivate(newName) &&
+      if (isPrivate(newName) &&
           declaration.name.endsWith(newName.substring(1))) {
         addPatch(patchDelete(span,
             start: 1, end: declaration.name.length - newName.length + 1));
@@ -1246,22 +1219,43 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(patchDelete(span, end: declaration.importOnlyPrefix.length));
     }
   }
+  
+  /// Converts a private identifier to a public one.
+  String _privateToPublic(String identifier) {
+      if (isPrivate(identifier)) {
+          for (var i = 0; i < identifier.length; i++) {
+            var char = identifier.codeUnitAt(i);
+            if (char != $dash && char != $underscore) {
+              return identifier.substring(i);
+            }
+          }
+  
+          _generatedVariables++;
+          return 'var${_generatedVariables}';
+      }
+      return identifier;
+  }
 
   /// If [name] starts with any of [prefixesToRemove], returns it with the
   /// longest matching prefix removed.
   ///
   /// Otherwise, returns [name] unaltered.
-  String _unprefix(String name) {
-    var isPrivate = _isPrivate(name);
-    var unprivateName = isPrivate ? _privateToPublic(name) : name;
-    var prefix = _prefixFor(unprivateName);
-    if (prefix == null) return name;
+  String _unprefix(String name, {bool isReferenced = false}) {
+    var wasPrivate = isPrivate(name);
+    var unprivateName = _privateToPublic(name);
+    var prefix = _prefixFor(unprivateName, unprivatized: true);
+    if (prefix == null) return isReferenced ? unprivateName : name;
 
     var withoutPrefix = unprivateName.substring(prefix.length);
-    if (_isPrivate(withoutPrefix)) {
-      withoutPrefix = _privateToPublic(withoutPrefix);
+    var withoutPrefixPublic = _privateToPublic(withoutPrefix);
+    var privatePrefix = '';
+    if (wasPrivate) {
+      var realPrefix = prefixesToRemove.firstWhere((pre) => _privateToPublic(pre) == prefix, orElse: () => prefix);
+      privatePrefix = !isPrivate(realPrefix)
+          ? name.substring(0, name.length - unprivateName.length)
+          : withoutPrefix.substring(0, withoutPrefix.length - withoutPrefixPublic.length);
     }
-    return (isPrivate ? '-' : '') + withoutPrefix;
+    return isReferenced ? withoutPrefixPublic : privatePrefix + withoutPrefixPublic;
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.
@@ -1356,11 +1350,13 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// starts with it and the remainder is a valid Sass identifier.
   ///
   /// If there is no such prefix, returns `null`.
-  String? _prefixFor(String identifier) => maxBy(
-      prefixesToRemove.where((prefix) =>
-          prefix.length < identifier.length &&
-          identifier.startsWith(prefix) &&
-          isIdentifier(identifier.substring(prefix.length))),
+  String? _prefixFor(String identifier, {bool unprivatized = false}) => maxBy(
+      prefixesToRemove
+          .map((prefix) => unprivatized ? _privateToPublic(prefix) : prefix)
+          .where((prefix) =>
+            prefix.length < identifier.length &&
+            identifier.startsWith(prefix) &&
+            isIdentifier(identifier.substring(prefix.length))),
       (prefix) => prefix.length);
 
   /// Disallows `@use` after `@at-root` rules.

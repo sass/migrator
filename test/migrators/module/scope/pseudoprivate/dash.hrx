@@ -7,7 +7,8 @@ a {
 }
 
 <==> input/_library.scss
-$-var: red;
+$-red: red;
+$-var: $-red;
 
 <==> output/entrypoint.scss
 @use "library";
@@ -16,4 +17,5 @@ a {
 }
 
 <==> output/_library.scss
-$var: red;
+$-red: red;
+$var: $-red;

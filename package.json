@@ -8,6 +8,9 @@
     "type": "git",
     "url": "https://github.com/sass/migrator"
   },
+  "scripts": {
+    "test": "dart run grinder pkg-npm-dev && dart pub run test -t node -r expanded --chain-stack-traces"
+  },
   "author": {
     "name": "Jennifer Thakar",
     "email": "jathak@google.com",
