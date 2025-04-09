@@ -356,11 +356,27 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration.isForwarded) return;
 
     var name = declaration.name;
-    name = _unprefix(name, isReferenced: isPrivate(name) && references.referencedOutsideDeclaringStylesheet(declaration));
+    name = _unprefix(name, forcePublic: references.referencedOutsideDeclaringStylesheet(declaration));
     if (name != declaration.name) {
       renamedMembers[declaration] = name;
       if (_upstreamStylesheets.isEmpty) _needsImportOnly = true;
     }
+  }
+
+  /// Converts a private identifier to a public one.
+  String _privateToPublic(String identifier) {
+    if (isPrivate(identifier)) {
+      for (var i = 0; i < identifier.length; i++) {
+        var char = identifier.codeUnitAt(i);
+        if (char != $dash && char != $underscore) {
+          return identifier.substring(i);
+        }
+      }
+
+      _generatedVariables++;
+      return 'var${_generatedVariables}';
+    }
+    return identifier;
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1073,7 +1089,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        name = _unprefix(name, isReferenced: true);
+        name = _unprefix(name, forcePublic: true);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
         allHidden.add(name);
@@ -1218,43 +1234,35 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(patchDelete(span, end: declaration.importOnlyPrefix.length));
     }
   }
-  
-  /// Converts a private identifier to a public one.
-  String _privateToPublic(String identifier) {
-      if (isPrivate(identifier)) {
-          for (var i = 0; i < identifier.length; i++) {
-            var char = identifier.codeUnitAt(i);
-            if (char != $dash && char != $underscore) {
-              return identifier.substring(i);
-            }
-          }
-  
-          _generatedVariables++;
-          return 'var${_generatedVariables}';
-      }
-      return identifier;
-  }
 
   /// If [name] starts with any of [prefixesToRemove], returns it with the
   /// longest matching prefix removed.
+  /// If forcePublic is true, any leading dash or underscore will be removed.
   ///
   /// Otherwise, returns [name] unaltered.
-  String _unprefix(String name, {bool isReferenced = false}) {
-    var wasPrivate = isPrivate(name);
+  String _unprefix(String name, {bool forcePublic = false}) {
     var unprivateName = _privateToPublic(name);
-    var prefix = _prefixFor(unprivateName, unprivatized: true);
-    if (prefix == null) return isReferenced ? unprivateName : name;
-
-    var withoutPrefix = unprivateName.substring(prefix.length);
-    var withoutPrefixPublic = _privateToPublic(withoutPrefix);
+    var wasPrivate = unprivateName != name;
+    var prefix = _prefixFor(name);
+    var withoutPrefix = '';
     var privatePrefix = '';
-    if (wasPrivate) {
-      var realPrefix = prefixesToRemove.firstWhere((pre) => _privateToPublic(pre) == prefix, orElse: () => prefix);
-      privatePrefix = !isPrivate(realPrefix)
-          ? name.substring(0, name.length - unprivateName.length)
-          : withoutPrefix.substring(0, withoutPrefix.length - withoutPrefixPublic.length);
+    if (wasPrivate && prefix == null) {
+      prefix = _prefixFor(unprivateName);
+      if (prefix != null) {
+        privatePrefix = name.substring(0, name.length - unprivateName.length);
+        withoutPrefix = _privateToPublic(unprivateName.substring(prefix.length));
+      }
+    } else if (prefix != null) {
+      withoutPrefix = name.substring(prefix.length);
+      var withoutPrefixPublic = _privateToPublic(withoutPrefix);
+      if (wasPrivate && withoutPrefixPublic != withoutPrefix) {
+        privatePrefix = withoutPrefix.substring(0, withoutPrefix.length - withoutPrefixPublic.length);
+      }
+      withoutPrefix = withoutPrefixPublic;
     }
-    return isReferenced ? withoutPrefixPublic : privatePrefix + withoutPrefixPublic;
+    if (prefix == null) return forcePublic ? unprivateName : name;
+
+    return forcePublic ? _privateToPublic(withoutPrefix) : privatePrefix + withoutPrefix;
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.
@@ -1349,13 +1357,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// starts with it and the remainder is a valid Sass identifier.
   ///
   /// If there is no such prefix, returns `null`.
-  String? _prefixFor(String identifier, {bool unprivatized = false}) => maxBy(
-      prefixesToRemove
-          .map((prefix) => unprivatized ? _privateToPublic(prefix) : prefix)
-          .where((prefix) =>
-            prefix.length < identifier.length &&
-            identifier.startsWith(prefix) &&
-            isIdentifier(identifier.substring(prefix.length))),
+  String? _prefixFor(String identifier) => maxBy(
+      prefixesToRemove.where((prefix) =>
+          prefix.length < identifier.length &&
+          identifier.startsWith(prefix) &&
+          isIdentifier(identifier.substring(prefix.length))),
       (prefix) => prefix.length);
 
   /// Disallows `@use` after `@at-root` rules.
