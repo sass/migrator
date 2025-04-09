@@ -1073,8 +1073,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        name = _privateToPublic(name);
-        name = _unprefix(name);
+        name = _unprefix(name, isReferenced: true);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
         allHidden.add(name);
