@@ -356,13 +356,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (declaration.isForwarded) return;
 
     var name = declaration.name;
-    if (_isPrivate(name) &&
-        references.referencedOutsideDeclaringStylesheet(declaration)) {
-      // Private members can't be accessed outside the module they're declared
-      // in.
-      name = _privateToPublic(name);
-    }
-    name = _unprefix(name);
+    name = _unprefix(name,
+        // Private members can't be accessed outside the module they're declared
+        // in.
+        forcePublic:
+            references.referencedOutsideDeclaringStylesheet(declaration));
     if (name != declaration.name) {
       renamedMembers[declaration] = name;
       if (_upstreamStylesheets.isEmpty) _needsImportOnly = true;
@@ -1100,8 +1098,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         if (declaration is ImportOnlyMemberDeclaration) {
           name = name.substring(declaration.importOnlyPrefix.length);
         }
-        if (_isPrivate(name)) name = _privateToPublic(name);
-        name = _unprefix(name);
+        name = _unprefix(name, forcePublic: true);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
         if (declaration.member is VariableDeclaration) name = '\$$name';
         allHidden.add(name);
@@ -1251,17 +1248,33 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// longest matching prefix removed.
   ///
   /// Otherwise, returns [name] unaltered.
-  String _unprefix(String name) {
-    var isPrivate = _isPrivate(name);
-    var unprivateName = isPrivate ? _privateToPublic(name) : name;
-    var prefix = _prefixFor(unprivateName);
-    if (prefix == null) return name;
+  ///
+  /// If [forcePublic] is true, this will ensure that the name is always a
+  /// public identifier.
+  String _unprefix(String name, {bool forcePublic = false}) {
+    bool isPrivate;
+    String withoutPrefix;
 
-    var withoutPrefix = unprivateName.substring(prefix.length);
+    // Allow users to pass prefixes that either do or do not include leading
+    // dashes/underscores. As usual, the longest prefix wins, so we check for
+    // ones that do include them first.
+    var prefix = _prefixFor(name);
+    if (prefix != null) {
+      isPrivate = false;
+      withoutPrefix = name.substring(prefix.length);
+    } else {
+      isPrivate = _isPrivate(name);
+      var unprivateName = isPrivate ? _privateToPublic(name) : name;
+      prefix = _prefixFor(unprivateName);
+      if (prefix == null)
+        return isPrivate && forcePublic ? unprivateName : name;
+      withoutPrefix = unprivateName.substring(prefix.length);
+    }
+
     if (_isPrivate(withoutPrefix)) {
       withoutPrefix = _privateToPublic(withoutPrefix);
     }
-    return (isPrivate ? '-' : '') + withoutPrefix;
+    return (isPrivate && !forcePublic ? '-' : '') + withoutPrefix;
   }
 
   /// Returns the namespace that built-in module [module] is loaded under.
