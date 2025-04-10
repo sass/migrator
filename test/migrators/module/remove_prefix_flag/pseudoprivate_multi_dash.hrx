@@ -1,0 +1,22 @@
+<==> arguments
+--migrate-deps --remove-prefix=lib-
+
+<==> input/entrypoint.scss
+@import "dependency";
+
+a {
+  background: $--lib-pseudoprivate;
+}
+
+<==> input/_dependency.scss
+$--lib-pseudoprivate: blue;
+
+<==> output/entrypoint.scss
+@use "dependency";
+
+a {
+  background: dependency.$pseudoprivate;
+}
+
+<==> output/_dependency.scss
+$pseudoprivate: blue;
