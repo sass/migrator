@@ -157,13 +157,13 @@ void emitWarning(String message, [FileSpan? context]) {
   }
 }
 
-/// Returns the only argument in [invocation], or null if [invocation] does not
+/// Returns the only argument in [arguments], or null if [arguments] does not
 /// contain exactly one argument.
-Expression? getOnlyArgument(ArgumentInvocation invocation) {
-  if (invocation.positional.length == 0 && invocation.named.length == 1) {
-    return invocation.named.values.first;
-  } else if (invocation.positional.length == 1 && invocation.named.isEmpty) {
-    return invocation.positional.first;
+Expression? getOnlyArgument(ArgumentList arguments) {
+  if (arguments.positional.length == 0 && arguments.named.length == 1) {
+    return arguments.named.values.first;
+  } else if (arguments.positional.length == 1 && arguments.named.isEmpty) {
+    return arguments.positional.first;
   } else {
     return null;
   }

@@ -167,7 +167,7 @@ class _ColorMigrationVisitor extends MigrationVisitor {
       {required String channel, bool negate = false, String? space}) sync* {
     yield Patch(node.nameSpan, 'adjust');
     switch (node.arguments) {
-      case ArgumentInvocation(positional: [_, var adjustment]):
+      case ArgumentList(positional: [_, var adjustment]):
         yield patchBefore(adjustment, '\$$channel: ${negate ? '-' : ''}');
         if (negate && adjustment.needsParens) {
           yield patchBefore(adjustment, '(');
@@ -177,7 +177,7 @@ class _ColorMigrationVisitor extends MigrationVisitor {
           yield patchAfter(adjustment, ', \$space: $space');
         }
 
-      case ArgumentInvocation(
+      case ArgumentList(
           named: {'amount': var adjustment} || {'degrees': var adjustment}
         ):
         var start = adjustment.span.start.offset - 1;

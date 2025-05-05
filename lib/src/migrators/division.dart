@@ -165,11 +165,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     return '$namespace.';
   }
 
-  /// Allows division within this argument invocation.
+  /// Allows division within this argument list.
   @override
-  void visitArgumentInvocation(ArgumentInvocation invocation,
-      {bool inCalcContext = false}) {
-    _withContext(() => super.visitArgumentInvocation(invocation),
+  void visitArgumentList(ArgumentList arguments, {bool inCalcContext = false}) {
+    _withContext(() => super.visitArgumentList(arguments),
         isDivisionAllowed: true, inCalcContext: inCalcContext);
   }
 
@@ -195,7 +194,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     if (_tryColorFunction(node)) return;
     var validCalcs = _calcFunctions.difference(currentScope.allFunctionNames);
-    visitArgumentInvocation(node.arguments,
+    visitArgumentList(node.arguments,
         inCalcContext:
             node.namespace == null && validCalcs.contains(node.name));
   }
@@ -274,15 +273,12 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
 
     var channels = switch (node.arguments) {
-      ArgumentInvocation(
+      ArgumentList(
         positional: [ListExpression arg],
         named: Map(isEmpty: true)
       ) =>
         arg,
-      ArgumentInvocation(
-        positional: [],
-        named: {r'$channels': ListExpression arg}
-      ) =>
+      ArgumentList(positional: [], named: {r'$channels': ListExpression arg}) =>
         arg,
       _ => null,
     };
