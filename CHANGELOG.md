@@ -1,3 +1,7 @@
+## 2.3.2
+
+* Update to be compatible with the latest version of the Dart Sass AST.
+
 ## 2.3.1
 
 ### Color Function Migrator

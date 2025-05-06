@@ -62,9 +62,9 @@ abstract class ScopedAstVisitor
   @override
   void visitCallableDeclaration(CallableDeclaration node) {
     scoped(() {
-      for (var argument in node.arguments.arguments) {
-        currentScope.variables[argument.name] = MemberDeclaration(argument);
-        if (argument.defaultValue case var defaultValue?) {
+      for (var parameter in node.parameters.parameters) {
+        currentScope.variables[parameter.name] = MemberDeclaration(parameter);
+        if (parameter.defaultValue case var defaultValue?) {
           visitExpression(defaultValue);
         }
       }
