@@ -1,0 +1,21 @@
+<==> arguments
+--migrate-deps
+<==> input/entrypoint.scss
+@import "library";
+a {
+  color: $middle;
+}
+
+<==> input/_library.scss
+$-upstream: red;
+$middle: $-upstream;
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  color: library.$middle;
+}
+
+<==> output/_library.scss
+$-upstream: red;
+$middle: $-upstream;
