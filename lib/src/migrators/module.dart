@@ -357,8 +357,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
     var name = declaration.name;
     name = _unprefix(name,
-        // Private members can't be accessed outside the module they're declared
-        // in.
+        // Private members can't be accessed outside the module they're
+        // declared in.
         forcePublic:
             references.referencedOutsideDeclaringStylesheet(declaration));
     if (name != declaration.name) {
@@ -376,16 +376,18 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Converts a private identifier to a public one.
   String _privateToPublic(String identifier) {
-    assert(_isPrivate(identifier));
-    for (var i = 0; i < identifier.length; i++) {
-      var char = identifier.codeUnitAt(i);
-      if (char != $dash && char != $underscore) {
-        return identifier.substring(i);
+    if (_isPrivate(identifier)) {
+      for (var i = 0; i < identifier.length; i++) {
+        var char = identifier.codeUnitAt(i);
+        if (char != $dash && char != $underscore) {
+          return identifier.substring(i);
+        }
       }
-    }
 
-    _generatedVariables++;
-    return 'var${_generatedVariables}';
+      _generatedVariables++;
+      return 'var${_generatedVariables}';
+    }
+    return identifier;
   }
 
   /// Returns whether the member named [name] should be forwarded in the
@@ -1246,6 +1248,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// If [name] starts with any of [prefixesToRemove], returns it with the
   /// longest matching prefix removed.
+  /// If forcePublic is true, any leading dash or underscore will be removed.
   ///
   /// Otherwise, returns [name] unaltered.
   ///
