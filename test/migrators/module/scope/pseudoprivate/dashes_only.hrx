@@ -12,8 +12,8 @@ $---: red;
 <==> output/entrypoint.scss
 @use "library";
 a {
-  color: library.$var1;
+  color: library.$private---;
 }
 
 <==> output/_library.scss
-$var1: red;
+$private---: red;

@@ -192,9 +192,6 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           "Can't access _configuredVariables when not visiting a dependency."));
   Set<MemberDeclaration<VariableDeclaration>>? __configuredVariables;
 
-  /// The number of variables that have been generated from whole cloth.
-  var _generatedVariables = 0;
-
   /// A mapping between member declarations and references.
   ///
   /// This performs an initial pass to determine how a declaration seen in the
@@ -384,8 +381,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
       }
 
-      _generatedVariables++;
-      return 'var${_generatedVariables}';
+      return 'private$identifier';
     }
     return identifier;
   }
