@@ -2,7 +2,7 @@
 
 ### Module System Migration
 
-* Fix some bugs in the conversion of private names that are references across
+* Fix some bugs in the conversion of private names that are referenced across
   files to public names, especially when `--remove-prefix` and/or multiple
   leading dashes/underscores are involved.
 

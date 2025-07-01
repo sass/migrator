@@ -373,17 +373,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
 
   /// Converts a private identifier to a public one.
   String _privateToPublic(String identifier) {
-    if (_isPrivate(identifier)) {
-      for (var i = 0; i < identifier.length; i++) {
-        var char = identifier.codeUnitAt(i);
-        if (char != $dash && char != $underscore) {
-          return identifier.substring(i);
-        }
-      }
+    if (!_isPrivate(identifier)) return identifier;
 
-      return 'private$identifier';
+    for (var i = 0; i < identifier.length; i++) {
+      var char = identifier.codeUnitAt(i);
+      if (char != $dash && char != $underscore) {
+        return identifier.substring(i);
+      }
     }
-    return identifier;
+
+    return 'private$identifier';
   }
 
   /// Returns whether the member named [name] should be forwarded in the
