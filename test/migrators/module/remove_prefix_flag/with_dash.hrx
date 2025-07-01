@@ -1,0 +1,25 @@
+<==> arguments
+--migrate-deps --remove-prefix=--app-
+<==> input/entrypoint.scss
+@import "library";
+a {
+  color: $--app-var;
+  background: $__app-var2;
+}
+
+<==> input/_library.scss
+$--app-red: red;
+$--app-var: $--app-red;
+$__app-var2: blue;
+
+<==> output/entrypoint.scss
+@use "library";
+a {
+  color: library.$var;
+  background: library.$var2;
+}
+
+<==> output/_library.scss
+$red: red;
+$var: $red;
+$var2: blue;

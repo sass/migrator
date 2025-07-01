@@ -1,3 +1,11 @@
+## 2.3.3
+
+### Module System Migration
+
+* Fix some bugs in the conversion of private names that are referenced across
+  files to public names, especially when `--remove-prefix` and/or multiple
+  leading dashes/underscores are involved.
+
 ## 2.3.2
 
 * Update to be compatible with the latest version of the Dart Sass AST.
