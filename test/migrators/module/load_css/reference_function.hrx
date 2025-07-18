@@ -13,7 +13,9 @@ a {
 }
 
 <==> error.txt
-Error: This function was loaded from a nested import of _library.scss. The module system only supports loading nested CSS using the load-css() mixin, which doesn't load functions.
+Error: This function was loaded from a nested import of _library.scss.
+The module system only supports loading nested CSS using the load-css() mixin,
+which doesn't load functions.
   ,
 3 |   e: fn();
   |      ^^^^

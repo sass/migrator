@@ -3,20 +3,24 @@
 
 <==> input/entrypoint.scss
 a {
+  b: c;
+}
+
+d {
   @import "library";
-  e: $x;
+  e: $var;
 }
 
 <==> input/_library.scss
-$x: blue;
+$var: blue;
 
 <==> error.txt
 Error: This variable was loaded from a nested import of _library.scss.
 The module system only supports loading nested CSS using the load-css() mixin,
 which doesn't load variables.
   ,
-3 |   e: $x;
-  |      ^^
+7 |   e: $var;
+  |      ^^^^
   '
-  entrypoint.scss 3:6  root stylesheet
+  entrypoint.scss 7:6  root stylesheet
 Migration failed!

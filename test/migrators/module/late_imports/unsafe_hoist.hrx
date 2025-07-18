@@ -1,0 +1,32 @@
+<==> arguments
+--migrate-deps --unsafe-hoist
+
+<==> input/entrypoint.scss
+a {
+  b: c;
+}
+
+@import "library";
+
+d {
+  e: $var;
+}
+
+<==> input/_library.scss
+$var: blue;
+
+x {
+  y: z;
+}
+
+<==> output/entrypoint.scss
+@use "library";
+
+a {
+  b: c;
+}
+
+
+d {
+  e: library.$var;
+}
