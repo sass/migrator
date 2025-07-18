@@ -1,0 +1,35 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+a {
+  b: c;
+}
+
+@import "references", "css";
+
+d {
+  e: $var;
+}
+
+<==> input/_references.scss
+$var: blue;
+
+<==> input/_css.scss
+g {
+  h: i;
+}
+
+<==> output/entrypoint.scss
+@use "sass:meta";
+@use "references";
+
+a {
+  b: c;
+}
+
+@include meta.load-css("css");
+
+d {
+  e: references.$var;
+}

@@ -1,0 +1,29 @@
+<==> arguments
+--migrate-deps --safe-at-rule=require
+
+<==> input/entrypoint.scss
+a {
+  b: c;
+}
+
+@import "library";
+
+d {
+  e: $var;
+}
+
+<==> input/_library.scss
+@require "foo";
+$var: blue;
+
+<==> output/entrypoint.scss
+@use "library";
+
+a {
+  b: c;
+}
+
+
+d {
+  e: library.$var;
+}
