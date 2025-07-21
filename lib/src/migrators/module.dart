@@ -857,8 +857,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           inPlaceUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else if (!isNested &&
             (!(references.fileEmitsCss[canonicalUrl] ?? true) ||
-                unsafeHoist &&
-                    references.anyMemberReferenced(canonicalUrl, currentUrl))) {
+                (unsafeHoist &&
+                    references.anyMemberReferenced(
+                        canonicalUrl, currentUrl)))) {
           _hoistedUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else {
           loadCssRules.add(
@@ -932,8 +933,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if ((rules.isEmpty && normalForwardRules == null) ||
         withClause.isNotEmpty ||
         references.anyMemberReferenced(canonicalUrl, currentUrl)) {
-      if (!_usedUrls.contains(canonicalUrl)) {
-        _usedUrls.add(canonicalUrl);
+      if (_usedUrls.add(canonicalUrl)) {
         rules.add('@use $quotedUrl$asClause$withClause');
       }
     }
