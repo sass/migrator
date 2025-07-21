@@ -35,6 +35,12 @@ class ModuleMigrator extends Migrator {
   final argParser = ArgParser()
     ..addFlag('built-in-only',
         help: 'Migrates global functions without migrating @import.')
+    ..addMultiOption('safe-at-rule',
+        help: 'CSS at-rules (without the @) used by postprocessing tools '
+            'that should not be considered to be emitting CSS.')
+    ..addFlag('unsafe-hoist',
+        help: 'Allow the migrator to hoist late imports to the top of the '
+            'file even when they emit CSS.')
     ..addMultiOption('remove-prefix',
         abbr: 'p',
         help: 'Removes PREFIX from all migrated member names.\n'
@@ -94,14 +100,16 @@ class ModuleMigrator extends Migrator {
           'which prefixed members to forward.');
     }
 
-    var references = References(importCache, stylesheet, importer);
+    var references = References(importCache, stylesheet, importer,
+        safeAtRules: argResults!['safe-at-rule'] as List<String>);
     var visitor = _ModuleMigrationVisitor(
         importCache, references, globalResults!['load-path'] as List<String>,
         migrateDependencies: migrateDependencies,
         builtInOnly: builtInOnly,
         prefixesToRemove: (argResults!['remove-prefix'] as List<String>)
             .map((prefix) => prefix.replaceAll('_', '-')),
-        forwards: forwards);
+        forwards: forwards,
+        unsafeHoist: argResults!['unsafe-hoist'] as bool);
     var migrated = visitor.run(stylesheet, importer);
     _filesWithRenamedDeclarations.addAll(
         {for (var member in visitor.renamedMembers.keys) member.sourceUrl});
@@ -156,6 +164,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       assertInStylesheet(__builtInUseRules, '_builtInUseRules');
   Set<String>? __builtInUseRules;
 
+  /// Set of `@use` rules hoisted from `@import` rules later in the stylesheet.
+  Set<String> get _hoistedUseRules =>
+      assertInStylesheet(__hoistedUseRules, '_hoistedUseRules');
+  Set<String>? __hoistedUseRules;
+
   /// Set of additional `@use` rules for stylesheets at a load path.
   Set<String> get _additionalLoadPathUseRules => assertInStylesheet(
       __additionalLoadPathUseRules, '_additionalLoadPathUseRules');
@@ -184,6 +197,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// from any member visible at the entrypoint.
   var _needsImportOnly = false;
 
+  /// The stylesheet currently being migrated.
+  late Stylesheet _currentStylesheet;
+
   /// Set of variables declared outside the current stylesheet that overrode
   /// `!default` variables within the current stylesheet.
   Set<MemberDeclaration<VariableDeclaration>> get _configuredVariables =>
@@ -211,6 +227,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Whether to migrate only global functions, leaving `@import` rules as-is.
   final bool builtInOnly;
 
+  /// Whether to allow hoisting imports to the top of the file even when they
+  /// emit CSS.
+  final bool unsafeHoist;
+
   /// Constructs a new module migration visitor.
   ///
   /// [importCache] must be the same one used by [references].
@@ -226,6 +246,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       super.importCache, this.references, List<String> loadPaths,
       {required super.migrateDependencies,
       required this.builtInOnly,
+      required this.unsafeHoist,
       Iterable<String> prefixesToRemove = const [],
       this.forwards = const {}})
       : loadPaths = List.unmodifiable(
@@ -421,10 +442,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// visiting it and restores the per-file state afterwards.
   @override
   void visitStylesheet(Stylesheet node) {
+    _currentStylesheet = node;
     var oldNamespaces = __namespaces;
     var oldForwardedUrls = __forwardedUrls;
     var oldUsedUrls = __usedUrls;
     var oldBuiltInUseRules = __builtInUseRules;
+    var oldHoistedUseRules = __hoistedUseRules;
     var oldLoadPathUseRules = __additionalLoadPathUseRules;
     var oldRelativeUseRules = __additionalRelativeUseRules;
     var oldBeforeFirstImport = _beforeFirstImport;
@@ -438,10 +461,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
                 ?.$2 ??
             rule.url: rule.namespace
     };
+    __usedUrls = _namespaces.keys.toSet();
     _determineNamespaces(node.span.sourceUrl!, _namespaces);
-    __usedUrls = {};
     __forwardedUrls = {};
     __builtInUseRules = {};
+    __hoistedUseRules = {};
     __additionalLoadPathUseRules = {};
     __additionalRelativeUseRules = {};
     _beforeFirstImport = null;
@@ -452,6 +476,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     __forwardedUrls = oldForwardedUrls;
     __usedUrls = oldUsedUrls;
     __builtInUseRules = oldBuiltInUseRules;
+    __hoistedUseRules = oldHoistedUseRules;
     __additionalLoadPathUseRules = oldLoadPathUseRules;
     __additionalRelativeUseRules = oldRelativeUseRules;
     _beforeFirstImport = oldBeforeFirstImport;
@@ -474,7 +499,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
               useRulesToString(_builtInUseRules)),
           beforeExisting: true);
     }
-    var extras = useRulesToString(_additionalLoadPathUseRules) +
+    var extras = useRulesToString(_hoistedUseRules) +
+        useRulesToString(_additionalLoadPathUseRules) +
         useRulesToString(_additionalRelativeUseRules) +
         _getAdditionalForwardRules();
     if (extras == '') return;
@@ -795,7 +821,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     String rulesText;
 
-    var migratedRules = <String>[];
+    var inPlaceUseRules = <String>[];
+    var loadCssRules = <String>[];
 
     var indent = ' ' * node.span.start.column;
 
@@ -816,6 +843,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         }
       }
       if (ruleUrl != null) {
+        var canonicalUrl = importCache
+            .canonicalize(ruleUrl, baseImporter: importer, baseUrl: currentUrl)!
+            .$2;
+        var isNested = !_currentStylesheet.children.contains(node);
         if (builtInOnly) {
           if (migrateDependencies) {
             _upstreamStylesheets.add(currentUrl);
@@ -823,16 +854,24 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             _upstreamStylesheets.remove(currentUrl);
           }
         } else if (_useAllowed) {
-          migratedRules.addAll(_migrateImportToRules(ruleUrl, import.span));
+          inPlaceUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
+        } else if (!isNested &&
+            (!(references.fileEmitsCss[canonicalUrl] ?? true) ||
+                (unsafeHoist &&
+                    references.anyMemberReferenced(
+                        canonicalUrl, currentUrl)))) {
+          _hoistedUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else {
-          migratedRules.add(_migrateImportToLoadCss(ruleUrl, import.span)
-              .replaceAll('\n', '\n$indent'));
+          loadCssRules.add(
+              _migrateImportToLoadCss(ruleUrl, import.span, isNested)
+                  .replaceAll('\n', '\n$indent'));
         }
       }
     }
     if (builtInOnly) return;
 
-    rulesText = migratedRules.join('$semicolon\n$indent');
+    rulesText =
+        [...inPlaceUseRules, ...loadCssRules].join('$semicolon\n$indent');
     if (rulesText.isEmpty) {
       var span = node.span.extendIfMatches(RegExp(' *$semicolon\n?'));
       addPatch(patchDelete(span));
@@ -894,8 +933,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if ((rules.isEmpty && normalForwardRules == null) ||
         withClause.isNotEmpty ||
         references.anyMemberReferenced(canonicalUrl, currentUrl)) {
-      _usedUrls.add(canonicalUrl);
-      rules.add('@use $quotedUrl$asClause$withClause');
+      if (_usedUrls.add(canonicalUrl)) {
+        rules.add('@use $quotedUrl$asClause$withClause');
+      }
     }
     if (normalForwardRules != null) rules.addAll(normalForwardRules);
     return rules;
@@ -906,7 +946,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// This is used for migrating `@import` rules that are nested or appear after
   /// some other rules.
-  String _migrateImportToLoadCss(Uri ruleUrl, FileSpan context) {
+  String _migrateImportToLoadCss(Uri ruleUrl, FileSpan context, bool isNested) {
     var oldUnreferencable = _unreferencable;
     _unreferencable = UnreferencableMembers(_unreferencable);
     for (var declaration in references.allDeclarations) {
@@ -927,7 +967,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _unreferencable = oldUnreferencable;
     for (var declaration in references.allDeclarations) {
       if (declaration.sourceUrl != canonicalUrl) continue;
-      _unreferencable.add(declaration, UnreferencableType.fromNestedImport);
+      _unreferencable.add(
+          declaration,
+          isNested
+              ? UnreferencableType.fromNestedImport
+              : UnreferencableType.fromLateImport);
     }
 
     var meta = _findOrAddBuiltInNamespace('meta');

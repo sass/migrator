@@ -1,3 +1,27 @@
+## 2.4.0
+
+### Module System Migration
+
+* Better handling of late `@import` rules. Previously, these were treated
+  identically to nested imports, but now they can be hoisted to the top of the
+  file where `@use` is allowed if they do not emit any CSS.
+
+  To allow the migrator to hoist even late imports that _do_ emit CSS, use the
+  `--unsafe-hoist` flag. `@import` rules that emit CSS will still be converted
+  to `meta.load-css()` even with this flag if no Sass members are referenced
+  from them.
+
+  If there are any plain CSS at-rules that are used by your post-processing
+  tools but never actually result in meaningful CSS, you can pass them
+  (without the `@`) to `--safe-at-rule` so that the migrator doesn't consider
+  them to emit CSS when handling late imports.
+
+  The migrator's behavior when encountering actual nested imports remains
+  unchanged.
+
+* Fix a bug that resulted in duplicate `@use` rules when migrating stylesheets
+  that contained both a `@use` and an `@import` of the same dependency.
+
 ## 2.3.3
 
 ### Module System Migration

@@ -85,6 +85,13 @@ class References {
   /// regular file is forwarded by the import-only file).
   final Map<Uri, ForwardRule?> orphanImportOnlyFiles;
 
+  /// A map from stylesheet URLs to whether or not they possibly emit CSS,
+  ///
+  /// A file is considered to emit CSS if it contains style rules, contains
+  /// any top-level `@include` rules or plain CSS at-rules, or depends on any
+  /// file that itself emits CSS.
+  final Map<Uri, bool> fileEmitsCss;
+
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -142,7 +149,8 @@ class References {
       Set<MemberDeclaration> globalDeclarations,
       Map<MemberDeclaration, Set<Uri>> libraries,
       Map<SassReference, ReferenceSource> sources,
-      Map<Uri, ForwardRule?> orphanImportOnlyFiles)
+      Map<Uri, ForwardRule?> orphanImportOnlyFiles,
+      Map<Uri, bool> fileEmitsCss)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -158,13 +166,16 @@ class References {
             entry.key: UnmodifiableSetView(entry.value)
         }),
         sources = UnmodifiableMapView(sources),
-        orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles);
+        orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles),
+        fileEmitsCss = UnmodifiableMapView(fileEmitsCss);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
   factory References(
-          ImportCache importCache, Stylesheet stylesheet, Importer importer) =>
-      _ReferenceVisitor(importCache).build(stylesheet, importer);
+          ImportCache importCache, Stylesheet stylesheet, Importer importer,
+          {Iterable<String> safeAtRules = const []}) =>
+      _ReferenceVisitor(importCache, safeAtRules.toSet())
+          .build(stylesheet, importer);
 }
 
 /// A visitor that builds a References object.
@@ -183,6 +194,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   final _libraries = <MemberDeclaration, Set<Uri>>{};
   final _sources = <SassReference, ReferenceSource>{};
   final _orphanImportOnlyFiles = <Uri, ForwardRule?>{};
+  final _fileEmitsCss = <Uri, bool>{};
 
   /// Mapping from canonical stylesheet URLs to the global scope of the module
   /// contained within it.
@@ -229,6 +241,10 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// stylesheet.
   late Importer _importer;
 
+  /// Whether any dependency of the current file emits CSS (which then means
+  /// that this file emits CSS even if it doesn't directly).
+  late bool _dependencyEmitsCss;
+
   /// If the current stylesheet is an import-only file, this starts as true and
   /// is changed to false if it forwards its regular counterpart.
   ///
@@ -241,7 +257,10 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// The last `@forward` rule to be visited that was not an import-only file.
   ForwardRule? _lastRegularForward;
 
-  _ReferenceVisitor(this.importCache);
+  /// CSS at-rules that should be considered to emit CSS.
+  final Set<String> safeAtRules;
+
+  _ReferenceVisitor(this.importCache, this.safeAtRules);
 
   /// Constructs a new References object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -253,6 +272,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     _moduleScopes[_currentUrl] = currentScope;
     _declarationSources = {};
     _moduleSources[_currentUrl] = _declarationSources;
+    _dependencyEmitsCss = false;
     visitStylesheet(stylesheet);
 
     for (var variable in currentScope.variables.values) {
@@ -274,7 +294,8 @@ class _ReferenceVisitor extends ScopedAstVisitor {
         _globalDeclarations,
         _libraries,
         _sources,
-        _orphanImportOnlyFiles);
+        _orphanImportOnlyFiles,
+        _fileEmitsCss);
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -318,6 +339,8 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     var oldNamespaces = _namespaces;
     var oldUrl = _currentUrl;
     var oldOrphaned = _isOrphanImportOnly;
+    var oldDependencyEmitsCss = _dependencyEmitsCss;
+    _dependencyEmitsCss = false;
     _namespaces = {};
     _currentUrl = node.span.sourceUrl!;
     _isOrphanImportOnly = isImportOnlyFile(_currentUrl);
@@ -328,10 +351,29 @@ class _ReferenceVisitor extends ScopedAstVisitor {
               ? _lastRegularForward
               : null;
     }
+    var emitsCss = _dependencyEmitsCss || node.children.any(_statementEmitsCss);
+    _fileEmitsCss[_currentUrl] = emitsCss;
     _isOrphanImportOnly = oldOrphaned;
     _namespaces = oldNamespaces;
     _currentUrl = oldUrl;
+    _dependencyEmitsCss = oldDependencyEmitsCss || emitsCss;
   }
+
+  /// Returns true if [statement] emits any CSS.
+  bool _statementEmitsCss(Statement statement) => switch (statement) {
+        StyleRule() || IncludeRule() || MediaRule() || SupportsRule() => true,
+        AtRule(:var name) => !safeAtRules.contains(name.asPlain),
+        EachRule(:var children) ||
+        ForRule(:var children) ||
+        MediaRule(:var children) ||
+        WhileRule(:var children) =>
+          children.any(_statementEmitsCss),
+        IfRule(:var clauses) =>
+          clauses.any((clause) => clause.children.any(_statementEmitsCss)),
+        // All other statement types either don't emit CSS or are always
+        // nested inside of a CSS-emitting statement.
+        _ => false,
+      };
 
   /// Visits the stylesheet this `@import` rule points to using the existing
   /// global scope.
