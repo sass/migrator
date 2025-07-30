@@ -25,6 +25,7 @@ import 'module/reference_source.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
 import 'module/unreferencable_type.dart';
+import 'module/use_allowed.dart';
 
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
@@ -99,9 +100,10 @@ class ModuleMigrator extends Migrator {
           'You must provide --remove-prefix with --forward=prefixed so we know '
           'which prefixed members to forward.');
     }
+    var safeAtRules = (argResults!['safe-at-rule'] as List<String>).toSet();
 
-    var references = References(importCache, stylesheet, importer,
-        safeAtRules: argResults!['safe-at-rule'] as List<String>);
+    var references =
+        References(importCache, stylesheet, importer, safeAtRules: safeAtRules);
     var visitor = _ModuleMigrationVisitor(
         importCache, references, globalResults!['load-path'] as List<String>,
         migrateDependencies: migrateDependencies,
@@ -109,7 +111,8 @@ class ModuleMigrator extends Migrator {
         prefixesToRemove: (argResults!['remove-prefix'] as List<String>)
             .map((prefix) => prefix.replaceAll('_', '-')),
         forwards: forwards,
-        unsafeHoist: argResults!['unsafe-hoist'] as bool);
+        unsafeHoist: argResults!['unsafe-hoist'] as bool,
+        safeAtRules: safeAtRules);
     var migrated = visitor.run(stylesheet, importer);
     _filesWithRenamedDeclarations.addAll(
         {for (var member in visitor.renamedMembers.keys) member.sourceUrl});
@@ -188,8 +191,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// or `@forward` rule, or null if none has been visited yet.
   FileLocation? _afterLastImport;
 
-  /// Whether @use and @forward are allowed in the current context.
-  var _useAllowed = true;
+  var _useAllowed = UseAllowed.allowed;
 
   /// Whether an import-only stylesheet should be generated.
   ///
@@ -231,6 +233,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// emit CSS.
   final bool unsafeHoist;
 
+  /// CSS at rules that should be considered to not emit CSS for the purpose
+  /// of hoisting late `@import` rules.
+  final Set<String> safeAtRules;
+
   /// Constructs a new module migration visitor.
   ///
   /// [importCache] must be the same one used by [references].
@@ -248,7 +254,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       required this.builtInOnly,
       required this.unsafeHoist,
       Iterable<String> prefixesToRemove = const [],
-      this.forwards = const {}})
+      this.forwards = const {},
+      this.safeAtRules = const {}})
       : loadPaths = List.unmodifiable(
             loadPaths.map((path) => p.toUri(p.absolute(path)).path)),
         prefixesToRemove = UnmodifiableSetView(prefixesToRemove.toSet());
@@ -470,7 +477,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     __additionalRelativeUseRules = {};
     _beforeFirstImport = null;
     _afterLastImport = null;
-    _useAllowed = true;
+    _useAllowed = UseAllowed.allowed;
     super.visitStylesheet(node);
     __namespaces = oldNamespaces;
     __forwardedUrls = oldForwardedUrls;
@@ -804,7 +811,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Visits a `@function` rule, renaming if necessary.
   @override
   void visitFunctionRule(FunctionRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitFunctionRule(node);
   }
@@ -816,7 +823,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var (staticImports, dynamicImports) =
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
     if (dynamicImports.isEmpty) {
-      _useAllowed = false;
+      _useAllowed = _useAllowed.lowerToRequiresHoist;
       return;
     }
     String rulesText;
@@ -853,10 +860,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
             visitDependency(ruleUrl, import.span);
             _upstreamStylesheets.remove(currentUrl);
           }
-        } else if (_useAllowed) {
+        } else if (_useAllowed.canMigrateInPlace) {
           inPlaceUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
         } else if (!isNested &&
-            (!(references.fileEmitsCss[canonicalUrl] ?? true) ||
+            (_useAllowed.canAlwaysSafelyHoist ||
+                !(references.fileEmitsCss[canonicalUrl] ?? true) ||
                 (unsafeHoist &&
                     references.anyMemberReferenced(
                         canonicalUrl, currentUrl)))) {
@@ -878,14 +886,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     } else {
       addPatch(Patch(node.span, rulesText));
     }
-    if (_useAllowed) {
+    if (_useAllowed.canMigrateInPlace) {
       _beforeFirstImport ??= node.span.start;
       _afterLastImport = afterImport(node,
           shouldHaveSemicolon: !currentUrl.path.endsWith('.sass'));
     }
 
     if (staticImports.isNotEmpty) {
-      _useAllowed = false;
+      _useAllowed = _useAllowed.lowerToRequiresHoist;
       addPatch(Patch.insert(
           _afterLastImport ?? node.span.file.location(0),
           '$indent@import ' +
@@ -906,7 +914,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// redirect to a different path to be migrated in-place.
   List<String> _migrateImportToRules(Uri ruleUrl, FileSpan context) {
     var (canonicalUrl, config, forwardForConfig) =
-        _migrateImportCommon(ruleUrl, context);
+        _migrateImportCommon(ruleUrl, context, toLoadCss: false);
 
     var asClause = '';
     var defaultNamespace = namespaceForPath(ruleUrl.path);
@@ -955,7 +963,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
 
     var (canonicalUrl, config, forwardForConfig) =
-        _migrateImportCommon(ruleUrl, context);
+        _migrateImportCommon(ruleUrl, context, toLoadCss: true);
     if (forwardForConfig != null) {
       throw MigrationSourceSpanException(
           "This declaration attempts to override a default value in an "
@@ -990,7 +998,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `meta.load-css`. The third is a string of variables that should be added
   /// to a `show` clause of a `@forward` rule so that they can be configured by
   /// an upstream file.
-  (Uri, String?, String?) _migrateImportCommon(Uri ruleUrl, FileSpan context) {
+  (Uri, String?, String?) _migrateImportCommon(Uri ruleUrl, FileSpan context,
+      {required bool toLoadCss}) {
     var oldConfiguredVariables = __configuredVariables;
     __configuredVariables = {};
     _upstreamStylesheets.add(currentUrl);
@@ -1057,7 +1066,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var end = start + semicolon.length;
         if (span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(span.file.span(start, end)));
-        var nameFormat = _useAllowed ? '\$$name' : '"$name"';
+        var nameFormat = toLoadCss ? '"$name"' : '\$$name';
         configured.add("$nameFormat: ${variable.member.expression}");
       }
     });
@@ -1157,7 +1166,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitIncludeRule(node);
     if (node.namespace != null) return;
     if (builtInOnly && references.sources[node] is! BuiltInSource) return;
@@ -1178,7 +1187,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Visits a `@mixin` rule, renaming it if necessary.
   @override
   void visitMixinRule(MixinRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     if (!builtInOnly) _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitMixinRule(node);
   }
@@ -1421,84 +1430,88 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Disallows `@use` after `@at-root` rules.
   @override
   void visitAtRootRule(AtRootRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitAtRootRule(node);
   }
 
-  /// Disallows `@use` after at-rules.
+  /// Disallows `@use` after at-rules depending on [safeAtRules].
   @override
   void visitAtRule(AtRule node) {
-    _useAllowed = false;
+    var oldUseAllowed = _useAllowed;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitAtRule(node);
+    if (safeAtRules.contains(node.name.asPlain)) {
+      _useAllowed = oldUseAllowed.lowerToRequiresHoist;
+    }
   }
 
-  /// Disallows `@use` after `@debug` rules.
+  /// Requires hoisting `@use` after `@debug` rules.
   @override
   void visitDebugRule(DebugRule node) {
-    _useAllowed = false;
+    _useAllowed = _useAllowed.lowerToRequiresHoist;
     super.visitDebugRule(node);
   }
 
   /// Disallows `@use` after `@each` rules.
   @override
   void visitEachRule(EachRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitEachRule(node);
   }
 
   /// Disallows `@use` after `@error` rules.
   @override
   void visitErrorRule(ErrorRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitErrorRule(node);
   }
 
   /// Disallows `@use` after `@for` rules.
   @override
   void visitForRule(ForRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitForRule(node);
   }
 
   /// Disallows `@use` after `@if` rules.
   @override
   void visitIfRule(IfRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitIfRule(node);
   }
 
   /// Disallows `@use` after `@media` rules.
   @override
   void visitMediaRule(MediaRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitMediaRule(node);
   }
 
   /// Disallows `@use` after style rules.
   @override
   void visitStyleRule(StyleRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitStyleRule(node);
   }
 
   /// Disallows `@use` after `@supports` rules.
   @override
   void visitSupportsRule(SupportsRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitSupportsRule(node);
   }
 
-  /// Disallows `@use` after `@warn` rules.
+  /// Requires hoisting `@use` after `@warn` rules.
   @override
   void visitWarnRule(WarnRule node) {
-    _useAllowed = false;
+    _useAllowed = _useAllowed.lowerToRequiresHoist;
     super.visitWarnRule(node);
   }
 
   /// Disallows `@use` after `@while` rules.
   @override
   void visitWhileRule(WhileRule node) {
-    _useAllowed = false;
+    _useAllowed = UseAllowed.notAllowed;
     super.visitWhileRule(node);
   }
 }

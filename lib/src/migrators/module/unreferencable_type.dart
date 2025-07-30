@@ -59,7 +59,7 @@ class UnreferencableType {
           "containing ${type}s\nand one emitting CSS will allow the migrator "
           "to safely migrate it by hoisting\nthe one containing members to "
           "the top of the file and converting the one\nemitting CSS to "
-          "meta.load-css().\n\nAlternatively, pass --force-hoist to force the "
+          "meta.load-css().\n\nAlternatively, pass --unsafe-hoist to force the "
           "migrator to hoist all\nlate imports containing Sass members, "
           "which may reorder your CSS.",
           reference.span,
