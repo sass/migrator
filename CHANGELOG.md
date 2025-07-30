@@ -1,6 +1,13 @@
+## 2.4.1
+
+### Module Migrator
+
+* Fix a bug where a duplicate namespace would be added to a reassignment of a
+  variable from another module when running on a partially migrated file.
+
 ## 2.4.0
 
-### Module System Migration
+### Module Migrator
 
 * Better handling of late `@import` rules. Previously, these were treated
   identically to nested imports, but now they can be hoisted to the top of the
@@ -24,7 +31,7 @@
 
 ## 2.3.3
 
-### Module System Migration
+### Module Migrator
 
 * Fix some bugs in the conversion of private names that are referenced across
   files to public names, especially when `--remove-prefix` and/or multiple

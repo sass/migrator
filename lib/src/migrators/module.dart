@@ -1236,7 +1236,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// renaming or namespacing if necessary.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    if (builtInOnly) {
+    if (builtInOnly || node.namespace != null) {
       super.visitVariableDeclaration(node);
       return;
     }
