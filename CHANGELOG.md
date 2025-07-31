@@ -2,7 +2,7 @@
 
 ### Module Migration
 
-* Late `@import` rules can now be hoisted above safe at rules in the same file.
+* Late `@import` rules can now be hoisted above safe at-rules in the same file.
 
 * Fix a typo in the error message for late `@import` rules that could not be
   migrated.

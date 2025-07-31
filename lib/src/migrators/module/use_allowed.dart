@@ -33,7 +33,7 @@ class UseAllowed {
 
   /// Returns [requiresHoist] unless [this] is already [notAllowed], in which
   /// case it should remain [notAllowed].
-  UseAllowed get lowerToRequiresHoist =>
+  UseAllowed lowerToRequiresHoist() =>
       switch (this) { notAllowed => notAllowed, _ => requiresHoist };
 
   /// Returns true when `@import` rules can be migrated in place in this state.

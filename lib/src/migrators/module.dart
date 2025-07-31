@@ -191,6 +191,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// or `@forward` rule, or null if none has been visited yet.
   FileLocation? _afterLastImport;
 
+  /// The state of whether `@use` and `@forward` are allowed at the current
+  /// point in the file.
   var _useAllowed = UseAllowed.allowed;
 
   /// Whether an import-only stylesheet should be generated.
@@ -823,7 +825,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var (staticImports, dynamicImports) =
         partitionOnType<Import, StaticImport, DynamicImport>(node.imports);
     if (dynamicImports.isEmpty) {
-      _useAllowed = _useAllowed.lowerToRequiresHoist;
+      _useAllowed = _useAllowed.lowerToRequiresHoist();
       return;
     }
     String rulesText;
@@ -893,7 +895,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
 
     if (staticImports.isNotEmpty) {
-      _useAllowed = _useAllowed.lowerToRequiresHoist;
+      _useAllowed = _useAllowed.lowerToRequiresHoist();
       addPatch(Patch.insert(
           _afterLastImport ?? node.span.file.location(0),
           '$indent@import ' +
@@ -998,6 +1000,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// `meta.load-css`. The third is a string of variables that should be added
   /// to a `show` clause of a `@forward` rule so that they can be configured by
   /// an upstream file.
+  ///
+  /// When [toLoadCss] is false, this uses the variable syntax for configuration
+  /// used by `@use`. When it is true, it instead uses the map syntax used by
+  /// `meta.load-css()`.
   (Uri, String?, String?) _migrateImportCommon(Uri ruleUrl, FileSpan context,
       {required bool toLoadCss}) {
     var oldConfiguredVariables = __configuredVariables;
@@ -1441,14 +1447,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _useAllowed = UseAllowed.notAllowed;
     super.visitAtRule(node);
     if (safeAtRules.contains(node.name.asPlain)) {
-      _useAllowed = oldUseAllowed.lowerToRequiresHoist;
+      _useAllowed = oldUseAllowed.lowerToRequiresHoist();
     }
   }
 
   /// Requires hoisting `@use` after `@debug` rules.
   @override
   void visitDebugRule(DebugRule node) {
-    _useAllowed = _useAllowed.lowerToRequiresHoist;
+    _useAllowed = _useAllowed.lowerToRequiresHoist();
     super.visitDebugRule(node);
   }
 
@@ -1504,7 +1510,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Requires hoisting `@use` after `@warn` rules.
   @override
   void visitWarnRule(WarnRule node) {
-    _useAllowed = _useAllowed.lowerToRequiresHoist;
+    _useAllowed = _useAllowed.lowerToRequiresHoist();
     super.visitWarnRule(node);
   }
 
