@@ -26,7 +26,7 @@ and one emitting CSS will allow the migrator to safely migrate it by hoisting
 the one containing members to the top of the file and converting the one
 emitting CSS to meta.load-css().
 
-Alternatively, pass --force-hoist to force the migrator to hoist all
+Alternatively, pass --unsafe-hoist to force the migrator to hoist all
 late imports containing Sass members, which may reorder your CSS.
   ,
 8 |   e: $var;

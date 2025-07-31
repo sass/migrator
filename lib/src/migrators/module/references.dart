@@ -257,7 +257,8 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// The last `@forward` rule to be visited that was not an import-only file.
   ForwardRule? _lastRegularForward;
 
-  /// CSS at-rules that should be considered to emit CSS.
+  /// CSS at rules that should be considered to not emit CSS for the purpose
+  /// of hoisting late `@import` rules.
   final Set<String> safeAtRules;
 
   _ReferenceVisitor(this.importCache, this.safeAtRules);

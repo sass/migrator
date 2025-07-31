@@ -1,0 +1,18 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+a { b: c; }
+$config: red;
+$no-config: blue;
+@import "library";
+
+<==> input/_library.scss
+$config: green !default;
+$no-config: yellow;
+
+<==> output/entrypoint.scss
+@use "library" with ($config: red);
+
+a { b: c; }
+$no-config: blue;
