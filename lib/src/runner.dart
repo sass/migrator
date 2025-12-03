@@ -16,6 +16,7 @@ import 'io.dart';
 import 'migrators/calc_interpolation.dart';
 import 'migrators/color.dart';
 import 'migrators/division.dart';
+import 'migrators/if_function.dart';
 import 'migrators/module.dart';
 import 'migrators/namespace.dart';
 import 'migrators/strict_unary.dart';
@@ -64,6 +65,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
     addCommand(CalculationInterpolationMigrator());
     addCommand(ColorMigrator());
     addCommand(DivisionMigrator());
+    addCommand(IfMigrator());
     addCommand(ModuleMigrator());
     addCommand(NamespaceMigrator());
     addCommand(StrictUnaryMigrator());

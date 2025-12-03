@@ -1,6 +1,15 @@
+## 2.5.0
+
+### `if()` Function Migrator
+
+* Added a new `if-function` migrator to convert the legacy Sass `if()` function
+  syntax into the new CSS syntax. See [the Sass website] for details.
+
+  [the Sass website]: https://sass-lang.com/d/if-function
+
 ## 2.4.2
 
-### Module Migration
+### Module Migrator
 
 * Late `@import` rules can now be hoisted above safe at-rules in the same file.
 

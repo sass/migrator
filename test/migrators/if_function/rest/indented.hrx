@@ -1,0 +1,12 @@
+<==> input/entrypoint.sass
+a
+  b: if([true, a, b]...)
+
+<==> output/entrypoint.sass
+/// A polyfill for the legacy Sass `if()` function, for cases that couldn't be
+/// directly migrated to CSS if().
+@function -if($condition, $if-true, $if-false)
+  @return if(sass($condition): $if-true; else: $if-false)
+
+a
+  b: -if([true, a, b]...)

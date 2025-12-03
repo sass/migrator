@@ -62,9 +62,12 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
   Importer get importer => _importer;
   late Importer _importer;
 
+  /// Whether the current stylesheet uses the indented syntax.
+  bool get isIndented => currentUrl.path.endsWith('.sass');
+
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
-  String get semicolon => currentUrl.path.endsWith('.sass') ? "" : ";";
+  String get semicolon => isIndented ? "" : ";";
 
   MigrationVisitor(this.importCache, {required this.migrateDependencies});
 

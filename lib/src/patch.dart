@@ -7,6 +7,8 @@
 import 'package:collection/collection.dart';
 import 'package:source_span/source_span.dart';
 
+import 'utils.dart';
+
 class Patch implements Comparable<Patch> {
   /// Selection to be replaced
   final FileSpan selection;
@@ -43,7 +45,11 @@ class Patch implements Comparable<Patch> {
         continue;
       }
       if (patch.selection.start.offset < offset) {
-        throw ArgumentError("Can't apply overlapping patches.");
+        var first = patches.firstWhere(
+            (earlier) => earlier.selection.hasOverlap(patch.selection));
+        throw ArgumentError("Can't apply overlapping patches:\n"
+            '* $first\n'
+            '* $patch');
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));
       buffer.write(patch.replacement);
@@ -56,4 +62,10 @@ class Patch implements Comparable<Patch> {
 
   /// Patches are ordered based on their selection.
   int compareTo(Patch other) => selection.compareTo(other.selection);
+
+  String toString() => selection.isEmpty
+      ? "at $selection inserting \"$replacement\""
+      : replacement.isEmpty
+          ? "removing $selection"
+          : "replacing $selection with \"$replacement\"";
 }

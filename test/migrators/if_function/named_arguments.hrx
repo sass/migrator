@@ -1,0 +1,19 @@
+<==> input/entrypoint.scss
+a {
+  all: if($condition: true, $if-true: a, $if-false: b);
+  one: if(true, a, $if-false: b);
+  reordered: if($if-false: b, $condition: true, $if-true: a);
+}
+
+<==> output/entrypoint.scss
+/// A polyfill for the legacy Sass `if()` function, for cases that couldn't be
+/// directly migrated to CSS if().
+@function -if($condition, $if-true, $if-false) {
+  @return if(sass($condition): $if-true; else: $if-false);
+}
+
+a {
+  all: if(sass(true): a; else: b);
+  one: if(sass(true): a; else: b);
+  reordered: -if($if-false: b, $condition: true, $if-true: a);
+}

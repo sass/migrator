@@ -10,43 +10,10 @@ import 'package:source_span/source_span.dart';
 
 import 'io.dart';
 import 'patch.dart';
+import 'util/span.dart';
 
-extension ExtendSpan on FileSpan {
-  /// Extends this span so it encompasses any whitespace on either side of it.
-  FileSpan extendThroughWhitespace() {
-    var text = file.getText(0);
-
-    var newStart = start.offset - 1;
-    for (; newStart >= 0; newStart--) {
-      if (!isWhitespace(text.codeUnitAt(newStart))) break;
-    }
-
-    var newEnd = end.offset;
-    for (; newEnd < text.length; newEnd++) {
-      if (!isWhitespace(text.codeUnitAt(newEnd))) break;
-    }
-
-    // Add 1 to start because it's guaranteed to end on either -1 or a character
-    // that's not whitespace.
-    return file.span(newStart + 1, newEnd);
-  }
-
-  /// Extends this span forward if it's followed by exactly [pattern].
-  ///
-  /// If it doesn't match, returns the span as-is.
-  FileSpan extendIfMatches(Pattern pattern) {
-    var text = file.getText(end.offset);
-    var match = pattern.matchAsPrefix(text);
-    if (match == null) return this;
-    return file.span(start.offset, end.offset + match.end);
-  }
-
-  /// Returns true if this span is preceded by exactly [text].
-  bool matchesBefore(String text) {
-    if (start.offset - text.length < 0) return false;
-    return file.getText(start.offset - text.length, start.offset) == text;
-  }
-}
+export 'util/span.dart';
+export 'util/get_arguments.dart';
 
 extension NullableExtension<T> on T? {
   /// If [this] is `null`, returns `null`. Otherwise, runs [fn] and returns its
@@ -84,6 +51,19 @@ bool valuesAreUnique(Map<Object, Object> map) =>
 /// provided, this deletes only the portion of the span within that range.
 Patch patchDelete(FileSpan span, {int start = 0, int? end}) =>
     Patch(span.subspan(start, end), "");
+
+/// Creates a patch that replaces any existing syntax between [before] and
+/// [after] with [text].
+Patch patchBetween(AstNode before, AstNode after, String text) =>
+    Patch(before.span.between(after.span), text);
+
+/// Replaces the first match of [from] in [span]'s text with [to].
+///
+/// Returns `null` if [from] has no matches within [span]'s text.
+Patch? patchReplaceFirst(FileSpan span, Pattern from, String to) => from
+    .allMatches(span.text)
+    .firstOrNull
+    ?.andThen((match) => Patch(span.subspan(match.start, match.end), to));
 
 /// Returns the next location after [import] that it would be safe to insert
 /// a `@use` or `@forward` rule.
