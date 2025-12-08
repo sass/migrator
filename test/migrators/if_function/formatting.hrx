@@ -1,0 +1,20 @@
+<==> input/entrypoint.scss
+a {
+  one-line: if(true, a, b);
+  multiline: if(
+    true,
+    a,
+    b
+  );
+  spaces-around-commas: if(true , a , b);
+}
+
+<==> output/entrypoint.scss
+a {
+  one-line: if(sass(true): a; else: b);
+  multiline: if(
+    sass(true): a;
+    else: b
+  );
+  spaces-around-commas: if(sass(true): a ; else: b);
+}

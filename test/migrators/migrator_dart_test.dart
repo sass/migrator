@@ -13,4 +13,5 @@ main() {
   testMigrator("module");
   testMigrator("namespace");
   testMigrator("strict_unary");
+  testMigrator("if_function");
 }

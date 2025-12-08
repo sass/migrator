@@ -1,0 +1,26 @@
+<==> input/entrypoint.scss
+@use "other";
+
+a {
+  b: other.if(true, a, b);
+}
+
+<==> input/_other.scss
+@function if($args...) {
+  @return null;
+}
+
+<==> log.txt
+Nothing to migrate!
+
+<==> output/entrypoint.scss
+@use "other";
+
+a {
+  b: other.if(true, a, b);
+}
+
+<==> output/_other.scss
+@function if($args...) {
+  @return null;
+}

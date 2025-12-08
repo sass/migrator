@@ -890,8 +890,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     }
     if (_useAllowed.canMigrateInPlace) {
       _beforeFirstImport ??= node.span.start;
-      _afterLastImport = afterImport(node,
-          shouldHaveSemicolon: !currentUrl.path.endsWith('.sass'));
+      _afterLastImport = afterImport(node, shouldHaveSemicolon: !isIndented);
     }
 
     if (staticImports.isNotEmpty) {
