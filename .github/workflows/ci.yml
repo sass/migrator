@@ -176,7 +176,7 @@ jobs:
       - run: dart pub get
       - uses: actions/setup-node@v6
         with:
-          node-version: "${{ inputs.node-version }}"
+          node-version: "${{ env.DEFAULT_NODE_VERSION }}"
           check-latest: true
           registry-url: 'https://registry.npmjs.org'
       # npm trusted publisher infrastructure requires npm >=11.5.1
