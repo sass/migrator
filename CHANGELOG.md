@@ -1,3 +1,7 @@
+## 2.5.1
+
+* No user-visible changes.
+
 ## 2.5.0
 
 ### `if()` Function Migrator
