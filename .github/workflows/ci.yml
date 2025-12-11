@@ -33,7 +33,7 @@ jobs:
         with: {sdk: "${{ matrix.dart_channel }}"}
       - uses: sass/clone-linked-repo@v1
         with: {repo: sass/dart-sass, path: dart-sass}
-      - run: dart pub add "override:sass:{path: dart-sass}"
+      - run: "dart pub add \"override:sass:{path: dart-sass}\""
       - run: dart pub get
       - run: dart pub run grinder pkg-standalone-dev
       - name: Run tests
@@ -74,7 +74,7 @@ jobs:
         with: {sdk: "${{ matrix.dart_channel }}"}
       - uses: sass/clone-linked-repo@v1
         with: {repo: sass/dart-sass, path: dart-sass}
-      - run: dart pub add "override:sass:{path: dart-sass}"
+      - run: "dart pub add \"override:sass:{path: dart-sass}\""
       - run: dart pub get
       - uses: actions/setup-node@v2
         with: {node-version: "${{ matrix.node_version }}"}
@@ -92,7 +92,7 @@ jobs:
       - uses: dart-lang/setup-dart@v1
       - uses: sass/clone-linked-repo@v1
         with: {repo: sass/dart-sass, path: dart-sass}
-      - run: dart pub add "override:sass:{path: dart-sass}"
+      - run: "dart pub add \"override:sass:{path: dart-sass}\""
       - run: dart pub get
       - name: Analyze dart
         run: dart analyze --fatal-warnings --fatal-infos lib tool test
