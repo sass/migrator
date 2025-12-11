@@ -2,7 +2,7 @@ name: CI
 
 env:
   # Note: when changing this, also change jobs.node_tests.strategy.matrix.node_version.
-  DEFAULT_NODE_VERSION: 18
+  DEFAULT_NODE_VERSION: 24
 
 on:
   push:
@@ -54,15 +54,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         dart_channel: [stable]
-        node_version: [18]
+        node_version: [24]
         include:
           # Include LTS versions on Ubuntu
           - os: ubuntu-latest
             dart_channel: stable
-            node_version: 16
+            node_version: 22
           - os: ubuntu-latest
             dart_channel: stable
-            node_version: 14
+            node_version: 20
           - os: ubuntu-latest
             dart_channel: dev
 
