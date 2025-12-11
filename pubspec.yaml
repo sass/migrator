@@ -1,10 +1,10 @@
 name: sass_migrator
-version: 2.5.0
+version: 2.5.1
 description: A tool for running migrations on Sass files
 homepage: https://github.com/sass/migrator
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   args: ^2.1.0
@@ -17,7 +17,7 @@ dependencies:
   node_interop: ^2.0.2
   node_io: ^2.3.0
   path: ^1.8.0
-  sass_api: ^15.4.0
+  sass_api: ^17.0.0
   source_span: ^1.8.1
   stack_trace: ^1.10.0
   string_scanner: ^1.1.0
@@ -31,6 +31,7 @@ dev_dependencies:
   http: ^1.1.2
   node_preamble: ^2.0.0
   pub_semver: ^2.0.0
+  pubspec_parse: ^1.5.0
   test: ^1.17.1
   test_descriptor: ^2.0.0
   test_process: ^2.0.0
