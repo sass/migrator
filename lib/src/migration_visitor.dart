@@ -190,6 +190,16 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
     }
   }
 
+  /// If [migrateDependencies] is enabled, this dependency will be
+  /// migrated before continuing.
+  @override
+  visitForwardRule(ForwardRule node) {
+    super.visitForwardRule(node);
+    if (migrateDependencies) {
+      visitDependency(node.url, node.span);
+    }
+  }
+
   /// Asserts that [value] is not `null` and returns it.
   ///
   /// This is used for fields that are set whenever the migrator is visiting

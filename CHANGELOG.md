@@ -1,3 +1,8 @@
+## 2.5.7
+
+* Fix a bug where the `--migrate-deps` flag would not apply to dependencies
+  via `@forward` rules.
+
 ## 2.5.6
 
 * No user-visible changes.

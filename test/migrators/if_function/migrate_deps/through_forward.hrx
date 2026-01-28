@@ -1,0 +1,15 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+@forward "library";
+
+<==> input/_library.scss
+a {
+  b: if(true, c, d);
+}
+
+<==> output/_library.scss
+a {
+  b: if(sass(true): c; else: d);
+}
