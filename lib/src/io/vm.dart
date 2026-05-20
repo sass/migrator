@@ -4,6 +4,8 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+export 'dart:io' show File, Directory, exitCode;
+
 import 'dart:io';
 
 import 'package:file/file.dart';
