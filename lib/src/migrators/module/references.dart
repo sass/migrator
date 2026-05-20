@@ -92,6 +92,10 @@ class References {
   /// file that itself emits CSS.
   final Map<Uri, bool> fileEmitsCss;
 
+  /// A map from import-only files to top-level `@include` rules that should be
+  /// used when migrating that import.
+  final Map<Uri, IncludeRule> importOnlyIncludes;
+
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
       variables.values.followedBy(mixins.values).followedBy(functions.values);
@@ -150,7 +154,8 @@ class References {
       Map<MemberDeclaration, Set<Uri>> libraries,
       Map<SassReference, ReferenceSource> sources,
       Map<Uri, ForwardRule?> orphanImportOnlyFiles,
-      Map<Uri, bool> fileEmitsCss)
+      Map<Uri, bool> fileEmitsCss,
+      Map<Uri, IncludeRule> importOnlyIncludes)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -167,7 +172,8 @@ class References {
         }),
         sources = UnmodifiableMapView(sources),
         orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles),
-        fileEmitsCss = UnmodifiableMapView(fileEmitsCss);
+        fileEmitsCss = UnmodifiableMapView(fileEmitsCss),
+        importOnlyIncludes = UnmodifiableMapView(importOnlyIncludes);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -195,6 +201,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   final _sources = <SassReference, ReferenceSource>{};
   final _orphanImportOnlyFiles = <Uri, ForwardRule?>{};
   final _fileEmitsCss = <Uri, bool>{};
+  final _importOnlyIncludes = <Uri, IncludeRule>{};
 
   /// Mapping from canonical stylesheet URLs to the global scope of the module
   /// contained within it.
@@ -296,7 +303,8 @@ class _ReferenceVisitor extends ScopedAstVisitor {
         _libraries,
         _sources,
         _orphanImportOnlyFiles,
-        _fileEmitsCss);
+        _fileEmitsCss,
+        _importOnlyIncludes);
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -700,6 +708,16 @@ class _ReferenceVisitor extends ScopedAstVisitor {
       }
     } else if (namespace == null) {
       _unresolvedReferences[node] = currentScope;
+    }
+    if (isImportOnlyFile(_currentUrl)) {
+      if (_importOnlyIncludes.containsKey(_currentUrl)) {
+        throw MigrationSourceSpanException(
+            "Found a second @include rule in an import-only file. "
+            "Import-only files should contain at most one @include.",
+            node.span);
+      }
+      _importOnlyIncludes[_currentUrl] = node;
+      _isOrphanImportOnly = false;
     }
   }
 

@@ -172,6 +172,12 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       assertInStylesheet(__hoistedUseRules, '_hoistedUseRules');
   Set<String>? __hoistedUseRules;
 
+  /// Set of `@include` rules from import-only files that need to be added after
+  /// all `@use` and `@forward` rules.
+  Set<String> get _postUseIncludeRules =>
+      assertInStylesheet(__postUseIncludeRules, '_postUseIncludeRules');
+  Set<String>? __postUseIncludeRules;
+
   /// Set of additional `@use` rules for stylesheets at a load path.
   Set<String> get _additionalLoadPathUseRules => assertInStylesheet(
       __additionalLoadPathUseRules, '_additionalLoadPathUseRules');
@@ -457,6 +463,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var oldUsedUrls = __usedUrls;
     var oldBuiltInUseRules = __builtInUseRules;
     var oldHoistedUseRules = __hoistedUseRules;
+    var oldPostUseIncludeRules = __postUseIncludeRules;
     var oldLoadPathUseRules = __additionalLoadPathUseRules;
     var oldRelativeUseRules = __additionalRelativeUseRules;
     var oldBeforeFirstImport = _beforeFirstImport;
@@ -475,6 +482,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     __forwardedUrls = {};
     __builtInUseRules = {};
     __hoistedUseRules = {};
+    __postUseIncludeRules = {};
     __additionalLoadPathUseRules = {};
     __additionalRelativeUseRules = {};
     _beforeFirstImport = null;
@@ -486,6 +494,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     __usedUrls = oldUsedUrls;
     __builtInUseRules = oldBuiltInUseRules;
     __hoistedUseRules = oldHoistedUseRules;
+    __postUseIncludeRules = oldPostUseIncludeRules;
     __additionalLoadPathUseRules = oldLoadPathUseRules;
     __additionalRelativeUseRules = oldRelativeUseRules;
     _beforeFirstImport = oldBeforeFirstImport;
@@ -496,8 +505,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds additional patches for extra `@use` and `@forward` rules.
   @override
   void beforePatch(Stylesheet node) {
-    useRulesToString(Set<String> useRules) =>
-        (useRules.toList()..sort()).map((use) => '$use$semicolon\n').join();
+    rulesToString(Set<String> rules) =>
+        (rules.toList()..sort()).map((rule) => '$rule$semicolon\n').join();
 
     if (_builtInUseRules.isNotEmpty) {
       // This is added before existing patches to ensure that this patch is
@@ -505,13 +514,14 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       // `@use` rule.
       addPatch(
           Patch.insert(_beforeFirstImport ?? node.span.start,
-              useRulesToString(_builtInUseRules)),
+              rulesToString(_builtInUseRules)),
           beforeExisting: true);
     }
-    var extras = useRulesToString(_hoistedUseRules) +
-        useRulesToString(_additionalLoadPathUseRules) +
-        useRulesToString(_additionalRelativeUseRules) +
-        _getAdditionalForwardRules();
+    var extras = rulesToString(_hoistedUseRules) +
+        rulesToString(_additionalLoadPathUseRules) +
+        rulesToString(_additionalRelativeUseRules) +
+        _getAdditionalForwardRules() +
+        rulesToString(_postUseIncludeRules);
     if (extras == '') return;
     var insertionPoint = _afterLastImport ?? node.span.start;
     // If the insertion point is in the middle of a line, add a line break
@@ -831,7 +841,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     String rulesText;
 
     var inPlaceUseRules = <String>[];
-    var loadCssRules = <String>[];
+    var includeRules = <String>[];
 
     var indent = ' ' * node.span.start.column;
 
@@ -855,6 +865,11 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
         var canonicalUrl = importCache
             .canonicalize(ruleUrl, baseImporter: importer, baseUrl: currentUrl)!
             .$2;
+        var canonicalImport = importCache
+            .canonicalize(ruleUrl,
+                baseImporter: importer, baseUrl: currentUrl, forImport: true)!
+            .$2;
+        var importOnlyInclude = references.importOnlyIncludes[canonicalImport];
         var isNested = !_currentStylesheet.children.contains(node);
         if (builtInOnly) {
           if (migrateDependencies) {
@@ -864,15 +879,23 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
           }
         } else if (_useAllowed.canMigrateInPlace) {
           inPlaceUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
-        } else if (!isNested &&
+          if (importOnlyInclude != null) {
+            _postUseIncludeRules
+                .add(_makeIncludeFromImportOnly(import, importOnlyInclude));
+          }
+        } else if ((!isNested || importOnlyInclude != null) &&
             (_useAllowed.canAlwaysSafelyHoist ||
                 !(references.fileEmitsCss[canonicalUrl] ?? true) ||
                 (unsafeHoist &&
                     references.anyMemberReferenced(
                         canonicalUrl, currentUrl)))) {
           _hoistedUseRules.addAll(_migrateImportToRules(ruleUrl, import.span));
+          if (importOnlyInclude != null) {
+            includeRules
+                .add(_makeIncludeFromImportOnly(import, importOnlyInclude));
+          }
         } else {
-          loadCssRules.add(
+          includeRules.add(
               _migrateImportToLoadCss(ruleUrl, import.span, isNested)
                   .replaceAll('\n', '\n$indent'));
         }
@@ -881,7 +904,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     if (builtInOnly) return;
 
     rulesText =
-        [...inPlaceUseRules, ...loadCssRules].join('$semicolon\n$indent');
+        [...inPlaceUseRules, ...includeRules].join('$semicolon\n$indent');
     if (rulesText.isEmpty) {
       var span = node.span.extendIfMatches(RegExp(' *$semicolon\n?'));
       addPatch(patchDelete(span));
@@ -988,6 +1011,41 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     var quote = context.text.startsWith("'") ? "'" : '"';
     var quotedUrl = '$quote$ruleUrl$quote';
     return '@include $meta.load-css($quotedUrl$configuration)';
+  }
+
+  /// Creates an `@include` rule for the current file based on the `@include`
+  /// rule in an import-only file, adding any additional `@use` rules as
+  /// necessary.
+  String _makeIncludeFromImportOnly(DynamicImport import, IncludeRule rule) {
+    var declaration = references.mixins[rule];
+    if (declaration == null) {
+      throw MigrationSourceSpanException(
+          "Couldn't find mixin referenced by import-only file.", import.span);
+    }
+    var namespace = _namespaceForDeclaration(declaration);
+    var args = [
+      for (var arg in rule.arguments.positional)
+        switch (arg) {
+          VariableExpression(:var name, namespace: _?) =>
+            '${_namespaceForDeclaration(references.variables[arg]!)}.\$$name',
+          VariableExpression(:var name) => '\$$name',
+          _ => throw MigrationSourceSpanException(
+              'Import-only @include rules may only pass variables as arguments.',
+              arg.span),
+        },
+      for (var MapEntry(key: parameter, value: arg)
+          in rule.arguments.named.entries)
+        switch (arg) {
+          VariableExpression(:var name, namespace: _?) => '\$$parameter: '
+              '${_namespaceForDeclaration(references.variables[arg]!)}.\$$name',
+          VariableExpression(:var name) => '\$$parameter: \$$name',
+          _ => throw MigrationSourceSpanException(
+              'Import-only @include rules may only pass variables as arguments.',
+              arg.span),
+        }
+    ];
+    var argString = args.isEmpty ? '' : '(${args.join(', ')})';
+    return '@include $namespace.${rule.name}$argString';
   }
 
   /// Common logic for migrating imports shared by both the normal migration to
