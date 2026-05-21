@@ -7,7 +7,10 @@
 import 'package:file/file.dart';
 import 'package:js/js.dart';
 import 'package:node_interop/node.dart';
-import 'package:node_io/node_io.dart';
+import 'package:node_io/src/file_system.dart';
+
+export 'package:node_io/src/directory.dart';
+export 'package:node_io/src/file.dart';
 
 // Node seems to support ANSI escapes on all terminals.
 //
@@ -18,4 +21,9 @@ external bool get supportsAnsiEscapes;
 
 void printStderr(Object message) => process.stderr.write("$message\n");
 
-FileSystem get fileSystem => nodeFileSystem;
+int get exitCode => process.exitCode;
+void set exitCode(int code) {
+  process.exitCode = code;
+}
+
+final FileSystem fileSystem = NodeFileSystem();
