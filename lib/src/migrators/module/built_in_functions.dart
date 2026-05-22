@@ -84,7 +84,7 @@ const builtInFunctionModules = {
   "str-slice": "string",
   "to-upper-case": "string",
   "to-lower-case": "string",
-  "unique-id": "string"
+  "unique-id": "string",
 };
 
 /// Mapping from old function name to new name, excluding namespace.
@@ -110,7 +110,7 @@ const builtInFunctionNameChanges = {
   "str-length": "length",
   "str-insert": "insert",
   "str-index": "index",
-  "str-slice": "slice"
+  "str-slice": "slice",
 };
 
 /// Mapping from removed color function names to the parameter passed to
@@ -127,5 +127,5 @@ const removedColorFunctions = {
   "opacify": r"$alpha: ",
   "fade-in": r"$alpha: ",
   "transparentize": r"$alpha: -",
-  "fade-out": r"$alpha: -"
+  "fade-out": r"$alpha: -",
 };

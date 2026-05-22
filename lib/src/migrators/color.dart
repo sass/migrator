@@ -21,10 +21,16 @@ class ColorMigrator extends Migrator {
 
   @override
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  ) {
     var references = References(importCache, stylesheet, importer);
-    var visitor = _ColorMigrationVisitor(references, importCache,
-        migrateDependencies: migrateDependencies);
+    var visitor = _ColorMigrationVisitor(
+      references,
+      importCache,
+      migrateDependencies: migrateDependencies,
+    );
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -37,8 +43,11 @@ final _colorUrl = Uri(scheme: 'sass', path: 'color');
 class _ColorMigrationVisitor extends MigrationVisitor {
   final References references;
 
-  _ColorMigrationVisitor(this.references, super.importCache,
-      {required super.migrateDependencies});
+  _ColorMigrationVisitor(
+    this.references,
+    super.importCache, {
+    required super.migrateDependencies,
+  });
 
   /// The namespace of an existing `@use "sass:color"` rule in the current
   /// file, if any.
@@ -75,8 +84,12 @@ class _ColorMigrationVisitor extends MigrationVisitor {
     if (source is BuiltInSource && source.url == _colorUrl) {
       var colorPatches = _makeColorPatches(node);
       if (colorPatches.isNotEmpty && node.namespace == null) {
-        addPatch(patchBefore(
-            node, '${_getOrAddColorModuleNamespace(node.span.file)}.'));
+        addPatch(
+          patchBefore(
+            node,
+            '${_getOrAddColorModuleNamespace(node.span.file)}.',
+          ),
+        );
       }
       colorPatches.forEach(addPatch);
     }
@@ -102,8 +115,12 @@ class _ColorMigrationVisitor extends MigrationVisitor {
               1:
         return _makeAdjustPatches(node, channel: 'saturation', space: 'hsl');
       case 'desaturate':
-        return _makeAdjustPatches(node,
-            channel: 'saturation', negate: true, space: 'hsl');
+        return _makeAdjustPatches(
+          node,
+          channel: 'saturation',
+          negate: true,
+          space: 'hsl',
+        );
       case 'transparentize' || 'fade-out':
         return _makeAdjustPatches(node, channel: 'alpha', negate: true);
       case 'opacify' || 'fade-in':
@@ -111,8 +128,12 @@ class _ColorMigrationVisitor extends MigrationVisitor {
       case 'lighten':
         return _makeAdjustPatches(node, channel: 'lightness', space: 'hsl');
       case 'darken':
-        return _makeAdjustPatches(node,
-            channel: 'lightness', negate: true, space: 'hsl');
+        return _makeAdjustPatches(
+          node,
+          channel: 'lightness',
+          negate: true,
+          space: 'hsl',
+        );
       default:
         return [];
     }
@@ -123,10 +144,12 @@ class _ColorMigrationVisitor extends MigrationVisitor {
   String _getOrAddColorModuleNamespace(SourceFile file) {
     if (_colorModuleNamespace == null) {
       _colorModuleNamespace = _chooseColorModuleNamespace();
-      var asClause =
-          _colorModuleNamespace == 'color' ? '' : ' as $_colorModuleNamespace';
+      var asClause = _colorModuleNamespace == 'color'
+          ? ''
+          : ' as $_colorModuleNamespace';
       addPatch(
-          Patch.insert(file.location(0), '@use "sass:color"$asClause;\n\n'));
+        Patch.insert(file.location(0), '@use "sass:color"$asClause;\n\n'),
+      );
     }
     return _colorModuleNamespace!;
   }
@@ -145,26 +168,34 @@ class _ColorMigrationVisitor extends MigrationVisitor {
 
   /// Returns the patches to make a deprecated channel function use
   /// `color.channel` instead.
-  Iterable<Patch> _makeChannelPatches(FunctionExpression node,
-      [String? colorSpace]) sync* {
+  Iterable<Patch> _makeChannelPatches(
+    FunctionExpression node, [
+    String? colorSpace,
+  ]) sync* {
     yield Patch(node.nameSpan, 'channel');
     if (node.arguments.named.isEmpty) {
       yield patchAfter(
-          node.arguments.positional.last,
-          ", '${node.name}'"
-          "${colorSpace == null ? '' : ', \$space: $colorSpace'}");
+        node.arguments.positional.last,
+        ", '${node.name}'"
+        "${colorSpace == null ? '' : ', \$space: $colorSpace'}",
+      );
     } else {
       yield patchAfter(
-          [...node.arguments.positional, ...node.arguments.named.values].last,
-          ", \$channel: '${node.name}'"
-          "${colorSpace == null ? '' : ', \$space: $colorSpace'}");
+        [...node.arguments.positional, ...node.arguments.named.values].last,
+        ", \$channel: '${node.name}'"
+        "${colorSpace == null ? '' : ', \$space: $colorSpace'}",
+      );
     }
   }
 
   /// Returns the patches to make a deprecated adjustment function use
   /// `color.adjust` instead.
-  Iterable<Patch> _makeAdjustPatches(FunctionExpression node,
-      {required String channel, bool negate = false, String? space}) sync* {
+  Iterable<Patch> _makeAdjustPatches(
+    FunctionExpression node, {
+    required String channel,
+    bool negate = false,
+    String? space,
+  }) sync* {
     yield Patch(node.nameSpan, 'adjust');
     switch (node.arguments) {
       case ArgumentList(positional: [_, var adjustment]):
@@ -178,8 +209,8 @@ class _ColorMigrationVisitor extends MigrationVisitor {
         }
 
       case ArgumentList(
-          named: {'amount': var adjustment} || {'degrees': var adjustment}
-        ):
+        named: {'amount': var adjustment} || {'degrees': var adjustment},
+      ):
         var start = adjustment.span.start.offset - 1;
         while (adjustment.span.file.getText(start, start + 1) != r'$') {
           start--;
@@ -210,10 +241,9 @@ class _ColorMigrationVisitor extends MigrationVisitor {
 extension _NeedsParens on Expression {
   /// Returns true if this expression needs parentheses when it's negated.
   bool get needsParens => switch (this) {
-        BinaryOperationExpression() ||
-        UnaryOperationExpression() ||
-        FunctionExpression() =>
-          true,
-        _ => false,
-      };
+    BinaryOperationExpression() ||
+    UnaryOperationExpression() ||
+    FunctionExpression() => true,
+    _ => false,
+  };
 }

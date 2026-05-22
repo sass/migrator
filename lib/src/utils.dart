@@ -120,9 +120,10 @@ FileSpan nameSpan(SassNode node) {
   var span = node is SassDeclaration
       ? node.nameSpan
       : node is SassReference
-          ? node.nameSpan
-          : (throw UnsupportedError(
-              "$node of type ${node.runtimeType} doesn't have a nameSpan"));
+      ? node.nameSpan
+      : (throw UnsupportedError(
+          "$node of type ${node.runtimeType} doesn't have a nameSpan",
+        ));
   return node is VariableDeclaration || node is VariableExpression
       ? span.subspan(1)
       : span;
@@ -200,7 +201,8 @@ bool isImportOnlyFile(Uri url) =>
 /// This asserts that every element in [iterable] is either an `F` or a `G`, and
 /// returns one list containing all the `F`s and one containing all the `G`s.
 (List<F>, List<G>) partitionOnType<E, F extends E, G extends E>(
-    Iterable<E> iterable) {
+  Iterable<E> iterable,
+) {
   var fs = <F>[];
   var gs = <G>[];
 

@@ -50,24 +50,35 @@ More info: https://sass-lang.com/d/slash-div""";
 
   @override
   final argParser = ArgParser()
-    ..addFlag('pessimistic',
-        abbr: 'p',
-        help: "Only migrate / expressions that are unambiguously division.",
-        negatable: false)
-    ..addFlag('multiplication',
-        help: 'Migrate / expressions with certain constant divisors to use '
-            'multiplication instead.',
-        defaultsTo: true);
+    ..addFlag(
+      'pessimistic',
+      abbr: 'p',
+      help: "Only migrate / expressions that are unambiguously division.",
+      negatable: false,
+    )
+    ..addFlag(
+      'multiplication',
+      help:
+          'Migrate / expressions with certain constant divisors to use '
+          'multiplication instead.',
+      defaultsTo: true,
+    );
 
   bool get isPessimistic => argResults!['pessimistic'] as bool;
   bool get useMultiplication => argResults!['multiplication'] as bool;
 
   @override
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  ) {
     var visitor = _DivisionMigrationVisitor(
-        importCache, isPessimistic, useMultiplication,
-        migrateDependencies: migrateDependencies);
+      importCache,
+      isPessimistic,
+      useMultiplication,
+      migrateDependencies: migrateDependencies,
+    );
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -82,8 +93,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   final bool useMultiplication;
 
   _DivisionMigrationVisitor(
-      super.importCache, this.isPessimistic, this.useMultiplication,
-      {required super.migrateDependencies});
+    super.importCache,
+    this.isPessimistic,
+    this.useMultiplication, {
+    required super.migrateDependencies,
+  });
 
   /// True when division is allowed by the context the current node is in.
   var _isDivisionAllowed = false;
@@ -111,7 +125,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     var oldUseRules = __useRulesToInsert;
     var oldScope = currentScope;
     __existingNamespaces = {
-      for (var rule in node.uses) rule.url: rule.namespace
+      for (var rule in node.uses) rule.url: rule.namespace,
     };
     __useRulesToInsert = [];
     currentScope = Scope();
@@ -157,8 +171,9 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       }
     }
 
-    var namespace = options()
-        .firstWhere((option) => !_existingNamespaces.containsValue(option));
+    var namespace = options().firstWhere(
+      (option) => !_existingNamespaces.containsValue(option),
+    );
     _existingNamespaces[url] = namespace;
     var asClause = module == namespace ? '' : ' as $namespace';
     _useRulesToInsert.add('@use "sass:$module"$asClause$semicolon');
@@ -168,8 +183,11 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Allows division within this argument list.
   @override
   void visitArgumentList(ArgumentList arguments, {bool inCalcContext = false}) {
-    _withContext(() => super.visitArgumentList(arguments),
-        isDivisionAllowed: true, inCalcContext: inCalcContext);
+    _withContext(
+      () => super.visitArgumentList(arguments),
+      isDivisionAllowed: true,
+      inCalcContext: inCalcContext,
+    );
   }
 
   /// If this is a division operation, migrates it.
@@ -181,10 +199,12 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     if (node.operator == BinaryOperator.dividedBy) {
       _visitSlashOperation(node);
     } else {
-      _withContext(() => super.visitBinaryOperationExpression(node),
-          isDivisionAllowed: true,
-          expectsNumericResult:
-              _expectsNumericResult || _operatesOnNumbers(node.operator));
+      _withContext(
+        () => super.visitBinaryOperationExpression(node),
+        isDivisionAllowed: true,
+        expectsNumericResult:
+            _expectsNumericResult || _operatesOnNumbers(node.operator),
+      );
     }
   }
 
@@ -194,25 +214,33 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void visitFunctionExpression(FunctionExpression node) {
     if (_tryColorFunction(node)) return;
     var validCalcs = _calcFunctions.difference(currentScope.allFunctionNames);
-    visitArgumentList(node.arguments,
-        inCalcContext:
-            node.namespace == null && validCalcs.contains(node.name));
+    visitArgumentList(
+      node.arguments,
+      inCalcContext: node.namespace == null && validCalcs.contains(node.name),
+    );
   }
 
   /// Visits interpolation with [_isDivisionAllowed] and [_inCalcContext] set
   /// to false.
   @override
   void visitInterpolation(Interpolation node) {
-    _withContext(() {
-      super.visitInterpolation(node);
-    }, isDivisionAllowed: false, inCalcContext: false);
+    _withContext(
+      () {
+        super.visitInterpolation(node);
+      },
+      isDivisionAllowed: false,
+      inCalcContext: false,
+    );
   }
 
   /// Disallows division within this list.
   @override
   void visitListExpression(ListExpression node) {
-    _withContext(() => super.visitListExpression(node),
-        isDivisionAllowed: false, expectsNumericResult: false);
+    _withContext(
+      () => super.visitListExpression(node),
+      isDivisionAllowed: false,
+      expectsNumericResult: false,
+    );
   }
 
   /// Allows division within this parenthesized expression.
@@ -221,8 +249,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// function call and [negated] is false, the now-unnecessary parentheses
   /// will be removed.
   @override
-  void visitParenthesizedExpression(ParenthesizedExpression node,
-      {bool negated = false}) {
+  void visitParenthesizedExpression(
+    ParenthesizedExpression node, {
+    bool negated = false,
+  }) {
     _withContext(() {
       if (node.expression
           case BinaryOperationExpression(operator: BinaryOperator.dividedBy) &&
@@ -241,11 +271,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// parenthesized expression.
   @override
   void visitUnaryOperationExpression(UnaryOperationExpression node) {
-    if (node
-        case UnaryOperationExpression(
-          operator: UnaryOperator.minus,
-          :ParenthesizedExpression operand
-        )) {
+    if (node case UnaryOperationExpression(
+      operator: UnaryOperator.minus,
+      :ParenthesizedExpression operand,
+    )) {
       visitParenthesizedExpression(operand, negated: true);
       return;
     }
@@ -261,8 +290,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Allows division within this variable declaration.
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _withContext(() => super.visitVariableDeclaration(node),
-        isDivisionAllowed: true);
+    _withContext(
+      () => super.visitVariableDeclaration(node),
+      isDivisionAllowed: true,
+    );
   }
 
   /// Migrates [node] and returns true if it is a new-syntax color function or
@@ -275,7 +306,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     var channels = switch (node.arguments) {
       ArgumentList(
         positional: [ListExpression arg],
-        named: Map(isEmpty: true)
+        named: Map(isEmpty: true),
       ) =>
         arg,
       ArgumentList(positional: [], named: {r'$channels': ListExpression arg}) =>
@@ -283,19 +314,17 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       _ => null,
     };
 
-    if (channels
-        case ListExpression(
-          hasBrackets: false,
-          separator: ListSeparator.space,
-          contents: [_, _, BinaryOperationExpression last]
-        )) {
+    if (channels case ListExpression(
+      hasBrackets: false,
+      separator: ListSeparator.space,
+      contents: [_, _, BinaryOperationExpression last],
+    )) {
       // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2`
       // to `div(30, 20)` would cause `/ 0.5` to be interpreted as division.
-      if (last
-          case BinaryOperationExpression(
-            left: NumberExpression(),
-            right: NumberExpression()
-          )) {
+      if (last case BinaryOperationExpression(
+        left: NumberExpression(),
+        right: NumberExpression(),
+      )) {
         // Nothing to patch
       } else {
         _patchSpacesToCommas(channels);
@@ -343,8 +372,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
         status == _NumberStatus.yes ||
         !isPessimistic) {
       // Definitely division
-      _withContext(() => super.visitBinaryOperationExpression(node),
-          expectsNumericResult: true);
+      _withContext(
+        () => super.visitBinaryOperationExpression(node),
+        expectsNumericResult: true,
+      );
       if (_tryMultiplication(node)) return false;
       addPatch(patchBefore(node, "${_builtInPrefix('math')}div("));
       addPatch(patchAfter(node, ")"));
@@ -366,8 +397,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if patched and false otherwise.
   bool _tryMultiplication(BinaryOperationExpression node) {
     if (!useMultiplication) return false;
-    if (node.right case NumberExpression(unit: null, value: var divisor)
-        when _allowedDivisors.contains(divisor)) {
+    if (node.right case NumberExpression(
+      unit: null,
+      value: var divisor,
+    ) when _allowedDivisors.contains(divisor)) {
       var operatorSpan = node.left.span
           .extendThroughWhitespace()
           .end
@@ -403,37 +436,38 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   ///
   /// This is true for `*`, `%`, `<`, `<=`, `>`, and `>=`.
   bool _operatesOnNumbers(BinaryOperator operator) => {
-        BinaryOperator.times,
-        BinaryOperator.modulo,
-        BinaryOperator.lessThan,
-        BinaryOperator.lessThanOrEquals,
-        BinaryOperator.greaterThan,
-        BinaryOperator.greaterThanOrEquals
-      }.contains(operator);
+    BinaryOperator.times,
+    BinaryOperator.modulo,
+    BinaryOperator.lessThan,
+    BinaryOperator.lessThanOrEquals,
+    BinaryOperator.greaterThan,
+    BinaryOperator.greaterThanOrEquals,
+  }.contains(operator);
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
   bool _onlySlash(Expression node) => switch (node) {
-        NumberExpression() => true,
-        BinaryOperationExpression(
-          operator: BinaryOperator.dividedBy,
-          :var left,
-          :var right
-        ) =>
-          _onlySlash(left) && _onlySlash(right),
-        _ => false
-      };
+    NumberExpression() => true,
+    BinaryOperationExpression(
+      operator: BinaryOperator.dividedBy,
+      :var left,
+      :var right,
+    ) =>
+      _onlySlash(left) && _onlySlash(right),
+    _ => false,
+  };
 
   /// Returns true if [node] contains an interpolation.
   bool _containsInterpolation(Expression node) => switch (node) {
-        ParenthesizedExpression(:var expression) ||
-        UnaryOperationExpression(operand: var expression) =>
-          _containsInterpolation(expression),
-        BinaryOperationExpression(:var left, :var right) =>
-          _containsInterpolation(left) || _containsInterpolation(right),
-        StringExpression(text: Interpolation(asPlain: null)) => true,
-        _ => false
-      };
+    ParenthesizedExpression(:var expression) ||
+    UnaryOperationExpression(
+      operand: var expression,
+    ) => _containsInterpolation(expression),
+    BinaryOperationExpression(:var left, :var right) =>
+      _containsInterpolation(left) || _containsInterpolation(right),
+    StringExpression(text: Interpolation(asPlain: null)) => true,
+    _ => false,
+  };
 
   /// Converts a space-separated list [node] to a comma-separated list.
   void _patchSpacesToCommas(ListExpression node) {
@@ -456,10 +490,10 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void _patchParensIfAny(SassNode node) {
     switch (node) {
       case ParenthesizedExpression(
-          expression: BinaryOperationExpression(
-            operator: BinaryOperator.dividedBy
-          )
-        ):
+        expression: BinaryOperationExpression(
+          operator: BinaryOperator.dividedBy,
+        ),
+      ):
         return;
       case ParenthesizedExpression():
         addPatch(patchDelete(node.span, end: 1));
@@ -468,10 +502,12 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   }
 
   /// Runs [operation] with the given context.
-  void _withContext(void operation(),
-      {bool? isDivisionAllowed,
-      bool? expectsNumericResult,
-      bool? inCalcContext}) {
+  void _withContext(
+    void operation(), {
+    bool? isDivisionAllowed,
+    bool? expectsNumericResult,
+    bool? inCalcContext,
+  }) {
     var previousDivisionAllowed = _isDivisionAllowed;
     var previousNumericResult = _expectsNumericResult;
     var previousCalcContext = _inCalcContext;
@@ -495,29 +531,26 @@ enum _NumberStatus {
   /// Returns [yes] if [node] is definitely a number, [no] if [node] is
   /// definitely not a number, and [maybe] otherwise.
   static _NumberStatus of(Expression node) => switch (node) {
-        NumberExpression() ||
-        BinaryOperationExpression(
-          operator: BinaryOperator.times || BinaryOperator.modulo
-        ) =>
-          yes,
-        BooleanExpression() ||
-        ColorExpression() ||
-        ListExpression() ||
-        MapExpression() ||
-        NullExpression() ||
-        StringExpression() =>
-          no,
-        ParenthesizedExpression(:var expression) ||
-        UnaryOperationExpression(operand: var expression) =>
-          of(expression),
-        BinaryOperationExpression(:var left, :var right) => switch ((
-            of(left),
-            of(right)
-          )) {
-            (yes, yes) => yes,
-            (no, _) || (_, no) => no,
-            _ => maybe
-          },
-        _ => maybe,
-      };
+    NumberExpression() ||
+    BinaryOperationExpression(
+      operator: BinaryOperator.times || BinaryOperator.modulo,
+    ) => yes,
+    BooleanExpression() ||
+    ColorExpression() ||
+    ListExpression() ||
+    MapExpression() ||
+    NullExpression() ||
+    StringExpression() => no,
+    ParenthesizedExpression(:var expression) ||
+    UnaryOperationExpression(operand: var expression) => of(expression),
+    BinaryOperationExpression(:var left, :var right) => switch ((
+      of(left),
+      of(right),
+    )) {
+      (yes, yes) => yes,
+      (no, _) || (_, no) => no,
+      _ => maybe,
+    },
+    _ => maybe,
+  };
 }

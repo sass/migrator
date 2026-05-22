@@ -27,41 +27,63 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
   String get invocation =>
       "$executableName <migrator> [options] <entrypoint.scss...>";
 
-  String get usage => "${super.usage}\n\n"
+  String get usage =>
+      "${super.usage}\n\n"
       "See also https://sass-lang.com/documentation/cli/migrator";
 
   MigratorRunner()
-      : super("sass-migrator", "Migrates stylesheets to new Sass versions.") {
+    : super("sass-migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
-      ..addMultiOption('load-path',
-          abbr: 'I',
-          valueHelp: 'PATH',
-          help: 'A path to use when resolving imports.\n'
-              'May be passed multiple times.',
-          splitCommas: false)
-      ..addFlag('migrate-deps',
-          abbr: 'd',
-          help: 'Migrate dependencies in addition to entrypoints.',
-          negatable: false)
-      ..addMultiOption('pkg-importer',
-          abbr: 'p',
-          valueHelp: 'TYPE',
-          allowed: ['node'],
-          help: 'Built-in importer(s) to use for pkg: URLs.',
-          allowedHelp: {'node': 'Load files like Node.js package resolution.'})
-      ..addFlag('dry-run',
-          abbr: 'n',
-          help: 'Show which files would be migrated but make no changes.',
-          negatable: false)
-      ..addFlag('color',
-          abbr: 'c', help: 'Whether to use terminal colors for messages..')
-      ..addFlag('unicode',
-          help: 'Whether to use Unicode characters for messages.')
+      ..addMultiOption(
+        'load-path',
+        abbr: 'I',
+        valueHelp: 'PATH',
+        help:
+            'A path to use when resolving imports.\n'
+            'May be passed multiple times.',
+        splitCommas: false,
+      )
+      ..addFlag(
+        'migrate-deps',
+        abbr: 'd',
+        help: 'Migrate dependencies in addition to entrypoints.',
+        negatable: false,
+      )
+      ..addMultiOption(
+        'pkg-importer',
+        abbr: 'p',
+        valueHelp: 'TYPE',
+        allowed: ['node'],
+        help: 'Built-in importer(s) to use for pkg: URLs.',
+        allowedHelp: {'node': 'Load files like Node.js package resolution.'},
+      )
+      ..addFlag(
+        'dry-run',
+        abbr: 'n',
+        help: 'Show which files would be migrated but make no changes.',
+        negatable: false,
+      )
+      ..addFlag(
+        'color',
+        abbr: 'c',
+        help: 'Whether to use terminal colors for messages..',
+      )
+      ..addFlag(
+        'unicode',
+        help: 'Whether to use Unicode characters for messages.',
+      )
       // TODO(jathak): Make this flag print a diff instead.
-      ..addFlag('verbose',
-          abbr: 'v', help: 'Print more information.', negatable: false)
-      ..addFlag('version',
-          help: 'Print the version of the Sass migrator.', negatable: false);
+      ..addFlag(
+        'verbose',
+        abbr: 'v',
+        help: 'Print more information.',
+        negatable: false,
+      )
+      ..addFlag(
+        'version',
+        help: 'Print the version of the Sass migrator.',
+        negatable: false,
+      );
     addCommand(CalculationInterpolationMigrator());
     addCommand(ColorMigrator());
     addCommand(DivisionMigrator());
@@ -100,10 +122,13 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       exitCode = 64;
       return;
     } on SourceSpanException catch (e) {
-      printStderr(e.toString(
+      printStderr(
+        e.toString(
           color: argResults.wasParsed('color')
               ? argResults['color'] as bool
-              : supportsAnsiEscapes));
+              : supportsAnsiEscapes,
+        ),
+      );
       printStderr('Migration failed!');
       exitCode = 1;
       return;
@@ -136,8 +161,10 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       });
     } else {
       migrated.forEach((url, contents) {
-        assert(url.scheme.isEmpty || url.scheme == "file",
-            "$url is not a file path.");
+        assert(
+          url.scheme.isEmpty || url.scheme == "file",
+          "$url is not a file path.",
+        );
         if (argResults['verbose']) print("Migrating ${p.prettyUri(url)}");
         File(url.toFilePath()).writeAsStringSync(contents);
       });
@@ -149,13 +176,15 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
 Future<String> _loadVersion() async {
   var version = const String.fromEnvironment('version');
   if (const bool.fromEnvironment('node')) {
-    version += " compiled with dart2js "
+    version +=
+        " compiled with dart2js "
         "${const String.fromEnvironment('dart-version')}";
   }
   if (version.isNotEmpty) return version;
 
   var libDir = p.fromUri(
-      await Isolate.resolvePackageUri(Uri.parse('package:sass_migrator/')));
+    await Isolate.resolvePackageUri(Uri.parse('package:sass_migrator/')),
+  );
   var pubspec = File(p.join(libDir, '..', 'pubspec.yaml')).readAsStringSync();
   return pubspec
       .split("\n")

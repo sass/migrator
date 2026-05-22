@@ -17,7 +17,7 @@ main(List<String> args) {
   pkg.jsRequires.value = [
     pkg.JSRequire('fs'),
     pkg.JSRequire('os'),
-    pkg.JSRequire('path')
+    pkg.JSRequire('path'),
   ];
   pkg.standaloneName.value = "sass-migrator";
   pkg.githubUser.fn = () => Platform.environment["GH_USER"]!;
@@ -37,8 +37,10 @@ sanityCheckBeforeRelease() {
     fail("${pkg.version} is a dev release.");
   }
 
-  var versionHeader =
-      RegExp("^## ${RegExp.escape(pkg.version.toString())}\$", multiLine: true);
+  var versionHeader = RegExp(
+    "^## ${RegExp.escape(pkg.version.toString())}\$",
+    multiLine: true,
+  );
   if (!File("CHANGELOG.md").readAsStringSync().contains(versionHeader)) {
     fail("There's no CHANGELOG entry for ${pkg.version}.");
   }

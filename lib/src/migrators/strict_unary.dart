@@ -13,14 +13,20 @@ import '../patch.dart';
 /// Migrates deprecated `$a -$b` construct to unambiguous `$a - $b`.
 class StrictUnaryMigrator extends Migrator {
   final name = "strict-unary";
-  final description = r"Migrates deprecated `$a -$b` syntax (and similar) to "
+  final description =
+      r"Migrates deprecated `$a -$b` syntax (and similar) to "
       r"unambiguous `$a - $b`";
 
   @override
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var visitor = _UnaryMigrationVisitor(importCache,
-        migrateDependencies: migrateDependencies);
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  ) {
+    var visitor = _UnaryMigrationVisitor(
+      importCache,
+      migrateDependencies: migrateDependencies,
+    );
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -28,8 +34,10 @@ class StrictUnaryMigrator extends Migrator {
 }
 
 class _UnaryMigrationVisitor extends MigrationVisitor {
-  _UnaryMigrationVisitor(super.importCache,
-      {required super.migrateDependencies});
+  _UnaryMigrationVisitor(
+    super.importCache, {
+    required super.migrateDependencies,
+  });
 
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {

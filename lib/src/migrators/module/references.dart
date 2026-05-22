@@ -37,8 +37,11 @@ class References {
   /// to the original declaration, not the previous reassignment.
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
-  final BidirectionalMap<MemberDeclaration<VariableDeclaration>,
-      MemberDeclaration> variableReassignments;
+  final BidirectionalMap<
+    MemberDeclaration<VariableDeclaration>,
+    MemberDeclaration
+  >
+  variableReassignments;
 
   /// An unmodifiable map from variable declarations with the `!default` flag to
   /// the declaration they would override were it not for that flag.
@@ -46,7 +49,7 @@ class References {
   /// This only includes `!default` declarations for variables that already
   /// exist.
   final Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
-      defaultVariableDeclarations;
+  defaultVariableDeclarations;
 
   /// An unmodifiable map between mixin references and their declarations.
   final BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins;
@@ -56,14 +59,14 @@ class References {
   ///
   /// This only includes references to user-defined functions.
   final BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-      functions;
+  functions;
 
   /// An unmodifiable map between statically-known function references within
   /// a `get-function` call and their declarations.
   ///
   /// This only includes references to user-defined functions.
   final BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-      getFunctionReferences;
+  getFunctionReferences;
 
   /// An unmodifiable set of all member declarations declared in the global
   /// scope of a stylesheet.
@@ -115,8 +118,9 @@ class References {
   /// Returns true if the member declared by [declaration] is referenced within
   /// another stylesheet.
   bool referencedOutsideDeclaringStylesheet(MemberDeclaration declaration) =>
-      referencesTo(declaration).any(
-          (reference) => reference.span.sourceUrl != declaration.sourceUrl);
+      referencesTo(
+        declaration,
+      ).any((reference) => reference.span.sourceUrl != declaration.sourceUrl);
 
   /// Returns true if any member of [declaringUrl] is referenced by
   /// [referencingUrl] and false otherwise.
@@ -139,56 +143,65 @@ class References {
   }
 
   References._(
-      BidirectionalMap<VariableExpression, MemberDeclaration> variables,
-      BidirectionalMap<MemberDeclaration<VariableDeclaration>,
-              MemberDeclaration>
-          variableReassignments,
-      Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
-          defaultVariableDeclarations,
-      BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins,
-      BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-          functions,
-      BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-          getFunctionReferences,
-      Set<MemberDeclaration> globalDeclarations,
-      Map<MemberDeclaration, Set<Uri>> libraries,
-      Map<SassReference, ReferenceSource> sources,
-      Map<Uri, ForwardRule?> orphanImportOnlyFiles,
-      Map<Uri, bool> fileEmitsCss,
-      Map<Uri, List<IncludeRule>> importOnlyIncludes)
-      : variables = UnmodifiableBidirectionalMapView(variables),
-        variableReassignments =
-            UnmodifiableBidirectionalMapView(variableReassignments),
-        defaultVariableDeclarations =
-            UnmodifiableMapView(defaultVariableDeclarations),
-        mixins = UnmodifiableBidirectionalMapView(mixins),
-        functions = UnmodifiableBidirectionalMapView(functions),
-        getFunctionReferences =
-            UnmodifiableBidirectionalMapView(getFunctionReferences),
-        globalDeclarations = UnmodifiableSetView(globalDeclarations),
-        libraries = UnmodifiableMapView({
-          for (var entry in libraries.entries)
-            entry.key: UnmodifiableSetView(entry.value)
-        }),
-        sources = UnmodifiableMapView(sources),
-        orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles),
-        fileEmitsCss = UnmodifiableMapView(fileEmitsCss),
-        importOnlyIncludes = UnmodifiableMapView(importOnlyIncludes);
+    BidirectionalMap<VariableExpression, MemberDeclaration> variables,
+    BidirectionalMap<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
+    variableReassignments,
+    Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
+    defaultVariableDeclarations,
+    BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins,
+    BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+    functions,
+    BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+    getFunctionReferences,
+    Set<MemberDeclaration> globalDeclarations,
+    Map<MemberDeclaration, Set<Uri>> libraries,
+    Map<SassReference, ReferenceSource> sources,
+    Map<Uri, ForwardRule?> orphanImportOnlyFiles,
+    Map<Uri, bool> fileEmitsCss,
+    Map<Uri, List<IncludeRule>> importOnlyIncludes,
+  ) : variables = UnmodifiableBidirectionalMapView(variables),
+      variableReassignments = UnmodifiableBidirectionalMapView(
+        variableReassignments,
+      ),
+      defaultVariableDeclarations = UnmodifiableMapView(
+        defaultVariableDeclarations,
+      ),
+      mixins = UnmodifiableBidirectionalMapView(mixins),
+      functions = UnmodifiableBidirectionalMapView(functions),
+      getFunctionReferences = UnmodifiableBidirectionalMapView(
+        getFunctionReferences,
+      ),
+      globalDeclarations = UnmodifiableSetView(globalDeclarations),
+      libraries = UnmodifiableMapView({
+        for (var entry in libraries.entries)
+          entry.key: UnmodifiableSetView(entry.value),
+      }),
+      sources = UnmodifiableMapView(sources),
+      orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles),
+      fileEmitsCss = UnmodifiableMapView(fileEmitsCss),
+      importOnlyIncludes = UnmodifiableMapView(importOnlyIncludes);
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
   factory References(
-          ImportCache importCache, Stylesheet stylesheet, Importer importer,
-          {Iterable<String> safeAtRules = const []}) =>
-      _ReferenceVisitor(importCache, safeAtRules.toSet())
-          .build(stylesheet, importer);
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer, {
+    Iterable<String> safeAtRules = const [],
+  }) => _ReferenceVisitor(
+    importCache,
+    safeAtRules.toSet(),
+  ).build(stylesheet, importer);
 }
 
 /// A visitor that builds a References object.
 class _ReferenceVisitor extends ScopedAstVisitor {
   final _variables = BidirectionalMap<VariableExpression, MemberDeclaration>();
-  final _variableReassignments = BidirectionalMap<
-      MemberDeclaration<VariableDeclaration>, MemberDeclaration>();
+  final _variableReassignments =
+      BidirectionalMap<
+        MemberDeclaration<VariableDeclaration>,
+        MemberDeclaration
+      >();
   final _defaultVariableDeclarations =
       <MemberDeclaration<VariableDeclaration>, MemberDeclaration>{};
   final _mixins = BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>>();
@@ -293,18 +306,19 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     _checkUnresolvedReferences(currentScope);
     _resolveBuiltInFunctionReferences();
     return References._(
-        _variables,
-        _variableReassignments,
-        _defaultVariableDeclarations,
-        _mixins,
-        _functions,
-        _getFunctionReferences,
-        _globalDeclarations,
-        _libraries,
-        _sources,
-        _orphanImportOnlyFiles,
-        _fileEmitsCss,
-        _importOnlyIncludes);
+      _variables,
+      _variableReassignments,
+      _defaultVariableDeclarations,
+      _mixins,
+      _functions,
+      _getFunctionReferences,
+      _globalDeclarations,
+      _libraries,
+      _sources,
+      _orphanImportOnlyFiles,
+      _fileEmitsCss,
+      _importOnlyIncludes,
+    );
   }
 
   /// Checks any remaining [_unresolvedReferences] to see if they match a
@@ -357,8 +371,8 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     if (_isOrphanImportOnly) {
       _orphanImportOnlyFiles[_currentUrl] =
           _lastRegularForward?.span.sourceUrl == _currentUrl
-              ? _lastRegularForward
-              : null;
+          ? _lastRegularForward
+          : null;
     }
     var emitsCss = _dependencyEmitsCss || node.children.any(_statementEmitsCss);
     _fileEmitsCss[_currentUrl] = emitsCss;
@@ -370,19 +384,19 @@ class _ReferenceVisitor extends ScopedAstVisitor {
 
   /// Returns true if [statement] emits any CSS.
   bool _statementEmitsCss(Statement statement) => switch (statement) {
-        StyleRule() || IncludeRule() || MediaRule() || SupportsRule() => true,
-        AtRule(:var name) => !safeAtRules.contains(name.asPlain),
-        EachRule(:var children) ||
-        ForRule(:var children) ||
-        MediaRule(:var children) ||
-        WhileRule(:var children) =>
-          children.any(_statementEmitsCss),
-        IfRule(:var clauses) =>
-          clauses.any((clause) => clause.children.any(_statementEmitsCss)),
-        // All other statement types either don't emit CSS or are always
-        // nested inside of a CSS-emitting statement.
-        _ => false,
-      };
+    StyleRule() || IncludeRule() || MediaRule() || SupportsRule() => true,
+    AtRule(:var name) => !safeAtRules.contains(name.asPlain),
+    EachRule(:var children) ||
+    ForRule(:var children) ||
+    MediaRule(:var children) ||
+    WhileRule(:var children) => children.any(_statementEmitsCss),
+    IfRule(:var clauses) => clauses.any(
+      (clause) => clause.children.any(_statementEmitsCss),
+    ),
+    // All other statement types either don't emit CSS or are always
+    // nested inside of a CSS-emitting statement.
+    _ => false,
+  };
 
   /// Visits the stylesheet this `@import` rule points to using the existing
   /// global scope.
@@ -390,12 +404,17 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   void visitImportRule(ImportRule node) {
     super.visitImportRule(node);
     for (var import in node.imports.whereType<DynamicImport>()) {
-      var result = importCache.import(import.url,
-          baseImporter: _importer, baseUrl: _currentUrl, forImport: true);
+      var result = importCache.import(
+        import.url,
+        baseImporter: _importer,
+        baseUrl: _currentUrl,
+        forImport: true,
+      );
       if (result == null) {
         throw MigrationSourceSpanException(
-            "Could not find Sass file at '${p.prettyUri(import.url)}'.",
-            import.span);
+          "Could not find Sass file at '${p.prettyUri(import.url)}'.",
+          import.span,
+        );
       }
       var (newImporter, stylesheet) = result;
 
@@ -417,8 +436,9 @@ class _ReferenceVisitor extends ScopedAstVisitor {
         if (source is CurrentSource || source is ForwardSource) {
           _declarationSources[declaration] = importSource;
         } else if (source is ImportOnlySource) {
-          _declarationSources[declaration] =
-              ImportSource.fromImportOnlyForward(source);
+          _declarationSources[declaration] = ImportSource.fromImportOnlyForward(
+            source,
+          );
         }
       }
 
@@ -462,12 +482,16 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// Given a URL from a `@use` or `@forward` rule, loads and visits the
   /// stylesheet it points to and returns its canonical URL.
   Uri _loadUseOrForward(Uri ruleUrl, AstNode nodeForSpan) {
-    var result = importCache.import(ruleUrl,
-        baseImporter: _importer, baseUrl: _currentUrl);
+    var result = importCache.import(
+      ruleUrl,
+      baseImporter: _importer,
+      baseUrl: _currentUrl,
+    );
     if (result == null) {
       throw MigrationSourceSpanException(
-          "Could not find Sass file at '${p.prettyUri(ruleUrl)}'.",
-          nodeForSpan.span);
+        "Could not find Sass file at '${p.prettyUri(ruleUrl)}'.",
+        nodeForSpan.span,
+      );
     }
     var (newImporter, stylesheet) = result;
 
@@ -512,22 +536,35 @@ class _ReferenceVisitor extends ScopedAstVisitor {
     for (var declaration in moduleScope.variables.values) {
       if (declaration.member is! VariableDeclaration) {
         throw StateError(
-            "Arguments should not be present in a module's global scope");
+          "Arguments should not be present in a module's global scope",
+        );
       }
-      if (_visibleThroughForward(declaration.name, node.prefix,
-          node.shownVariables, node.hiddenVariables)) {
+      if (_visibleThroughForward(
+        declaration.name,
+        node.prefix,
+        node.shownVariables,
+        node.hiddenVariables,
+      )) {
         _forwardMember(declaration, node, canonicalUrl, currentScope.variables);
       }
     }
     for (var declaration in moduleScope.mixins.values) {
-      if (_visibleThroughForward(declaration.name, node.prefix,
-          node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
+      if (_visibleThroughForward(
+        declaration.name,
+        node.prefix,
+        node.shownMixinsAndFunctions,
+        node.hiddenMixinsAndFunctions,
+      )) {
         _forwardMember(declaration, node, canonicalUrl, currentScope.mixins);
       }
     }
     for (var declaration in moduleScope.functions.values) {
-      if (_visibleThroughForward(declaration.name, node.prefix,
-          node.shownMixinsAndFunctions, node.hiddenMixinsAndFunctions)) {
+      if (_visibleThroughForward(
+        declaration.name,
+        node.prefix,
+        node.shownMixinsAndFunctions,
+        node.hiddenMixinsAndFunctions,
+      )) {
         _forwardMember(declaration, node, canonicalUrl, currentScope.functions);
       }
     }
@@ -536,7 +573,11 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// Returns true if [name] should be shown based on [prefix], [shown], and
   /// [hidden] from a `@forward` rule.
   bool _visibleThroughForward(
-      String name, String? prefix, Set<String>? shown, Set<String>? hidden) {
+    String name,
+    String? prefix,
+    Set<String>? shown,
+    Set<String>? hidden,
+  ) {
     if (prefix != null) name = '$prefix$name';
     return (shown?.contains(name) ?? true) &&
         !(hidden?.contains(name) ?? false);
@@ -545,10 +586,11 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// Forwards [forwarding] into [declarations], adding the forwarded
   /// declaration to [_declarationSources].
   void _forwardMember<T extends SassDeclaration>(
-      MemberDeclaration<T> forwarding,
-      ForwardRule forward,
-      Uri forwardedUrl,
-      Map<String, MemberDeclaration<T>> declarations) {
+    MemberDeclaration<T> forwarding,
+    ForwardRule forward,
+    Uri forwardedUrl,
+    Map<String, MemberDeclaration<T>> declarations,
+  ) {
     var declaration = MemberDeclaration<T>.forward(forwarding, forward);
     _registerLibraryUrl(declaration);
     var prefix = forward.prefix ?? '';
@@ -556,14 +598,17 @@ class _ReferenceVisitor extends ScopedAstVisitor {
 
     if (declaration is ImportOnlyMemberDeclaration<T>) {
       _declarationSources[declaration] = ImportOnlySource(
-          declaration.importOnlyUrl,
-          declaration.sourceUrl,
-          forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl)
-              ? _currentRuleUrl
-              : null);
+        declaration.importOnlyUrl,
+        declaration.sourceUrl,
+        forward.span.sourceUrl == getImportOnlyUrl(forwardedUrl)
+            ? _currentRuleUrl
+            : null,
+      );
     } else {
-      _declarationSources[declaration] =
-          ForwardSource(forward.span.sourceUrl!, forward);
+      _declarationSources[declaration] = ForwardSource(
+        forward.span.sourceUrl!,
+        forward,
+      );
     }
   }
 
@@ -584,21 +629,37 @@ class _ReferenceVisitor extends ScopedAstVisitor {
       if (!refScope.isDescendentOf(scope)) continue;
       if (reference is VariableExpression) {
         _linkUnresolvedReference(
-            reference, reference.name, scope.variables, _variables);
+          reference,
+          reference.name,
+          scope.variables,
+          _variables,
+        );
       } else if (reference is IncludeRule) {
         _linkUnresolvedReference(
-            reference, reference.name, scope.mixins, _mixins);
+          reference,
+          reference.name,
+          scope.mixins,
+          _mixins,
+        );
       } else if (reference is FunctionExpression) {
         if (reference.name == 'get-function') {
           var nameExpression = getStaticNameForGetFunctionCall(reference);
           if (nameExpression == null) continue;
           var staticName = nameExpression.text.replaceAll('_', '-');
           _linkUnresolvedReference(
-              reference, staticName, scope.functions, _getFunctionReferences,
-              trackSources: false);
+            reference,
+            staticName,
+            scope.functions,
+            _getFunctionReferences,
+            trackSources: false,
+          );
         } else {
           _linkUnresolvedReference(
-              reference, reference.name, scope.functions, _functions);
+            reference,
+            reference.name,
+            scope.functions,
+            _functions,
+          );
         }
       }
     }
@@ -609,11 +670,12 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   ///
   /// If [trackSources] is true, this also adds [reference] to [_sources].
   void _linkUnresolvedReference<T extends SassReference>(
-      T reference,
-      String name,
-      Map<String, MemberDeclaration> declarations,
-      BidirectionalMap<T, MemberDeclaration> references,
-      {bool trackSources = true}) {
+    T reference,
+    String name,
+    Map<String, MemberDeclaration> declarations,
+    BidirectionalMap<T, MemberDeclaration> references, {
+    bool trackSources = true,
+  }) {
     var declaration = declarations[name];
     if (declaration == null) return;
     references[reference] = declaration;

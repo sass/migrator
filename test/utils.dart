@@ -21,12 +21,14 @@ import 'package:test_process/test_process.dart';
 var runNodeTests = false;
 
 /// Starts a Sass migrator process with the given [args].
-Future<TestProcess> runMigrator(List<String> args) =>
-    pkg.start('sass-migrator', args,
-        node: runNodeTests,
-        workingDirectory: d.sandbox,
-        description: "migrator",
-        encoding: utf8);
+Future<TestProcess> runMigrator(List<String> args) => pkg.start(
+  'sass-migrator',
+  args,
+  node: runNodeTests,
+  workingDirectory: d.sandbox,
+  description: "migrator",
+  encoding: utf8,
+);
 
 /// Runs all tests for [migrator].
 ///
@@ -38,11 +40,14 @@ void testMigrator(String migrator) {
 
   var dir = "test/migrators/$migrator";
   group(migrator, () {
-    for (var file
-        in Directory(dir).listSync(recursive: true).whereType<File>()) {
+    for (var file in Directory(
+      dir,
+    ).listSync(recursive: true).whereType<File>()) {
       if (file.path.endsWith(".hrx")) {
-        test(p.withoutExtension(p.relative(file.path, from: dir)),
-            () => _testHrx(file, migrator));
+        test(
+          p.withoutExtension(p.relative(file.path, from: dir)),
+          () => _testHrx(file, migrator),
+        );
       }
     }
   });
@@ -60,7 +65,7 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
     '--no-unicode',
     ...files.arguments,
     for (var path in files.input.keys)
-      if (path.startsWith("entrypoint")) path
+      if (path.startsWith("entrypoint")) path,
   ]);
 
   var expectedLog = files.expectedLog;
@@ -72,19 +77,26 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
   var expectedStderr = files.expectedError ?? files.expectedWarning;
   if (expectedStderr != null) {
     expect(
-        process.stderr, emitsInOrder(expectedStderr.trimRight().split("\n")));
+      process.stderr,
+      emitsInOrder(expectedStderr.trimRight().split("\n")),
+    );
   }
   expect(process.stderr, emitsDone);
 
   await process.shouldExit(files.expectedError != null ? 1 : 0);
 
   await Future.wait([
-    Future.wait(files.output.keys
-        .map((path) => d.file(path, files.output[path]).validate())),
+    Future.wait(
+      files.output.keys.map(
+        (path) => d.file(path, files.output[path]).validate(),
+      ),
+    ),
     // Ensure that the migrator *doesn't* migrate files it's not supposed to.
-    Future.wait(files.input.keys
-        .where((path) => !files.output.containsKey(path))
-        .map((path) => d.file(path, files.input[path]).validate()))
+    Future.wait(
+      files.input.keys
+          .where((path) => !files.output.containsKey(path))
+          .map((path) => d.file(path, files.input[path]).validate()),
+    ),
   ]);
 }
 
@@ -139,7 +151,7 @@ class _HrxTestFiles {
           match.group(1) ??
               match.group(2) ??
               match.group(3) ??
-              (throw ArgumentError('Bad arguments for test'))
+              (throw ArgumentError('Bad arguments for test')),
       ];
     }
   }

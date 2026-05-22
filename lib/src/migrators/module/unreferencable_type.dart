@@ -33,8 +33,8 @@ class UnreferencableType {
     var type = reference is IncludeRule
         ? 'mixin'
         : reference is FunctionExpression
-            ? 'function'
-            : 'variable';
+        ? 'function'
+        : 'variable';
     var url = p.prettyUri(source);
     switch (this) {
       case fromImporter:

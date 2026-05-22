@@ -100,9 +100,10 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
       var existingResults = _migrated[_currentUrl];
       if (existingResults != null && existingResults != results) {
         throw MigrationException(
-            "The migrator has found multiple possible migrations for "
-            "${p.prettyUri(_currentUrl)}, depending on the context in which "
-            "it's loaded.");
+          "The migrator has found multiple possible migrations for "
+          "${p.prettyUri(_currentUrl)}, depending on the context in which "
+          "it's loaded.",
+        );
       }
 
       _migrated[currentUrl] = results;
@@ -125,11 +126,18 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
   /// When [forImport] is true, this preserves the [currentScope]. Otherwise,
   /// the dependency is visited with a new global scope for the new module.
   @protected
-  void visitDependency(Uri dependency, FileSpan context,
-      {bool forImport = false}) {
+  void visitDependency(
+    Uri dependency,
+    FileSpan context, {
+    bool forImport = false,
+  }) {
     if (dependency.scheme == 'sass') return;
-    var result = importCache.import(dependency,
-        baseImporter: _importer, baseUrl: _currentUrl, forImport: forImport);
+    var result = importCache.import(
+      dependency,
+      baseImporter: _importer,
+      baseUrl: _currentUrl,
+      forImport: forImport,
+    );
     if (result case (var newImporter, var stylesheet)) {
       // If [dependency] comes from a non-relative import, don't migrate it,
       // because it's likely to be outside the user's repository and may even be
@@ -148,7 +156,9 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
       currentScope = oldScope;
     } else {
       _missingDependencies.putIfAbsent(
-          context.sourceUrl!.resolveUri(dependency), () => context);
+        context.sourceUrl!.resolveUri(dependency),
+        () => context,
+      );
     }
   }
 

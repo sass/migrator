@@ -21,7 +21,7 @@ class Patch implements Comparable<Patch> {
 
   /// Constructs a patch that inserts [replacement] at [location].
   Patch.insert(FileLocation location, String replacement)
-      : this(location.pointSpan(), replacement);
+    : this(location.pointSpan(), replacement);
 
   /// Applies a series of non-overlapping patches to the text of a file.
   static String applyAll(SourceFile file, List<Patch> patches) {
@@ -46,10 +46,13 @@ class Patch implements Comparable<Patch> {
       }
       if (patch.selection.start.offset < offset) {
         var first = patches.firstWhere(
-            (earlier) => earlier.selection.hasOverlap(patch.selection));
-        throw ArgumentError("Can't apply overlapping patches:\n"
-            '* $first\n'
-            '* $patch');
+          (earlier) => earlier.selection.hasOverlap(patch.selection),
+        );
+        throw ArgumentError(
+          "Can't apply overlapping patches:\n"
+          '* $first\n'
+          '* $patch',
+        );
       }
       buffer.write(file.getText(offset, patch.selection.start.offset));
       buffer.write(patch.replacement);
@@ -66,6 +69,6 @@ class Patch implements Comparable<Patch> {
   String toString() => selection.isEmpty
       ? "at $selection inserting \"$replacement\""
       : replacement.isEmpty
-          ? "removing $selection"
-          : "replacing $selection with \"$replacement\"";
+      ? "removing $selection"
+      : "replacing $selection with \"$replacement\"";
 }

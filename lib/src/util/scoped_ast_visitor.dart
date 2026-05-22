@@ -95,7 +95,7 @@ abstract class ScopedAstVisitor
     var scope = switch (node) {
       VariableDeclaration(isGlobal: true) => currentScope.global,
       VariableDeclaration(namespace: null) => currentScope,
-      _ => null
+      _ => null,
     };
     scope?.variables[node.name] = MemberDeclaration(node);
   }

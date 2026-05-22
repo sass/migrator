@@ -67,28 +67,39 @@ void main() {
 
     group('multiple keys', () {
       test('named key', () {
-        var renamer =
-            Renamer.map(r'url .*/(\w+)/lib/mixins to \1', ['namespace', 'url']);
+        var renamer = Renamer.map(r'url .*/(\w+)/lib/mixins to \1', [
+          'namespace',
+          'url',
+        ]);
         expect(
-            renamer.rename(
-                {'namespace': 'mixins', 'url': 'path/button/lib/mixins'}),
-            equals('button'));
+          renamer.rename({
+            'namespace': 'mixins',
+            'url': 'path/button/lib/mixins',
+          }),
+          equals('button'),
+        );
       });
 
       test('named key with unused default key', () {
-        var renamer =
-            Renamer.map(r'url .*/(\w+)/lib/mixins to \1', ['', 'url']);
-        expect(renamer.rename({'': 'mixins', 'url': 'path/button/lib/mixins'}),
-            equals('button'));
+        var renamer = Renamer.map(r'url .*/(\w+)/lib/mixins to \1', [
+          '',
+          'url',
+        ]);
+        expect(
+          renamer.rename({'': 'mixins', 'url': 'path/button/lib/mixins'}),
+          equals('button'),
+        );
       });
 
       test('default key', () {
-        var renamer =
-            Renamer.map(r'.*/(\w+)/lib/mixins to \1', ['namespace', '']);
+        var renamer = Renamer.map(r'.*/(\w+)/lib/mixins to \1', [
+          'namespace',
+          '',
+        ]);
         expect(
-            renamer
-                .rename({'namespace': 'mixins', '': 'path/button/lib/mixins'}),
-            equals('button'));
+          renamer.rename({'namespace': 'mixins', '': 'path/button/lib/mixins'}),
+          equals('button'),
+        );
       });
 
       test('matcher on default key has same name as another key', () {
@@ -163,13 +174,17 @@ void main() {
     });
 
     test('four clauses with invalid key', () {
-      expect(() => Renamer.map('wrong old to new', ['key']),
-          throwsFormatException);
+      expect(
+        () => Renamer.map('wrong old to new', ['key']),
+        throwsFormatException,
+      );
     });
 
     test('five clauses', () {
-      expect(() => Renamer.map('key old to new extra', ['key']),
-          throwsFormatException);
+      expect(
+        () => Renamer.map('key old to new extra', ['key']),
+        throwsFormatException,
+      );
     });
   });
 }

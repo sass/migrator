@@ -30,11 +30,13 @@ import 'utils.dart';
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
 abstract class Migrator extends Command<Map<Uri, String>> {
-  String get invocation => super
-      .invocation
-      .replaceFirst("[arguments]", "[options] <entrypoints.scss...>");
+  String get invocation => super.invocation.replaceFirst(
+    "[arguments]",
+    "[options] <entrypoints.scss...>",
+  );
 
-  String get usage => "${super.usage}\n\n"
+  String get usage =>
+      "${super.usage}\n\n"
       "See also https://sass-lang.com/documentation/cli/migrator#$name";
 
   /// If true, dependencies will be migrated in addition to the entrypoints.
@@ -55,7 +57,10 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   /// should not be included map of results.
   @protected
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer);
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  );
 
   /// Runs this migrator.
   ///
@@ -68,11 +73,14 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   Map<Uri, String> run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
-    var importCache = ImportCache(importers: [
-      NodeModulesImporter(),
-      for (var item in globalResults!['pkg-importer'] as List<String>)
-        if (item == 'node') NodePackageImporter('.')
-    ], loadPaths: globalResults!['load-path']);
+    var importCache = ImportCache(
+      importers: [
+        NodeModulesImporter(),
+        for (var item in globalResults!['pkg-importer'] as List<String>)
+          if (item == 'node') NodePackageImporter('.'),
+      ],
+      loadPaths: globalResults!['load-path'],
+    );
 
     var entrypoints = [
       for (var argument in argResults!.rest)
@@ -80,11 +88,13 @@ abstract class Migrator extends Command<Map<Uri, String>> {
           argument
         else
           for (var entry in Glob(argument).listFileSystemSync(fileSystem))
-            if (entry is File) entry.path
+            if (entry is File) entry.path,
     ];
     for (var entrypoint in entrypoints) {
-      var tuple =
-          importCache.import(p.toUri(entrypoint), baseImporter: importer);
+      var tuple = importCache.import(
+        p.toUri(entrypoint),
+        baseImporter: importer,
+      );
       if (tuple == null) {
         throw MigrationException("Could not find Sass file at '$entrypoint'.");
       }
@@ -93,8 +103,9 @@ abstract class Migrator extends Command<Map<Uri, String>> {
       migrated.forEach((file, contents) {
         if (allMigrated.containsKey(file) && contents != allMigrated[file]) {
           throw MigrationException(
-              "The migrator has found multiple possible migrations for $file, "
-              "depending on the context in which it's loaded.");
+            "The migrator has found multiple possible migrations for $file, "
+            "depending on the context in which it's loaded.",
+          );
         }
         allMigrated[file] = contents;
       });
@@ -114,16 +125,21 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   void _warnForMissingDependencies() {
     if (globalResults!['verbose'] as bool) {
       for (var uri in missingDependencies.keys) {
-        emitWarning("Could not find Sass file at '${p.prettyUri(uri)}'.",
-            missingDependencies[uri]);
+        emitWarning(
+          "Could not find Sass file at '${p.prettyUri(uri)}'.",
+          missingDependencies[uri],
+        );
       }
     } else {
       var count = missingDependencies.length;
       emitWarning(
-          "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.");
+        "$count dependenc${count == 1 ? 'y' : 'ies'} could not be found.",
+      );
       missingDependencies.forEach((url, context) {
-        printStderr('  ${p.prettyUri(url)} '
-            '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}');
+        printStderr(
+          '  ${p.prettyUri(url)} '
+          '@${p.prettyUri(context.sourceUrl)}:${context.start.line + 1}',
+        );
       });
     }
   }
