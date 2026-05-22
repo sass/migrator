@@ -48,9 +48,6 @@
   wrapping the nested imports' CSS in mixins and then running the migrator to
   actually handle the nested imports.
 
-  Arguments can be passed to the mixin included here, but each argument must
-  consist of a single variable or the migrator will error.
-
 ## 2.5.7
 
 * Fix a bug where the `--migrate-deps` flag would not apply to dependencies

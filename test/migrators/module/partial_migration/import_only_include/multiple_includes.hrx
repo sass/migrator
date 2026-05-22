@@ -1,0 +1,29 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+a {
+  @import "library";
+}
+
+<==> input/_library.scss
+@mixin styles1 {
+  b: c;
+}
+
+@mixin styles2 {
+  d: e;
+}
+
+<==> input/_library.import.scss
+@use "library";
+@include library.styles1;
+@include library.styles2;
+
+<==> output/entrypoint.scss
+@use "library";
+
+a {
+  @include library.styles1;
+  @include library.styles2;
+}

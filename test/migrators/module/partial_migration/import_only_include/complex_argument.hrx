@@ -1,0 +1,41 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+x {
+  y: z;
+}
+
+@import "library";
+
+<==> input/_library.scss
+@mixin styles($num, $str) {
+  a {
+    b: $num;
+    c: $str;
+  }
+}
+
+<==> input/_nums.scss
+$a: 1;
+$b: 2;
+$c: 3;
+$d: 4;
+$e: 5;
+
+<==> input/_library.import.scss
+@use "sass:map";
+@use "library";
+@use "nums";
+@include library.styles(map.get(("a": 1), "a") + (nums.$e - nums.$c) * nums.$d, "a ${nums.$a} b");
+
+<==> output/entrypoint.scss
+@use "sass:map";
+@use "library";
+@use "nums";
+
+x {
+  y: z;
+}
+
+@include library.styles(map.get(("a": 1), "a") + (nums.$e - nums.$c) * nums.$d, "a ${nums.$a} b");

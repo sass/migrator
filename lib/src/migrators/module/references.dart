@@ -94,7 +94,7 @@ class References {
 
   /// A map from import-only files to top-level `@include` rules that should be
   /// used when migrating that import.
-  final Map<Uri, IncludeRule> importOnlyIncludes;
+  final Map<Uri, List<IncludeRule>> importOnlyIncludes;
 
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
@@ -155,7 +155,7 @@ class References {
       Map<SassReference, ReferenceSource> sources,
       Map<Uri, ForwardRule?> orphanImportOnlyFiles,
       Map<Uri, bool> fileEmitsCss,
-      Map<Uri, IncludeRule> importOnlyIncludes)
+      Map<Uri, List<IncludeRule>> importOnlyIncludes)
       : variables = UnmodifiableBidirectionalMapView(variables),
         variableReassignments =
             UnmodifiableBidirectionalMapView(variableReassignments),
@@ -201,7 +201,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   final _sources = <SassReference, ReferenceSource>{};
   final _orphanImportOnlyFiles = <Uri, ForwardRule?>{};
   final _fileEmitsCss = <Uri, bool>{};
-  final _importOnlyIncludes = <Uri, IncludeRule>{};
+  final _importOnlyIncludes = <Uri, List<IncludeRule>>{};
 
   /// Mapping from canonical stylesheet URLs to the global scope of the module
   /// contained within it.
@@ -710,13 +710,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
       _unresolvedReferences[node] = currentScope;
     }
     if (isImportOnlyFile(_currentUrl)) {
-      if (_importOnlyIncludes.containsKey(_currentUrl)) {
-        throw MigrationSourceSpanException(
-            "Found a second @include rule in an import-only file. "
-            "Import-only files should contain at most one @include.",
-            node.span);
-      }
-      _importOnlyIncludes[_currentUrl] = node;
+      _importOnlyIncludes.putIfAbsent(_currentUrl, () => []).add(node);
       _isOrphanImportOnly = false;
     }
   }
