@@ -1,0 +1,24 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+$var1: 2;
+@import "library";
+
+<==> input/_library.scss
+a {
+  margin: $var1;
+}
+
+<==> error.txt
+Error: Dependency loop detected: entrypoint -> library.
+To resolve this issue, consider either of the following:
+1. Remove the import statement that causes the dependency loop.
+2. Declare the variables used in the other stylesheet within the same stylesheet.
+
+  ,
+2 | @import "library";
+  |         ^^^^^^^^^
+  '
+  entrypoint.scss 2:9  root stylesheet
+Migration failed!
