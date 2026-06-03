@@ -17,7 +17,7 @@ import '../migrator.dart';
 import '../patch.dart';
 import '../utils.dart';
 import '../util/member_declaration.dart';
-import '../util/namespaced_serializer.dart';
+import '../util/copy_namespaced_code.dart';
 import '../util/node_modules_importer.dart';
 
 import 'module/built_in_functions.dart';
@@ -1149,7 +1149,8 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       var declaration = switch (reference) {
         VariableExpression() => references.variables[reference],
         FunctionExpression() => references.functions[reference],
-        _ => null,
+        IncludeRule() => references.mixins[reference],
+        _ => throw UnsupportedError('Unrecognized reference $reference'),
       };
       return switch (source) {
         BuiltInSource(:var preferredNamespace) => _findOrAddBuiltInNamespace(
@@ -1161,11 +1162,10 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       };
     }
 
-    var namespace = _namespaceForDeclaration(declaration);
-    var serializer = NamespacedSerializer(namespacer);
-    var argString = serializer.serializeArgumentList(rule.arguments);
-    if (argString.isNotEmpty) argString = '($argString)';
-    return '@include $namespace.${rule.name}$argString';
+    var newInclude = copyNamespacedCode(rule, namespacer).trim();
+    return newInclude.endsWith(';')
+        ? newInclude.substring(0, newInclude.length - 1)
+        : newInclude;
   }
 
   /// Common logic for migrating imports shared by both the normal migration to

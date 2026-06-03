@@ -1,0 +1,36 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+x {
+  y: z;
+}
+
+@import "library";
+
+<==> input/_library.scss
+@mixin styles($num, $str) {
+  a {
+    b: $num;
+    c: $str;
+  }
+}
+
+<==> input/_library.import.scss
+@use "library";
+@include library.styles(
+  1, // silent comment
+  foo, /* loud comment */
+);
+
+<==> output/entrypoint.scss
+@use "library";
+
+x {
+  y: z;
+}
+
+@include library.styles(
+  1, // silent comment
+  foo, /* loud comment */
+);
