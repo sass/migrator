@@ -18,9 +18,14 @@ class IfMigrator extends Migrator {
 
   @override
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var visitor = _IfMigrationVisitor(importCache,
-        migrateDependencies: migrateDependencies);
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  ) {
+    var visitor = _IfMigrationVisitor(
+      importCache,
+      migrateDependencies: migrateDependencies,
+    );
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -28,8 +33,9 @@ class IfMigrator extends Migrator {
 }
 
 /// The parameter list for `if()`.
-final _parameters =
-    ParameterList.parse(r"@rule if($condition, $if-true, $if-false) {");
+final _parameters = ParameterList.parse(
+  r"@rule if($condition, $if-true, $if-false) {",
+);
 
 /// A definition of an SCSS polyfill for the legacy `if()` function.
 final _scssPolyfill = r"""
@@ -73,16 +79,28 @@ class _IfMigrationVisitor extends MigrationVisitor {
 
     switch (nodeBefore) {
       case LoudComment(:var span) || SilentComment(:var span):
-        addPatch(Patch.insert(span.end,
-            '\n' + (isIndented ? _sassPolyfill : _scssPolyfill) + '\n'));
+        addPatch(
+          Patch.insert(
+            span.end,
+            '\n' + (isIndented ? _sassPolyfill : _scssPolyfill) + '\n',
+          ),
+        );
 
       case AstNode(:var span):
-        addPatch(Patch.insert(span.extendIfMatches(_semicolonRegExp).end,
-            '\n\n' + (isIndented ? _sassPolyfill : _scssPolyfill)));
+        addPatch(
+          Patch.insert(
+            span.extendIfMatches(_semicolonRegExp).end,
+            '\n\n' + (isIndented ? _sassPolyfill : _scssPolyfill),
+          ),
+        );
 
       case _:
-        addPatch(Patch.insert(node.span.start,
-            (isIndented ? _sassPolyfill : _scssPolyfill) + '\n\n'));
+        addPatch(
+          Patch.insert(
+            node.span.start,
+            (isIndented ? _sassPolyfill : _scssPolyfill) + '\n\n',
+          ),
+        );
     }
   }
 
@@ -101,13 +119,19 @@ class _IfMigrationVisitor extends MigrationVisitor {
         arguments[0].patchOutName().andThen(addPatch);
         addPatch(patchBefore(arguments[0].argument, 'sass('));
         addPatch(
-            patchBetween(arguments[0].argument, arguments[1].argument, '): '));
+          patchBetween(arguments[0].argument, arguments[1].argument, '): '),
+        );
 
         if (arguments[1].argument case NullExpression()) {
           addPatch(Patch(node.span.after(arguments[1].span), ')'));
         } else {
-          addPatch(patchReplaceFirst(
-              arguments[1].span.between(arguments[2].span), ',', ';')!);
+          addPatch(
+            patchReplaceFirst(
+              arguments[1].span.between(arguments[2].span),
+              ',',
+              ';',
+            )!,
+          );
           arguments[2].patchOutName().andThen(addPatch);
           addPatch(patchBefore(arguments[2].argument, 'else: '));
         }

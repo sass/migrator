@@ -40,7 +40,7 @@ class MemberDeclaration<T extends SassDeclaration> {
   /// Creates a MemberDefinition for a [member] that was loaded from the same
   /// module it was defined.
   MemberDeclaration(T member)
-      : this._(member, member.name, member.span.sourceUrl!);
+    : this._(member, member.name, member.span.sourceUrl!);
 
   /// Creates a MemberDefinition for a member that was forwarded through at
   /// least one non-import-only module.
@@ -50,13 +50,15 @@ class MemberDeclaration<T extends SassDeclaration> {
   /// If [forward] comes from an import-only file, this returns an
   /// [ImportOnlyMemberDeclaration].
   factory MemberDeclaration.forward(
-          MemberDeclaration<T> forwarded, ForwardRule forward) =>
-      isImportOnlyFile(forward.span.sourceUrl!)
-          ? ImportOnlyMemberDeclaration._(forwarded, forward)
-          : MemberDeclaration._(
-              forwarded.member,
-              '${forward.prefix ?? ""}${forwarded.name}',
-              forward.span.sourceUrl!);
+    MemberDeclaration<T> forwarded,
+    ForwardRule forward,
+  ) => isImportOnlyFile(forward.span.sourceUrl!)
+      ? ImportOnlyMemberDeclaration._(forwarded, forward)
+      : MemberDeclaration._(
+          forwarded.member,
+          '${forward.prefix ?? ""}${forwarded.name}',
+          forward.span.sourceUrl!,
+        );
 
   MemberDeclaration._(this.member, this.name, this.sourceUrl);
 
@@ -97,14 +99,19 @@ class ImportOnlyMemberDeclaration<T extends SassDeclaration>
   /// Constructs a forwarded MemberDefinition of [forwarding] based on
   /// [forward].
   ImportOnlyMemberDeclaration._(
-      MemberDeclaration<T> forwarded, ForwardRule forward)
-      : importOnlyPrefix = (forward.prefix ?? "") +
-            (forwarded is ImportOnlyMemberDeclaration<T>
-                ? forwarded.importOnlyPrefix
-                : ""),
-        importOnlyUrl = forward.span.sourceUrl!,
-        super._(forwarded.member, '${forward.prefix ?? ""}${forwarded.name}',
-            forwarded.sourceUrl) {
+    MemberDeclaration<T> forwarded,
+    ForwardRule forward,
+  ) : importOnlyPrefix =
+          (forward.prefix ?? "") +
+          (forwarded is ImportOnlyMemberDeclaration<T>
+              ? forwarded.importOnlyPrefix
+              : ""),
+      importOnlyUrl = forward.span.sourceUrl!,
+      super._(
+        forwarded.member,
+        '${forward.prefix ?? ""}${forwarded.name}',
+        forwarded.sourceUrl,
+      ) {
     assert(isImportOnlyFile(forward.span.sourceUrl!));
   }
 

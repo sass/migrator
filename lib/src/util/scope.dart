@@ -35,15 +35,19 @@ class Scope {
   bool get isGlobal => parent == null;
 
   /// The set of all variable names defined in this scope or its ancestors.
-  Set<String> get allVariableNames =>
-      {...variables.keys, ...?parent?.allVariableNames};
+  Set<String> get allVariableNames => {
+    ...variables.keys,
+    ...?parent?.allVariableNames,
+  };
 
   /// The set of all mixin names defined in this scope or its ancestors.
   Set<String> get allMixinNames => {...mixins.keys, ...?parent?.allMixinNames};
 
   /// The set of all function names defined in this scope or its ancestors.
-  Set<String> get allFunctionNames =>
-      {...functions.keys, ...?parent?.allFunctionNames};
+  Set<String> get allFunctionNames => {
+    ...functions.keys,
+    ...?parent?.allFunctionNames,
+  };
 
   /// Returns true if this scope is [ancestor] or one of its descendents.
   bool isDescendentOf(Scope ancestor) =>

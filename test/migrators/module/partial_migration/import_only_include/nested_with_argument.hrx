@@ -1,0 +1,29 @@
+<==> arguments
+--migrate-deps
+
+<==> input/entrypoint.scss
+$var: green;
+
+a {
+  @import "library";
+}
+
+<==> input/_library.scss
+@mixin styles($var) {
+  x {
+    b: $var;
+  }
+}
+
+<==> input/_library.import.scss
+@use "library";
+@include library.styles($var);
+
+<==> output/entrypoint.scss
+@use "library";
+
+$var: green;
+
+a {
+  @include library.styles($var);
+}

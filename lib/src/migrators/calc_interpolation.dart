@@ -13,14 +13,20 @@ import '../patch.dart';
 /// Removes interpolation in calculation functions.
 class CalculationInterpolationMigrator extends Migrator {
   final name = "calc-interpolation";
-  final description = r"Removes interpolation in calculation functions"
+  final description =
+      r"Removes interpolation in calculation functions"
       r"`calc()`, `clamp()`, `min()`, and `max()`";
 
   @override
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var visitor = _CalculationInterpolationVisitor(importCache,
-        migrateDependencies: migrateDependencies);
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  ) {
+    var visitor = _CalculationInterpolationVisitor(
+      importCache,
+      migrateDependencies: migrateDependencies,
+    );
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -28,8 +34,10 @@ class CalculationInterpolationMigrator extends Migrator {
 }
 
 class _CalculationInterpolationVisitor extends MigrationVisitor {
-  _CalculationInterpolationVisitor(super.importCache,
-      {required super.migrateDependencies});
+  _CalculationInterpolationVisitor(
+    super.importCache, {
+    required super.migrateDependencies,
+  });
 
   @override
   void visitFunctionExpression(FunctionExpression node) {
@@ -37,7 +45,8 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
     final interpolation = RegExp(r'\#{\s*[^}]+\s*}');
     final hasOperation = RegExp(r'\s+[-+*/]+\s+');
     final isVarFunc = RegExp(
-        r'var\(#{[a-zA-Z0-9#{$}-]+}\)|var\(\-\-[a-zA-Z0-9\$\#\{\}\-]+\)');
+      r'var\(#{[a-zA-Z0-9#{$}-]+}\)|var\(\-\-[a-zA-Z0-9\$\#\{\}\-]+\)',
+    );
     if (calcFunctions.contains(node.name)) {
       for (var arg in node.arguments.positional) {
         var newArg = arg.toString();
@@ -59,8 +68,10 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
         }
 
         if (newArg != arg.toString()) {
-          var interpolationSpan =
-              node.span.file.span(arg.span.start.offset, arg.span.end.offset);
+          var interpolationSpan = node.span.file.span(
+            arg.span.start.offset,
+            arg.span.end.offset,
+          );
           addPatch(Patch(interpolationSpan, newArg));
           return;
         }

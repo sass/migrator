@@ -24,9 +24,13 @@ void main() {
     // sure it's not totally busted.
     var migrator = await runMigrator(["--help"]);
     expect(
-        migrator.stdout, emits("Migrates stylesheets to new Sass versions."));
-    expect(migrator.stdout,
-        emitsThrough(contains("Print this usage information.")));
+      migrator.stdout,
+      emits("Migrates stylesheets to new Sass versions."),
+    );
+    expect(
+      migrator.stdout,
+      emitsThrough(contains("Print this usage information.")),
+    );
     await migrator.shouldExit(0);
   });
 
@@ -46,7 +50,7 @@ void main() {
     await d.dir('dir', [
       d.file("test-1.scss", "a {b: (1 / 2)}"),
       d.file("test-2.scss", "c {d: (1 / 2)}"),
-      d.file("test-3.scss", "e {f: (1 / 2)}")
+      d.file("test-3.scss", "e {f: (1 / 2)}"),
     ]).create();
 
     await (await runMigrator(["division", "**.scss"])).shouldExit(0);
@@ -54,7 +58,7 @@ void main() {
     await d.dir('dir', [
       d.file("test-1.scss", 'a {b: (1 * 0.5)}'),
       d.file("test-2.scss", 'c {d: (1 * 0.5)}'),
-      d.file("test-3.scss", 'e {f: (1 * 0.5)}')
+      d.file("test-3.scss", 'e {f: (1 * 0.5)}'),
     ]).validate();
   });
 
@@ -80,65 +84,81 @@ void main() {
 
       var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
       expect(
+        migrator.stdout,
+        emitsInOrder([
+          "Dry run. Logging migrated files instead of overwriting...",
+          "",
+          "test.scss",
+          emitsDone,
+        ]),
+      );
+      await migrator.shouldExit(0);
+    });
+
+    test(
+      "doesn't print the name of a file that doesn't need to be migrated",
+      () async {
+        await d.file("test.scss", "a {b: abs(-1)}").create();
+        await d.file("other.scss", "a {b: c}").create();
+
+        var migrator = await runMigrator([
+          "--dry-run",
+          "module",
+          "test.scss",
+          "other.scss",
+        ]);
+        expect(
           migrator.stdout,
           emitsInOrder([
             "Dry run. Logging migrated files instead of overwriting...",
             "",
             "test.scss",
-            emitsDone
-          ]));
-      await migrator.shouldExit(0);
-    });
+            emitsDone,
+          ]),
+        );
+        await migrator.shouldExit(0);
+      },
+    );
 
-    test("doesn't print the name of a file that doesn't need to be migrated",
-        () async {
-      await d.file("test.scss", "a {b: abs(-1)}").create();
-      await d.file("other.scss", "a {b: c}").create();
+    test(
+      "doesn't print the name of imported files without --migrate-deps",
+      () async {
+        await d.file("test.scss", "@import 'other'").create();
+        await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator =
-          await runMigrator(["--dry-run", "module", "test.scss", "other.scss"]);
-      expect(
+        var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
+        expect(
           migrator.stdout,
           emitsInOrder([
             "Dry run. Logging migrated files instead of overwriting...",
             "",
             "test.scss",
-            emitsDone
-          ]));
-      await migrator.shouldExit(0);
-    });
-
-    test("doesn't print the name of imported files without --migrate-deps",
-        () async {
-      await d.file("test.scss", "@import 'other'").create();
-      await d.file("_other.scss", "a {b: abs(-1)}").create();
-
-      var migrator = await runMigrator(["--dry-run", "module", "test.scss"]);
-      expect(
-          migrator.stdout,
-          emitsInOrder([
-            "Dry run. Logging migrated files instead of overwriting...",
-            "",
-            "test.scss",
-            emitsDone
-          ]));
-      await migrator.shouldExit(0);
-    });
+            emitsDone,
+          ]),
+        );
+        await migrator.shouldExit(0);
+      },
+    );
 
     test("prints the name of imported files with --migrate-deps", () async {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(
-          ["--dry-run", "--migrate-deps", "module", "test.scss"]);
+      var migrator = await runMigrator([
+        "--dry-run",
+        "--migrate-deps",
+        "module",
+        "test.scss",
+      ]);
       expect(
-          migrator.stdout,
-          emitsInOrder([
-            "Dry run. Logging migrated files instead of overwriting...",
-            "",
-            emitsInAnyOrder(["test.scss", "_other.scss"]),
-            emitsDone
-          ]));
+        migrator.stdout,
+        emitsInOrder([
+          "Dry run. Logging migrated files instead of overwriting...",
+          "",
+          emitsInAnyOrder(["test.scss", "_other.scss"]),
+          emitsDone,
+        ]),
+      );
       await migrator.shouldExit(0);
     });
 
@@ -146,23 +166,29 @@ void main() {
       await d.file("test.scss", "@import 'other'").create();
       await d.file("_other.scss", "a {b: abs(-1)}").create();
 
-      var migrator = await runMigrator(
-          ["--dry-run", "--migrate-deps", "--verbose", "module", "test.scss"]);
+      var migrator = await runMigrator([
+        "--dry-run",
+        "--migrate-deps",
+        "--verbose",
+        "module",
+        "test.scss",
+      ]);
       expect(
-          migrator.stdout,
-          emitsInOrder([
-            "Dry run. Logging migrated files instead of overwriting...",
-            "",
-            emitsInAnyOrder([
-              emitsInOrder(["<===> test.scss", "@use 'other'"]),
-              emitsInOrder([
-                "<===> _other.scss",
-                '@use "sass:math";',
-                "a {b: math.abs(-1)}"
-              ]),
+        migrator.stdout,
+        emitsInOrder([
+          "Dry run. Logging migrated files instead of overwriting...",
+          "",
+          emitsInAnyOrder([
+            emitsInOrder(["<===> test.scss", "@use 'other'"]),
+            emitsInOrder([
+              "<===> _other.scss",
+              '@use "sass:math";',
+              "a {b: math.abs(-1)}",
             ]),
-            emitsDone
-          ]));
+          ]),
+          emitsDone,
+        ]),
+      );
       await migrator.shouldExit(0);
     });
   });
@@ -171,33 +197,43 @@ void main() {
     test("an unknown command", () async {
       var migrator = await runMigrator(["asdf"]);
       expect(migrator.stderr, emits('Could not find a command named "asdf".'));
-      expect(migrator.stderr,
-          emitsThrough(contains('for more information about a command.')));
+      expect(
+        migrator.stderr,
+        emitsThrough(contains('for more information about a command.')),
+      );
       await migrator.shouldExit(64);
     });
 
     test("an unknown argument", () async {
       var migrator = await runMigrator(["--asdf"]);
       expect(
-          migrator.stderr, emits('Could not find an option named "--asdf".'));
-      expect(migrator.stderr,
-          emitsThrough(contains('for more information about a command.')));
+        migrator.stderr,
+        emits('Could not find an option named "--asdf".'),
+      );
+      expect(
+        migrator.stderr,
+        emitsThrough(contains('for more information about a command.')),
+      );
       await migrator.shouldExit(64);
     });
 
     test("an invalid glob", () async {
-      var migrator =
-          await runMigrator(["--no-unicode", "module", "test.s{a,css"]);
+      var migrator = await runMigrator([
+        "--no-unicode",
+        "module",
+        "test.s{a,css",
+      ]);
       expect(
-          migrator.stderr,
-          emitsInOrder([
-            'Error on line 1, column 13: expected "}".',
-            "  ,",
-            "1 | test.s{a,css",
-            "  |             ^",
-            "  '",
-            "Migration failed!"
-          ]));
+        migrator.stderr,
+        emitsInOrder([
+          'Error on line 1, column 13: expected "}".',
+          "  ,",
+          "1 | test.s{a,css",
+          "  |             ^",
+          "  '",
+          "Migration failed!",
+        ]),
+      );
       await migrator.shouldExit(1);
     });
 
@@ -206,15 +242,16 @@ void main() {
 
       var migrator = await runMigrator(["--no-unicode", "module", "test.scss"]);
       expect(
-          migrator.stderr,
-          emitsInOrder([
-            "Error: Expected expression.",
-            "  ,",
-            "1 | a {b: }",
-            "  |       ^",
-            "  '",
-            "  test.scss 1:7  root stylesheet"
-          ]));
+        migrator.stderr,
+        emitsInOrder([
+          "Error: Expected expression.",
+          "  ,",
+          "1 | a {b: }",
+          "  |       ^",
+          "  '",
+          "  test.scss 1:7  root stylesheet",
+        ]),
+      );
       await migrator.shouldExit(1);
     });
 
@@ -223,16 +260,17 @@ void main() {
 
       var migrator = await runMigrator(["--no-unicode", "module", "test.scss"]);
       expect(
-          migrator.stderr,
-          emitsInOrder([
-            "Error: Could not find Sass file at 'nonexistent'.",
-            "  ,",
-            "1 | @import 'nonexistent';",
-            "  |         ^^^^^^^^^^^^^",
-            "  '",
-            "  test.scss 1:9  root stylesheet",
-            "Migration failed!"
-          ]));
+        migrator.stderr,
+        emitsInOrder([
+          "Error: Could not find Sass file at 'nonexistent'.",
+          "  ,",
+          "1 | @import 'nonexistent';",
+          "  |         ^^^^^^^^^^^^^",
+          "  '",
+          "  test.scss 1:9  root stylesheet",
+          "Migration failed!",
+        ]),
+      );
       await migrator.shouldExit(1);
     });
 
@@ -240,37 +278,47 @@ void main() {
       test("a syntax error", () async {
         await d.file("test.scss", "a {b: }").create();
 
-        var migrator = await runMigrator(
-            ["--no-unicode", "--color", "module", "test.scss"]);
+        var migrator = await runMigrator([
+          "--no-unicode",
+          "--color",
+          "module",
+          "test.scss",
+        ]);
         expect(
-            migrator.stderr,
-            emitsInOrder([
-              "Error: Expected expression.",
-              "\u001b[34m  ,\u001b[0m",
-              "\u001b[34m1 |\u001b[0m a {b: \u001b[31m\u001b[0m}",
-              "\u001b[34m  |\u001b[0m \u001b[31m      ^\u001b[0m",
-              "\u001b[34m  '\u001b[0m",
-              "  test.scss 1:7  root stylesheet",
-            ]));
+          migrator.stderr,
+          emitsInOrder([
+            "Error: Expected expression.",
+            "\u001b[34m  ,\u001b[0m",
+            "\u001b[34m1 |\u001b[0m a {b: \u001b[31m\u001b[0m}",
+            "\u001b[34m  |\u001b[0m \u001b[31m      ^\u001b[0m",
+            "\u001b[34m  '\u001b[0m",
+            "  test.scss 1:7  root stylesheet",
+          ]),
+        );
         await migrator.shouldExit(1);
       });
 
       test("an error from a migrator", () async {
         await d.file("test.scss", "@import 'nonexistent';").create();
 
-        var migrator = await runMigrator(
-            ["--no-unicode", "--color", "module", "test.scss"]);
+        var migrator = await runMigrator([
+          "--no-unicode",
+          "--color",
+          "module",
+          "test.scss",
+        ]);
         expect(
-            migrator.stderr,
-            emitsInOrder([
-              "Error: Could not find Sass file at 'nonexistent'.",
-              "\u001b[34m  ,\u001b[0m",
-              "\u001b[34m1 |\u001b[0m @import \u001b[31m'nonexistent'\u001b[0m;",
-              "\u001b[34m  |\u001b[0m \u001b[31m        ^^^^^^^^^^^^^\u001b[0m",
-              "\u001b[34m  '\u001b[0m",
-              "  test.scss 1:9  root stylesheet",
-              "Migration failed!"
-            ]));
+          migrator.stderr,
+          emitsInOrder([
+            "Error: Could not find Sass file at 'nonexistent'.",
+            "\u001b[34m  ,\u001b[0m",
+            "\u001b[34m1 |\u001b[0m @import \u001b[31m'nonexistent'\u001b[0m;",
+            "\u001b[34m  |\u001b[0m \u001b[31m        ^^^^^^^^^^^^^\u001b[0m",
+            "\u001b[34m  '\u001b[0m",
+            "  test.scss 1:9  root stylesheet",
+            "Migration failed!",
+          ]),
+        );
         await migrator.shouldExit(1);
       });
     });

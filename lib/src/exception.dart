@@ -27,5 +27,5 @@ class MigrationException implements Exception {
 class MigrationSourceSpanException extends SassException
     implements MigrationException {
   MigrationSourceSpanException(String message, FileSpan span)
-      : super(message, span);
+    : super(message, span);
 }

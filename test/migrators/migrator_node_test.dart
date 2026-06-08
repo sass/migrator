@@ -5,7 +5,6 @@
 // https://opensource.org/licenses/MIT.
 
 @Tags(["node"])
-
 import 'package:test/test.dart';
 
 import 'migrator_dart_test.dart' as dart;

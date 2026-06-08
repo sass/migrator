@@ -1,3 +1,53 @@
+## 2.6.0
+
+### Module Migrator
+
+* Add support for import-only files that include a mixin from their
+  corresponding regular file. For example, given code like:
+
+  `styles.scss`:
+  ```scss
+  a {
+    $color: blue;
+    @import "library";
+    background: $bg;
+  }
+  ```
+
+  `_library.scss`:
+  ```scss
+  $bg: gold;
+  @mixin styles($color) {
+    b {
+      color: $color;
+    }
+  }
+  ```
+
+  `_library.import.scss`:
+  ```
+  @forward "library";
+  @use "library";
+  @include library.styles($color);
+  ```
+
+  the migrator will migrate `styles.scss` to:
+  ```
+  @use "library";
+
+  a {
+    $color: blue;
+    @include library.styles($color);
+    background: library.$bg;
+  }
+  ```
+
+  While the migrator won't generate import-only files with this structure, this
+  support for them will enable migration of projects that use nested and late
+  imports that both emit CSS and provide Sass members by first manually
+  wrapping the nested imports' CSS in mixins and then running the migrator to
+  actually handle the nested imports.
+
 ## 2.5.7
 
 * Fix a bug where the `--migrate-deps` flag would not apply to dependencies

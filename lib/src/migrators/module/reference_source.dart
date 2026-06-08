@@ -10,7 +10,7 @@ import 'package:sass_api/sass_api.dart';
 import '../../utils.dart';
 
 /// A [ReferenceSource] is used to track where a referenced member came from.
-abstract class ReferenceSource {
+sealed class ReferenceSource {
   /// The canonical URL that contains the declaration being referenced.
   Uri get url;
 
@@ -23,7 +23,7 @@ abstract class ReferenceSource {
 ///
 /// This includes both sources that directly come from an `@import` rule and
 /// those from a `@forward` rule within an import-only file.
-class ImportSource extends ReferenceSource {
+final class ImportSource extends ReferenceSource {
   final Uri url;
 
   /// The URL of the `@import` rule that loaded this member, or null if this
@@ -43,8 +43,8 @@ class ImportSource extends ReferenceSource {
 
   /// Creates an [ImportSource] from an [ImportOnlySource].
   ImportSource.fromImportOnlyForward(ImportOnlySource source)
-      : url = source.realSourceUrl,
-        originalRuleUrl = source.originalRuleUrl;
+    : url = source.realSourceUrl,
+      originalRuleUrl = source.originalRuleUrl;
 
   /// Returns the preferred namespace to use for this module, based on
   /// [originalRuleUrl].
@@ -63,7 +63,7 @@ class ImportSource extends ReferenceSource {
 }
 
 /// A source for references to members loaded by a `@use` rule.
-class UseSource extends ReferenceSource {
+final class UseSource extends ReferenceSource {
   final Uri url;
 
   /// The `@use` rule that made the referenced member available in the
@@ -86,7 +86,7 @@ class UseSource extends ReferenceSource {
 
 /// A source for references to built-in functions that are now part of a
 /// built-in module.
-class BuiltInSource extends ReferenceSource {
+final class BuiltInSource extends ReferenceSource {
   final Uri url;
 
   /// Constructs a [BuiltInSource] for a [module].
@@ -99,7 +99,7 @@ class BuiltInSource extends ReferenceSource {
 }
 
 /// A source for references to members declared in the same stylesheet.
-class CurrentSource extends ReferenceSource {
+final class CurrentSource extends ReferenceSource {
   final Uri url;
   CurrentSource(this.url);
 
@@ -122,7 +122,7 @@ class CurrentSource extends ReferenceSource {
 ///
 /// Members forwarded from an import-only file should use [ImportOnlySource]
 /// instead of this.
-class ForwardSource extends ReferenceSource {
+final class ForwardSource extends ReferenceSource {
   final Uri url;
 
   /// The `@forward` rule the forwarded a member through the current stylesheet.
@@ -142,7 +142,7 @@ class ForwardSource extends ReferenceSource {
 /// This source is similar to [ForwardSource] in that it is only used by
 /// [_ReferenceVisitor] to track sources internally, and should not be present
 /// in the final [sources] property of [References].
-class ImportOnlySource extends ReferenceSource {
+final class ImportOnlySource extends ReferenceSource {
   /// The canonical URL of the outermost import-only file in the member's
   /// forward chain.
   final Uri url;

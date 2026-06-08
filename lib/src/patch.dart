@@ -21,10 +21,15 @@ class Patch implements Comparable<Patch> {
 
   /// Constructs a patch that inserts [replacement] at [location].
   Patch.insert(FileLocation location, String replacement)
-      : this(location.pointSpan(), replacement);
+    : this(location.pointSpan(), replacement);
 
   /// Applies a series of non-overlapping patches to the text of a file.
   static String applyAll(SourceFile file, List<Patch> patches) {
+    return applyAllToSpan(file.span(0), patches);
+  }
+
+  /// Applies a series of non-overlapping patches to the text of a span.
+  static String applyAllToSpan(FileSpan span, List<Patch> patches) {
     // We use mergeSort instead of List.sort here because [patches] can be
     // order-dependent when there are multiple insertion patches at the same
     // point, and List.sort is not guaranteed to be stable.
@@ -32,7 +37,7 @@ class Patch implements Comparable<Patch> {
     mergeSort(sortedPatches);
 
     var buffer = StringBuffer();
-    int offset = 0;
+    int offset = span.start.offset;
     Patch? lastPatch;
     for (var patch in sortedPatches) {
       // The module migrator generates duplicate patches when renaming two nodes
@@ -46,17 +51,20 @@ class Patch implements Comparable<Patch> {
       }
       if (patch.selection.start.offset < offset) {
         var first = patches.firstWhere(
-            (earlier) => earlier.selection.hasOverlap(patch.selection));
-        throw ArgumentError("Can't apply overlapping patches:\n"
-            '* $first\n'
-            '* $patch');
+          (earlier) => earlier.selection.hasOverlap(patch.selection),
+        );
+        throw ArgumentError(
+          "Can't apply overlapping patches:\n"
+          '* $first\n'
+          '* $patch',
+        );
       }
-      buffer.write(file.getText(offset, patch.selection.start.offset));
+      buffer.write(span.file.getText(offset, patch.selection.start.offset));
       buffer.write(patch.replacement);
       offset = patch.selection.end.offset;
       lastPatch = patch;
     }
-    buffer.write(file.getText(offset));
+    buffer.write(span.file.getText(offset, span.end.offset));
     return buffer.toString();
   }
 
@@ -66,6 +74,6 @@ class Patch implements Comparable<Patch> {
   String toString() => selection.isEmpty
       ? "at $selection inserting \"$replacement\""
       : replacement.isEmpty
-          ? "removing $selection"
-          : "replacing $selection with \"$replacement\"";
+      ? "removing $selection"
+      : "replacing $selection with \"$replacement\"";
 }

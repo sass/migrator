@@ -13,21 +13,30 @@ import 'package:path/path.dart' as p;
 
 void main() {
   test("declares a compatible dependency for sass_api", () {
-    var migratorPubspec = Pubspec.parse(File("pubspec.yaml").readAsStringSync(),
-        sourceUrl: p.toUri("pubspec.yaml"));
-    var sassApiPubspecPath = p.normalize(p.join(
+    var migratorPubspec = Pubspec.parse(
+      File("pubspec.yaml").readAsStringSync(),
+      sourceUrl: p.toUri("pubspec.yaml"),
+    );
+    var sassApiPubspecPath = p.normalize(
+      p.join(
         p.fromUri(
-            Isolate.resolvePackageUriSync(Uri.parse("package:sass_api/."))),
-        "../pubspec.yaml"));
+          Isolate.resolvePackageUriSync(Uri.parse("package:sass_api/.")),
+        ),
+        "../pubspec.yaml",
+      ),
+    );
     var sassApiPubspec = Pubspec.parse(
-        File(sassApiPubspecPath).readAsStringSync(),
-        sourceUrl: p.toUri(sassApiPubspecPath));
+      File(sassApiPubspecPath).readAsStringSync(),
+      sourceUrl: p.toUri(sassApiPubspecPath),
+    );
 
     switch (migratorPubspec.dependencies["sass_api"]) {
       case HostedDependency dep:
         if (!dep.version.allows(sassApiPubspec.version!)) {
-          fail("sass_api dependency $dep doesn't include actual sass_api "
-              "version ${sassApiPubspec.version!}");
+          fail(
+            "sass_api dependency $dep doesn't include actual sass_api "
+            "version ${sassApiPubspec.version!}",
+          );
         }
 
       case var dep?:

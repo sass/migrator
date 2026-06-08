@@ -14,8 +14,8 @@ class UnmodifiableBidirectionalMapView<K, V> extends UnmodifiableMapView<K, V>
   final BidirectionalMap<K, V> _map;
 
   UnmodifiableBidirectionalMapView(BidirectionalMap<K, V> map)
-      : _map = map,
-        super(map);
+    : _map = map,
+      super(map);
 
   @override
   Iterable<K> keysForValue(V value) => _map.keysForValue(value);

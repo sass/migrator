@@ -21,26 +21,39 @@ class NamespaceMigrator extends Migrator {
 
   @override
   final argParser = ArgParser()
-    ..addMultiOption('rename',
-        abbr: 'r',
-        splitCommas: false,
-        help: 'e.g. "old-namespace to new-namespace" or\n'
-            '     "url my/url to new-namespace"\n'
-            'See https://sass-lang.com/documentation/cli/migrator#rename.')
-    ..addFlag('force',
-        abbr: 'f',
-        help: 'Force rename namespaces, adding numerical suffixes for '
-            'conflicts.');
+    ..addMultiOption(
+      'rename',
+      abbr: 'r',
+      splitCommas: false,
+      help:
+          'e.g. "old-namespace to new-namespace" or\n'
+          '     "url my/url to new-namespace"\n'
+          'See https://sass-lang.com/documentation/cli/migrator#rename.',
+    )
+    ..addFlag(
+      'force',
+      abbr: 'f',
+      help:
+          'Force rename namespaces, adding numerical suffixes for '
+          'conflicts.',
+    );
 
   @override
   Map<Uri, String> migrateFile(
-      ImportCache importCache, Stylesheet stylesheet, Importer importer) {
-    var renamer = Renamer<UseRule>(argResults!['rename'].join('\n'),
-        {'': ((rule) => rule.namespace!), 'url': (rule) => rule.url.toString()},
-        sourceUrl: '--rename');
+    ImportCache importCache,
+    Stylesheet stylesheet,
+    Importer importer,
+  ) {
+    var renamer = Renamer<UseRule>(argResults!['rename'].join('\n'), {
+      '': ((rule) => rule.namespace!),
+      'url': (rule) => rule.url.toString(),
+    }, sourceUrl: '--rename');
     var visitor = _NamespaceMigrationVisitor(
-        renamer, argResults!['force'] as bool, importCache,
-        migrateDependencies: migrateDependencies);
+      renamer,
+      argResults!['force'] as bool,
+      importCache,
+      migrateDependencies: migrateDependencies,
+    );
     var result = visitor.run(stylesheet, importer);
     missingDependencies.addAll(visitor.missingDependencies);
     return result;
@@ -63,8 +76,12 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
       assertInStylesheet(__usedNamespaces, '_usedNamespaces');
   Set<String>? __usedNamespaces;
 
-  _NamespaceMigrationVisitor(this.renamer, this.forceRename, super.importCache,
-      {required super.migrateDependencies});
+  _NamespaceMigrationVisitor(
+    this.renamer,
+    this.forceRename,
+    super.importCache, {
+    required super.migrateDependencies,
+  });
 
   @override
   void visitStylesheet(Stylesheet node) {
@@ -101,12 +118,13 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
       // If there's still a conflict, fail unless --force is passed.
       if (!forceRename) {
         throw MultiSourceSpanException(
-            'Rename failed. ${rules.length} rules would use namespace '
-                '"$newNamespace".\n'
-                'Run with --force to rename with numerical suffixes.',
-            rules.first.span,
-            '',
-            {for (var rule in rules.skip(1)) rule.span: ''});
+          'Rename failed. ${rules.length} rules would use namespace '
+              '"$newNamespace".\n'
+              'Run with --force to rename with numerical suffixes.',
+          rules.first.span,
+          '',
+          {for (var rule in rules.skip(1)) rule.span: ''},
+        );
       }
 
       // With --force, give the first rule its preferred namespace and then
@@ -128,22 +146,28 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
     var oldNamespace = rule.namespace!;
     _usedNamespaces.add(newNamespace);
     if (rule.namespace == newNamespace) return;
-    var asClause =
-        RegExp('\\s*as\\s+(${rule.namespace})').firstMatch(rule.span.text);
+    var asClause = RegExp(
+      '\\s*as\\s+(${rule.namespace})',
+    ).firstMatch(rule.span.text);
     if (asClause == null) {
       // Add an `as` clause to a rule that previously lacked one.
       var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text)!.end;
       addPatch(
-          Patch.insert(rule.span.subspan(0, end).end, ' as $newNamespace'));
+        Patch.insert(rule.span.subspan(0, end).end, ' as $newNamespace'),
+      );
     } else if (namespaceForPath(rule.url.toString()) == newNamespace) {
       // Remove an `as` clause that is no longer necessary.
       addPatch(
-          patchDelete(rule.span, start: asClause.start, end: asClause.end));
+        patchDelete(rule.span, start: asClause.start, end: asClause.end),
+      );
     } else {
       // Change the namespace of an existing `as` clause.
-      addPatch(Patch(
+      addPatch(
+        Patch(
           rule.span.subspan(asClause.end - oldNamespace.length, asClause.end),
-          newNamespace));
+          newNamespace,
+        ),
+      );
     }
     for (FileSpan span in _spansByNamespace[oldNamespace] ?? {}) {
       addPatch(Patch(span, newNamespace));
@@ -186,8 +210,10 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   void visitIncludeRule(IncludeRule node) {
     var namespace = node.namespace;
     if (namespace != null) {
-      var startNamespace = node.span.text
-          .indexOf(namespace, node.span.text[0] == '+' ? 1 : '@include'.length);
+      var startNamespace = node.span.text.indexOf(
+        namespace,
+        node.span.text[0] == '+' ? 1 : '@include'.length,
+      );
       _addNamespaceSpan(namespace, node.span.subspan(startNamespace));
     }
     super.visitIncludeRule(node);

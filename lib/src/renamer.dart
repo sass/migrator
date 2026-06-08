@@ -65,17 +65,17 @@ class Renamer<T> {
   ///
   /// If provided, [sourceUrl] will appear in parsing errors. It can be
   /// a [String] or a [Uri].
-  static Renamer<Map<String, String>> map(String code, List<String> keys,
-      {dynamic sourceUrl}) {
-    return Renamer(
-        code,
-        {
-          for (var key in keys)
-            key: ((input) =>
-                input[key] ??
-                (throw ArgumentError.value(input, 'Missing key "$key".')))
-        },
-        sourceUrl: sourceUrl);
+  static Renamer<Map<String, String>> map(
+    String code,
+    List<String> keys, {
+    dynamic sourceUrl,
+  }) {
+    return Renamer(code, {
+      for (var key in keys)
+        key: ((input) =>
+            input[key] ??
+            (throw ArgumentError.value(input, 'Missing key "$key".'))),
+    }, sourceUrl: sourceUrl);
   }
 
   /// Creates a Renamer based on [code] and a map from keys to functions that
@@ -85,13 +85,17 @@ class Renamer<T> {
   ///
   /// If provided, [sourceUrl] will appear in parsing errors. It can be
   /// a [String] or a [Uri].
-  factory Renamer(String code, Map<String, String Function(T input)> keys,
-      {dynamic sourceUrl}) {
+  factory Renamer(
+    String code,
+    Map<String, String Function(T input)> keys, {
+    dynamic sourceUrl,
+  }) {
     for (var key in keys.keys) {
       if (!RegExp(r'^[a-z_-]*$').hasMatch(key)) {
         throw ArgumentError(
-            'Invalid key "$key". Must use only lowercase letters, '
-            'underscores, and hyphens.');
+          'Invalid key "$key". Must use only lowercase letters, '
+          'underscores, and hyphens.',
+        );
       }
     }
     var scanner = StringScanner(code, sourceUrl: sourceUrl);
@@ -106,7 +110,9 @@ class Renamer<T> {
   /// Reads the next statement (and the trailing delimiter, if any) from
   /// [scanner].
   static _Statement<T> _readStatement<T>(
-      StringScanner scanner, Map<String, String Function(T input)> keys) {
+    StringScanner scanner,
+    Map<String, String Function(T input)> keys,
+  ) {
     var start = scanner.position;
     FormatException? lastException;
     // Tries each key in succession until one is successfully returned.
@@ -138,7 +144,10 @@ class Renamer<T> {
   /// Otherwise, after consuming the key clause (if any), attempts to read
   /// the matcher and output clauses, throwing if it's unable to.
   static _Statement<T>? _tryKey<T>(
-      StringScanner scanner, String key, String Function(T input) keyFunction) {
+    StringScanner scanner,
+    String key,
+    String Function(T input) keyFunction,
+  ) {
     if (key.isNotEmpty && !scanner.scan('$key ')) return null;
     var matcher = _readMatcher(scanner);
     scanner.expect(' to ');

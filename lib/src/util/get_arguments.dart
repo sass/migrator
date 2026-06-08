@@ -15,7 +15,9 @@ import '../utils.dart';
 ///
 /// [ParameterList.restParameter] may not be defined.
 GetArgumentsResult getArguments(
-    ParameterList parameters, ArgumentList arguments) {
+  ParameterList parameters,
+  ArgumentList arguments,
+) {
   if (parameters.restParameter != null) {
     throw new ArgumentError("parameters.restParameter is not supported");
   } else if (arguments.rest != null) {
@@ -29,22 +31,33 @@ GetArgumentsResult getArguments(
     if (arguments.positional.length > i) {
       var arg = arguments.positional[i];
       results.add(
-          GetArgumentArgument._(arg, arg.span, GetArgumentType.positional));
+        GetArgumentArgument._(arg, arg.span, GetArgumentType.positional),
+      );
     } else if (namedArgs.remove(parameter.name) case var arg?) {
-      results.add(GetArgumentArgument._(
-          arg, arguments.namedSpans[parameter.name]!, GetArgumentType.named));
+      results.add(
+        GetArgumentArgument._(
+          arg,
+          arguments.namedSpans[parameter.name]!,
+          GetArgumentType.named,
+        ),
+      );
     } else if (parameter.defaultValue case var arg?) {
-      results.add(GetArgumentArgument._(
-          arg, parameter.span, GetArgumentType.defaultArg));
+      results.add(
+        GetArgumentArgument._(arg, parameter.span, GetArgumentType.defaultArg),
+      );
     } else {
       return GetArgumentsInvalidCall._(
-          arguments.span, "missing argument \$${parameter.name}");
+        arguments.span,
+        "missing argument \$${parameter.name}",
+      );
     }
   }
 
   if (namedArgs.isNotEmpty) {
     return GetArgumentsInvalidCall._(
-        namedArgs.values.first.span, "unused argument");
+      namedArgs.values.first.span,
+      "unused argument",
+    );
   } else {
     return GetArgumentsArguments._(results);
   }
