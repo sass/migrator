@@ -1,3 +1,13 @@
+## 2.6.1
+
+### `if()` Function Migrator
+
+* Fix a bug where `if(C, null, V)` would be incorrectly migrated to `if(sass(C):
+  null)` rather than `if(not sass(C): V)`.
+
+* Migrate `if(C, V, null)` to `if(sass(C): V)` rather than `if(sass(C): V; else:
+  null)`. The extra `else` clause was redundant.
+
 ## 2.6.0
 
 ### Module Migrator
