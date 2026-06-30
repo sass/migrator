@@ -117,12 +117,29 @@ class _IfMigrationVisitor extends MigrationVisitor {
 
       case GetArgumentsArguments(:var arguments):
         arguments[0].patchOutName().andThen(addPatch);
-        addPatch(patchBefore(arguments[0].argument, 'sass('));
+
+        addPatch(
+          patchBefore(
+            arguments[0].argument,
+            arguments[1].argument is NullExpression ? 'not sass(' : 'sass(',
+          ),
+        );
         addPatch(
           patchBetween(arguments[0].argument, arguments[1].argument, '): '),
         );
 
-        if (arguments[1].argument case NullExpression()) {
+        if (arguments[1].argument is NullExpression) {
+          // Omit the first argument entirely because in this case we negate the
+          // condition, so `if(X, null, V)` becomes `if(not sass(X): V)`.
+          addPatch(
+            Patch(
+              arguments[1].span.expand(
+                arguments[1].span.between(arguments[2].span),
+              ),
+              '',
+            ),
+          );
+        } else if (arguments[2].argument is NullExpression) {
           addPatch(Patch(node.span.after(arguments[1].span), ')'));
         } else {
           addPatch(

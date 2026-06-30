@@ -1,0 +1,13 @@
+<==> input/entrypoint.scss
+a {
+  $b: true;
+  if-true: if($b, null, c);
+  if-false: if($b, c, null);
+}
+
+<==> output/entrypoint.scss
+a {
+  $b: true;
+  if-true: if(not sass($b): c);
+  if-false: if(sass($b): c);
+}
