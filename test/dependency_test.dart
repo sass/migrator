@@ -7,9 +7,10 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:test/test.dart';
-import 'package:pubspec_parse/pubspec_parse.dart';
 import 'package:path/path.dart' as p;
+import 'package:pub_semver/pub_semver.dart';
+import 'package:pubspec_parse/pubspec_parse.dart';
+import 'package:test/test.dart';
 
 void main() {
   test("declares a compatible dependency for sass_api", () {
@@ -32,10 +33,22 @@ void main() {
 
     switch (migratorPubspec.dependencies["sass_api"]) {
       case HostedDependency dep:
-        if (!dep.version.allows(sassApiPubspec.version!)) {
+        var sassApiVersion = sassApiPubspec.version!;
+
+        // If we're using a dev version of sass_api, make sure the dependency
+        // constraint will match it once it's published.
+        if (sassApiVersion.preRelease case ["dev"]) {
+          sassApiVersion = Version(
+            sassApiVersion.major,
+            sassApiVersion.minor,
+            sassApiVersion.patch,
+          );
+        }
+
+        if (!dep.version.allows(sassApiVersion)) {
           fail(
             "sass_api dependency $dep doesn't include actual sass_api "
-            "version ${sassApiPubspec.version!}",
+            "version $sassApiVersion",
           );
         }
 

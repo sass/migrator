@@ -1,3 +1,11 @@
+## 3.0.0
+
+* Removed the `division` and `strict_unary` migrators. This tool uses the latest
+  Dart Sass parser, which no longer supports slash-as-division or loose unary
+  operators, so older Sass files that still use this deprecated syntax can't be
+  parsed anymore. The 2.x `sass_migrator` will remain available to migrate these
+  patterns.
+
 ## 2.6.1
 
 ### `if()` Function Migrator

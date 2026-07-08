@@ -35,47 +35,71 @@ void main() {
   });
 
   test("allows glob arguments", () async {
-    await d.file("test-1.scss", "a {b: (1 / 2)}").create();
-    await d.file("test-2.scss", "c {d: (1 / 2)}").create();
-    await d.file("test-3.scss", "e {f: (1 / 2)}").create();
+    await d.file("test-1.scss", "@use 'sass:math' as a;").create();
+    await d.file("test-2.scss", "@use 'sass:color' as a;").create();
+    await d.file("test-3.scss", "@use 'sass:string' as a;").create();
 
-    await (await runMigrator(["division", "test-*.scss"])).shouldExit(0);
+    await (await runMigrator([
+      "namespace",
+      "-r",
+      "a to b",
+      "test-*.scss",
+    ])).shouldExit(0);
 
-    await d.file("test-1.scss", 'a {b: (1 * 0.5)}').validate();
-    await d.file("test-2.scss", 'c {d: (1 * 0.5)}').validate();
-    await d.file("test-3.scss", 'e {f: (1 * 0.5)}').validate();
+    await d.file("test-1.scss", "@use 'sass:math' as b;").validate();
+    await d.file("test-2.scss", "@use 'sass:color' as b;").validate();
+    await d.file("test-3.scss", "@use 'sass:string' as b;").validate();
   });
 
   test("allows recursive glob arguments", () async {
     await d.dir('dir', [
-      d.file("test-1.scss", "a {b: (1 / 2)}"),
-      d.file("test-2.scss", "c {d: (1 / 2)}"),
-      d.file("test-3.scss", "e {f: (1 / 2)}"),
+      d.file("test-1.scss", "@use 'sass:math' as a;"),
+      d.file("test-2.scss", "@use 'sass:color' as a;"),
+      d.file("test-3.scss", "@use 'sass:string' as a;"),
     ]).create();
 
-    await (await runMigrator(["division", "**.scss"])).shouldExit(0);
+    await (await runMigrator([
+      "namespace",
+      "-r",
+      "a to b",
+      "**.scss",
+    ])).shouldExit(0);
 
     await d.dir('dir', [
-      d.file("test-1.scss", 'a {b: (1 * 0.5)}'),
-      d.file("test-2.scss", 'c {d: (1 * 0.5)}'),
-      d.file("test-3.scss", 'e {f: (1 * 0.5)}'),
+      d.file("test-1.scss", "@use 'sass:math' as b;"),
+      d.file("test-2.scss", "@use 'sass:color' as b;"),
+      d.file("test-3.scss", "@use 'sass:string' as b;"),
     ]).validate();
   });
 
   test("treats file arguments as paths, not urls", () async {
-    await d.file("#file.scss", "a {b: (1 / 2)}").create();
+    await d.file("#file.scss", "@use 'sass:math' as a;").create();
 
-    await (await runMigrator(["division", "#file.scss"])).shouldExit(0);
+    await (await runMigrator([
+      "namespace",
+      "-r",
+      "a to b",
+      "#file.scss",
+    ])).shouldExit(0);
 
-    await d.file("#file.scss", 'a {b: (1 * 0.5)}').validate();
+    await d.file("#file.scss", "@use 'sass:math' as b;").validate();
   });
 
   test("allows non-glob file arguments containing glob syntax", () async {
-    await d.dir('[dir]', [d.file("test.scss", "a {b: (1 / 2)}")]).create();
+    await d.dir('[dir]', [
+      d.file("test.scss", "@use 'sass:math' as a;"),
+    ]).create();
 
-    await (await runMigrator(["division", "[dir]/test.scss"])).shouldExit(0);
+    await (await runMigrator([
+      "namespace",
+      "-r",
+      "a to b",
+      "[dir]/test.scss",
+    ])).shouldExit(0);
 
-    await d.dir('[dir]', [d.file("test.scss", 'a {b: (1 * 0.5)}')]).validate();
+    await d.dir('[dir]', [
+      d.file("test.scss", "@use 'sass:math' as b;"),
+    ]).validate();
   });
 
   group("with --dry-run", () {
