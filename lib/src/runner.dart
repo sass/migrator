@@ -15,11 +15,10 @@ import 'package:term_glyph/term_glyph.dart' as glyph;
 import 'io.dart';
 import 'migrators/calc_interpolation.dart';
 import 'migrators/color.dart';
-import 'migrators/division.dart';
 import 'migrators/if_function.dart';
 import 'migrators/module.dart';
 import 'migrators/namespace.dart';
-import 'migrators/strict_unary.dart';
+import 'migrators/outdated.dart';
 import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
@@ -86,11 +85,12 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       );
     addCommand(CalculationInterpolationMigrator());
     addCommand(ColorMigrator());
-    addCommand(DivisionMigrator());
     addCommand(IfMigrator());
     addCommand(ModuleMigrator());
     addCommand(NamespaceMigrator());
-    addCommand(StrictUnaryMigrator());
+
+    addCommand(OutdatedMigrator("division", "2.x"));
+    addCommand(OutdatedMigrator("strict_unary", "2.x"));
   }
 
   /// Runs a migrator and then writes the migrated files to disk unless

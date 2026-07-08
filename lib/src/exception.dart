@@ -17,15 +17,18 @@ class MigrationException implements Exception {
   String toString() => "Error: $message";
 }
 
-// TODO(jathak): Stop extending [SassException] here.
-// ignore_for_file: subtype_of_sealed_class
-
 /// A [MigrationException] that has source span information associated with it.
 ///
 /// This extends [SassException] to ensure that migrator exceptions are
 /// formatted the same way as the syntax errors Sass throws.
-class MigrationSourceSpanException extends SassException
+class MigrationSourceSpanException extends SourceSpanException
     implements MigrationException {
+  FileSpan get span => super.span as FileSpan;
+
   MigrationSourceSpanException(String message, FileSpan span)
     : super(message, span);
+
+  String toString({Object? color}) =>
+      // Match Dart Sass's exception formatting.
+      SassException(message, span).toString(color: color);
 }
