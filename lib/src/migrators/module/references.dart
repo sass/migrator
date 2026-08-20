@@ -142,7 +142,7 @@ class References {
     return variableReassignments[declaration] ?? declaration;
   }
 
-  References._(
+  new _(
     BidirectionalMap<VariableExpression, MemberDeclaration> variables,
     BidirectionalMap<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
     variableReassignments,
@@ -183,7 +183,7 @@ class References {
 
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
-  factory References(
+  factory(
     ImportCache importCache,
     Stylesheet stylesheet,
     Importer importer, {
@@ -281,7 +281,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// of hoisting late `@import` rules.
   final Set<String> safeAtRules;
 
-  _ReferenceVisitor(this.importCache, this.safeAtRules);
+  new(this.importCache, this.safeAtRules);
 
   /// Constructs a new References object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.

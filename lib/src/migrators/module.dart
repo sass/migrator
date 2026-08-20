@@ -30,7 +30,9 @@ import 'module/use_allowed.dart';
 
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
+  @override
   final name = "module";
+  @override
   final description = "Use the new module system.";
 
   @override
@@ -100,12 +102,15 @@ class ModuleMigrator extends Migrator {
 
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
+  @override
   Map<Uri, String> migrateFile(
     ImportCache importCache,
     Stylesheet stylesheet,
     Importer importer,
   ) {
-    var forwards = {for (var arg in argResults!['forward']) ForwardType(arg)};
+    var forwards = {
+      for (var arg in argResults!['forward'] as List<String>) ForwardType(arg),
+    };
     var builtInOnly = argResults!['built-in-only'] as bool;
     if (builtInOnly &&
         (argResults!.wasParsed('forward') ||
@@ -292,7 +297,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   ///
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
-  _ModuleMigrationVisitor(
+  new(
     super.importCache,
     this.references,
     List<String> loadPaths, {
@@ -422,7 +427,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       ...entrypointForwards,
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
-    return forwardLines.join('$semicolon\n') + '$semicolon\n';
+    return '${forwardLines.join('$semicolon\n')}$semicolon\n';
   }
 
   /// If [declaration] should be renamed, adds it to [renamedMembers].
@@ -498,7 +503,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       ]);
     }
     var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
-    return forwards.isEmpty ? '' : '\n' + forwards.join('');
+    return forwards.isEmpty ? '' : '\n${forwards.join('')}';
   }
 
   /// Stores per-file state and determines namespaces for this stylesheet before
@@ -820,7 +825,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchNamespaceForFunction(
     FunctionExpression node,
     MemberDeclaration<FunctionRule>? declaration,
-    void patchNamespace(String namespace), {
+    void Function(String namespace) patchNamespace, {
     bool getFunctionCall = false,
   }) {
     var span = getFunctionCall
@@ -1027,9 +1032,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(
         Patch.insert(
           _afterLastImport ?? node.span.file.location(0),
-          '$indent@import ' +
-              staticImports.map((import) => import.span.text).join(', ') +
-              '$semicolon\n',
+          '$indent@import ${staticImports.map((import) => import.span.text).join(', ')}$semicolon\n',
         ),
       );
     }
@@ -1264,9 +1267,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     });
     if (configured.length == 1) {
-      normalConfig = "(" + configured.first + ")";
+      normalConfig = "(${configured.first})";
     } else if (configured.isNotEmpty) {
-      normalConfig = "(\n  " + configured.join(',\n  ') + "\n)";
+      normalConfig = "(\n  ${configured.join(',\n  ')}\n)";
     }
     return (canonicalUrl, normalConfig, extraForward);
   }
@@ -1390,6 +1393,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
+  @override
   void visitUseRule(UseRule node) {
     _usedUrls.add(
       importCache
@@ -1407,6 +1411,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
+  @override
   void visitForwardRule(ForwardRule node) {
     _forwardedUrls.add(
       importCache
@@ -1529,8 +1534,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       isPrivate = _isPrivate(name);
       var unprivateName = isPrivate ? _privateToPublic(name) : name;
       prefix = _prefixFor(unprivateName);
-      if (prefix == null)
+      if (prefix == null) {
         return isPrivate && forcePublic ? unprivateName : name;
+      }
       withoutPrefix = unprivateName.substring(prefix.length);
     }
 

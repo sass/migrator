@@ -31,7 +31,7 @@ class _NamespacePatchingVisitor
 
   late List<Patch> patches;
 
-  _NamespacePatchingVisitor(this.namespacer);
+  new(this.namespacer);
 
   List<Patch> getPatchesFor(SassNode node) {
     patches = [];

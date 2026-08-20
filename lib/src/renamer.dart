@@ -47,7 +47,7 @@ class Renamer<T> {
   /// The list of statements that are evaluated in order by this renamer.
   final List<_Statement<T>> _statements;
 
-  Renamer._(this.keys, this._statements);
+  new _(this.keys, this._statements);
 
   /// Creates a simple Renamer from [code] that only uses an empty key.
   ///
@@ -85,7 +85,7 @@ class Renamer<T> {
   ///
   /// If provided, [sourceUrl] will appear in parsing errors. It can be
   /// a [String] or a [Uri].
-  factory Renamer(
+  factory(
     String code,
     Map<String, String Function(T input)> keys, {
     dynamic sourceUrl,
@@ -236,7 +236,7 @@ class _Statement<T> {
   /// these components.
   final List<_OutputComponent> output;
 
-  _Statement(this.key, this.matcher, this.output);
+  new(this.key, this.matcher, this.output);
 
   /// Return the output if this statement matches [input] or null otherwise.
   String? rename(T input) {
@@ -256,17 +256,19 @@ abstract class _OutputComponent {
 /// Literal text that's part of a statement's output.
 class _Literal extends _OutputComponent {
   final String text;
-  _Literal(this.text);
+  new(this.text);
 
   /// This just returns the literal text of this component.
+  @override
   String build(RegExpMatch match) => text;
 }
 
 /// A backreference that's part of a statement's output.
 class _Backreference extends _OutputComponent {
   final int number;
-  _Backreference(this.number);
+  new(this.number);
 
   /// Returns the captured group numbered [number] in [match].
+  @override
   String? build(RegExpMatch match) => match.group(number);
 }

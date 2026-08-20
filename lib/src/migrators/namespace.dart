@@ -16,7 +16,9 @@ import '../renamer.dart';
 
 /// Changes namespaces for `@use` rules within the file(s) being migrated.
 class NamespaceMigrator extends Migrator {
+  @override
   final name = "namespace";
+  @override
   final description = "Change namespaces for `@use` rules.";
 
   @override
@@ -44,10 +46,11 @@ class NamespaceMigrator extends Migrator {
     Stylesheet stylesheet,
     Importer importer,
   ) {
-    var renamer = Renamer<UseRule>(argResults!['rename'].join('\n'), {
-      '': ((rule) => rule.namespace!),
-      'url': (rule) => rule.url.toString(),
-    }, sourceUrl: '--rename');
+    var renamer = Renamer<UseRule>(
+      (argResults!['rename'] as List<String>).join('\n'),
+      {'': ((rule) => rule.namespace!), 'url': (rule) => rule.url.toString()},
+      sourceUrl: '--rename',
+    );
     var visitor = _NamespaceMigrationVisitor(
       renamer,
       argResults!['force'] as bool,
@@ -76,7 +79,7 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
       assertInStylesheet(__usedNamespaces, '_usedNamespaces');
   Set<String>? __usedNamespaces;
 
-  _NamespaceMigrationVisitor(
+  new(
     this.renamer,
     this.forceRename,
     super.importCache, {

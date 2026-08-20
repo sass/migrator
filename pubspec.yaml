@@ -32,6 +32,8 @@ dev_dependencies:
   node_preamble: ^2.0.0
   pub_semver: ^2.0.0
   pubspec_parse: ^1.5.0
+  sass_analysis:
+    git: {url: https://github.com/sass/dart-sass.git, path: analysis}
   test: ^1.17.1
   test_descriptor: ^2.0.0
   test_process: ^2.0.0

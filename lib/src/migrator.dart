@@ -30,11 +30,13 @@ import 'utils.dart';
 /// Most migrators will want to create a subclass of [MigrationVisitor] and
 /// implement [migrateFile] with `MyMigrationVisitor(this, entrypoint).run()`.
 abstract class Migrator extends Command<Map<Uri, String>> {
+  @override
   String get invocation => super.invocation.replaceFirst(
     "[arguments]",
     "[options] <entrypoints.scss...>",
   );
 
+  @override
   String get usage =>
       "${super.usage}\n\n"
       "See also https://sass-lang.com/documentation/cli/migrator#$name";
@@ -70,6 +72,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
   ///
   /// Entrypoints and dependencies that did not require any changes will not be
   /// included in the results.
+  @override
   Map<Uri, String> run() {
     var allMigrated = <Uri, String>{};
     var importer = FilesystemImporter('.');
@@ -79,7 +82,7 @@ abstract class Migrator extends Command<Map<Uri, String>> {
         for (var item in globalResults!['pkg-importer'] as List<String>)
           if (item == 'node') NodePackageImporter('.'),
       ],
-      loadPaths: globalResults!['load-path'],
+      loadPaths: globalResults!['load-path'] as List<String>?,
     );
 
     var entrypoints = [

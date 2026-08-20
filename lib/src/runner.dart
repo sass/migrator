@@ -24,15 +24,16 @@ import 'exception.dart';
 
 /// A command runner that runs a migrator based on provided arguments.
 class MigratorRunner extends CommandRunner<Map<Uri, String>> {
+  @override
   String get invocation =>
       "$executableName <migrator> [options] <entrypoint.scss...>";
 
+  @override
   String get usage =>
       "${super.usage}\n\n"
       "See also https://sass-lang.com/documentation/cli/migrator";
 
-  MigratorRunner()
-    : super("sass-migrator", "Migrates stylesheets to new Sass versions.") {
+  new() : super("sass-migrator", "Migrates stylesheets to new Sass versions.") {
     argParser
       ..addMultiOption(
         'load-path',
@@ -95,7 +96,7 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
 
   /// Runs a migrator and then writes the migrated files to disk unless
   /// `--dry-run` is passed.
-  Future execute(Iterable<String> args) async {
+  Future<void> execute(Iterable<String> args) async {
     ArgResults argResults;
     try {
       argResults = parse(args);
@@ -145,11 +146,11 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
       return;
     }
 
-    if (argResults['dry-run']) {
+    if (argResults['dry-run'] as bool) {
       print('Dry run. Logging migrated files instead of overwriting...\n');
 
       migrated.forEach((url, contents) {
-        if (argResults['verbose']) {
+        if (argResults['verbose'] as bool) {
           // This isn't *strictly* HRX format, since it can produce absolute
           // URLs rather than those that are relative to the HRX root, but we
           // just need it to be readable, not to interoperate with other tools.
@@ -165,7 +166,9 @@ class MigratorRunner extends CommandRunner<Map<Uri, String>> {
           url.scheme.isEmpty || url.scheme == "file",
           "$url is not a file path.",
         );
-        if (argResults['verbose']) print("Migrating ${p.prettyUri(url)}");
+        if (argResults['verbose'] as bool) {
+          print("Migrating ${p.prettyUri(url)}");
+        }
         File(url.toFilePath()).writeAsStringSync(contents);
       });
     }

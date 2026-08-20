@@ -5,12 +5,14 @@
 // https://opensource.org/licenses/MIT.
 
 @Tags(["node"])
+library;
+
 import 'package:test/test.dart';
 
 import 'migrator_dart_test.dart' as dart;
 import '../utils.dart';
 
-main() {
+void main() {
   runNodeTests = true;
   dart.main();
 }

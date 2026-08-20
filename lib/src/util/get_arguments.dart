@@ -19,7 +19,7 @@ GetArgumentsResult getArguments(
   ArgumentList arguments,
 ) {
   if (parameters.restParameter != null) {
-    throw new ArgumentError("parameters.restParameter is not supported");
+    throw ArgumentError("parameters.restParameter is not supported");
   } else if (arguments.rest != null) {
     return GetArgumentsNotResolvable._();
   }
@@ -74,13 +74,13 @@ class GetArgumentsInvalidCall extends GetArgumentsResult {
   /// A description of what's invalid.
   final String description;
 
-  GetArgumentsInvalidCall._(this.span, this.description);
+  new _(this.span, this.description);
 }
 
 /// The call may be valid, but can't be resolved statically (for example because
 /// it involves rest arguments).
 class GetArgumentsNotResolvable extends GetArgumentsResult {
-  GetArgumentsNotResolvable._();
+  new _();
 }
 
 /// The call is valid.
@@ -93,7 +93,7 @@ class GetArgumentsArguments extends GetArgumentsResult {
   /// Whether the arguments were passed in the canonical, positional order.
   final bool inOrder;
 
-  GetArgumentsArguments._(this.arguments) : inOrder = _isInOrder(arguments);
+  new _(this.arguments) : inOrder = _isInOrder(arguments);
 
   /// Returns whether each non-default argument in [arguments] appears in the
   /// normal positional order.
@@ -134,7 +134,7 @@ class GetArgumentArgument {
   /// The type of argument this represents.
   final GetArgumentType type;
 
-  GetArgumentArgument._(this.argument, this.span, this.type);
+  new _(this.argument, this.span, this.type);
 
   /// If this is a named argument, returns a [Patch] that removes its argument name.
   Patch? patchOutName() => type == GetArgumentType.named

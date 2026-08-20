@@ -17,10 +17,10 @@ class Patch implements Comparable<Patch> {
   final String replacement;
 
   /// Constructs a patch that replaces [selection] with [replacement].
-  const Patch(this.selection, this.replacement);
+  const new(this.selection, this.replacement);
 
   /// Constructs a patch that inserts [replacement] at [location].
-  Patch.insert(FileLocation location, String replacement)
+  new insert(FileLocation location, String replacement)
     : this(location.pointSpan(), replacement);
 
   /// Applies a series of non-overlapping patches to the text of a file.
@@ -69,8 +69,10 @@ class Patch implements Comparable<Patch> {
   }
 
   /// Patches are ordered based on their selection.
+  @override
   int compareTo(Patch other) => selection.compareTo(other.selection);
 
+  @override
   String toString() => selection.isEmpty
       ? "at $selection inserting \"$replacement\""
       : replacement.isEmpty

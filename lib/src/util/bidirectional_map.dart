@@ -45,7 +45,7 @@ class BidirectionalMap<K, V> extends MapBase<K, V> {
   @override
   V? remove(Object? key) {
     if (!_valueForKey.containsKey(key)) return null;
-    V value = _valueForKey.remove(key)!;
+    V value = _valueForKey.remove(key) as V;
     var keys = _keysForValue[value]!;
     keys.remove(key);
     if (keys.isEmpty) _keysForValue.remove(value);

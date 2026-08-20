@@ -17,7 +17,7 @@ class UnreferencableMembers {
   /// The members marked as unreferencable in this scope directly.
   final _unreferencable = <MemberDeclaration, UnreferencableType>{};
 
-  UnreferencableMembers([this.parent]);
+  new([this.parent]);
 
   /// Marks [declaration] as unreferencable with the given [type].
   void add(MemberDeclaration declaration, UnreferencableType type) {

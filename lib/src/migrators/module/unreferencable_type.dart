@@ -25,7 +25,7 @@ class UnreferencableType {
   /// Identifier for this unreferencable type.
   final String id;
 
-  const UnreferencableType._(this.id);
+  const new _(this.id);
 
   /// Returns a MigrationException for a [reference] to a member defined in
   /// [source] of this type.

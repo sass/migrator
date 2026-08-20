@@ -8,7 +8,7 @@ import 'package:cli_pkg/cli_pkg.dart' as pkg;
 import 'package:collection/collection.dart';
 import 'package:grinder/grinder.dart';
 
-main(List<String> args) {
+void main(List<String> args) {
   pkg.humanName.value = "Sass Migrator";
   pkg.botName.value = "Sass Bot";
   pkg.botEmail.value = "sass.bot.beep.boop@gmail.com";
@@ -28,12 +28,12 @@ main(List<String> args) {
 }
 
 @Task('Verify that the package is in a good state to release.')
-sanityCheckBeforeRelease() {
+void sanityCheckBeforeRelease() {
   var ref = environment("GITHUB_REF");
   if (ref != "refs/tags/${pkg.version}") {
     fail("GITHUB_REF $ref is different than pubspec version ${pkg.version}.");
   }
-  if (const ListEquality().equals(pkg.version.preRelease, ["dev"])) {
+  if (const ListEquality<Object>().equals(pkg.version.preRelease, ["dev"])) {
     fail("${pkg.version} is a dev release.");
   }
 

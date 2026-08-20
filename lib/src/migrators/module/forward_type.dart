@@ -21,9 +21,9 @@ class ForwardType {
   /// Identifier for this value.
   final String id;
 
-  const ForwardType._(this.id);
+  const new _(this.id);
 
-  factory ForwardType(String option) {
+  factory(String option) {
     switch (option) {
       case 'all':
         return ForwardType.all;
@@ -32,7 +32,7 @@ class ForwardType {
       case 'prefixed':
         return ForwardType.prefixed;
       default:
-        throw StateError('Invalid value "${option}" for --forward option.');
+        throw StateError('Invalid value "$option" for --forward option.');
     }
   }
 }

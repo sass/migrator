@@ -39,8 +39,7 @@ class MemberDeclaration<T extends SassDeclaration> {
 
   /// Creates a MemberDefinition for a [member] that was loaded from the same
   /// module it was defined.
-  MemberDeclaration(T member)
-    : this._(member, member.name, member.span.sourceUrl!);
+  new(T member) : this._(member, member.name, member.span.sourceUrl!);
 
   /// Creates a MemberDefinition for a member that was forwarded through at
   /// least one non-import-only module.
@@ -49,10 +48,8 @@ class MemberDeclaration<T extends SassDeclaration> {
   ///
   /// If [forward] comes from an import-only file, this returns an
   /// [ImportOnlyMemberDeclaration].
-  factory MemberDeclaration.forward(
-    MemberDeclaration<T> forwarded,
-    ForwardRule forward,
-  ) => isImportOnlyFile(forward.span.sourceUrl!)
+  factory forward(MemberDeclaration<T> forwarded, ForwardRule forward) =>
+      isImportOnlyFile(forward.span.sourceUrl!)
       ? ImportOnlyMemberDeclaration._(forwarded, forward)
       : MemberDeclaration._(
           forwarded.member,
@@ -60,16 +57,19 @@ class MemberDeclaration<T extends SassDeclaration> {
           forward.span.sourceUrl!,
         );
 
-  MemberDeclaration._(this.member, this.name, this.sourceUrl);
+  new _(this.member, this.name, this.sourceUrl);
 
+  @override
   operator ==(other) =>
       other is MemberDeclaration &&
       member == other.member &&
       name == other.name &&
       sourceUrl == other.sourceUrl;
 
+  @override
   int get hashCode => member.hashCode ^ name.hashCode ^ sourceUrl.hashCode;
 
+  @override
   String toString() {
     var buffer = StringBuffer();
     if (member is MixinRule) {
@@ -94,14 +94,13 @@ class ImportOnlyMemberDeclaration<T extends SassDeclaration>
   /// member.
   final Uri importOnlyUrl;
 
+  @override
   bool get isForwarded => true;
 
   /// Constructs a forwarded MemberDefinition of [forwarding] based on
   /// [forward].
-  ImportOnlyMemberDeclaration._(
-    MemberDeclaration<T> forwarded,
-    ForwardRule forward,
-  ) : importOnlyPrefix =
+  new _(MemberDeclaration<T> forwarded, ForwardRule forward)
+    : importOnlyPrefix =
           (forward.prefix ?? "") +
           (forwarded is ImportOnlyMemberDeclaration<T>
               ? forwarded.importOnlyPrefix
@@ -115,6 +114,7 @@ class ImportOnlyMemberDeclaration<T extends SassDeclaration>
     assert(isImportOnlyFile(forward.span.sourceUrl!));
   }
 
+  @override
   String toString() =>
       "${super.toString()} through ${p.prettyUri(importOnlyUrl)}";
 }

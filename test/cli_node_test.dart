@@ -5,6 +5,8 @@
 // https://opensource.org/licenses/MIT.
 
 @Tags(["node"])
+library;
+
 import 'package:test/test.dart';
 
 import 'cli_dart_test.dart' as dart;

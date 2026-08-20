@@ -16,7 +16,9 @@ import '../utils.dart';
 
 /// Migrates off of legacy color functions.
 class ColorMigrator extends Migrator {
+  @override
   final name = "color";
+  @override
   final description = "Migrates off of legacy color functions.";
 
   @override
@@ -43,11 +45,7 @@ final _colorUrl = Uri(scheme: 'sass', path: 'color');
 class _ColorMigrationVisitor extends MigrationVisitor {
   final References references;
 
-  _ColorMigrationVisitor(
-    this.references,
-    super.importCache, {
-    required super.migrateDependencies,
-  });
+  new(this.references, super.importCache, {required super.migrateDependencies});
 
   /// The namespace of an existing `@use "sass:color"` rule in the current
   /// file, if any.

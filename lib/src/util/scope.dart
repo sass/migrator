@@ -26,7 +26,7 @@ class Scope {
   /// Functions defined in this scope.
   final functions = <String, MemberDeclaration<FunctionRule>>{};
 
-  Scope([this.parent]);
+  new([this.parent]);
 
   /// The global scope this scope descends from.
   Scope get global => parent?.global ?? this;
@@ -68,5 +68,6 @@ class Scope {
   MemberDeclaration<FunctionRule>? findFunction(String name) =>
       functions[name] ?? parent?.findFunction(name);
 
+  @override
   String toString() => '${functions.keys}->$parent';
 }

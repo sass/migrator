@@ -29,7 +29,7 @@ class UseAllowed {
   /// Identifier for this status
   final String id;
 
-  const UseAllowed._(this.id);
+  const new _(this.id);
 
   /// Returns [requiresHoist] unless [this] is already [notAllowed], in which
   /// case it should remain [notAllowed].

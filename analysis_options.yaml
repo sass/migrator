@@ -1,3 +1,1 @@
-analyzer:
-  errors:
-    missing_js_lib_annotation: ignore
+include: package:sass_analysis/analysis_options.yaml

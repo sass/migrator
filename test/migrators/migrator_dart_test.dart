@@ -6,7 +6,7 @@
 
 import '../utils.dart';
 
-main() {
+void main() {
   testMigrator("calc_interpolation");
   testMigrator("color");
   testMigrator("division");

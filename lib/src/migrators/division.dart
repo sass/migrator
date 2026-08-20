@@ -42,7 +42,9 @@ const _calcFunctions = {
 /// Migrates stylesheets that use the `/` operator for division to use the
 /// `divide` function instead.
 class DivisionMigrator extends Migrator {
+  @override
   final name = "division";
+  @override
   final description = """
 Use the math.div() function instead of the / division operator
 
@@ -92,7 +94,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   final bool isPessimistic;
   final bool useMultiplication;
 
-  _DivisionMigrationVisitor(
+  new(
     super.importCache,
     this.isPessimistic,
     this.useMultiplication, {
@@ -501,7 +503,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Runs [operation] with the given context.
   void _withContext(
-    void operation(), {
+    void Function() operation, {
     bool? isDivisionAllowed,
     bool? expectsNumericResult,
     bool? inCalcContext,
