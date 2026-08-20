@@ -193,7 +193,7 @@ class _DivisionMigrationVisitor(
   /// operands.
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
-    if (node.operator == BinaryOperator.dividedBy) {
+    if (node.operator == .dividedBy) {
       _visitSlashOperation(node);
     } else {
       _withContext(
@@ -252,7 +252,7 @@ class _DivisionMigrationVisitor(
   }) {
     _withContext(() {
       if (node.expression
-          case BinaryOperationExpression(operator: BinaryOperator.dividedBy) &&
+          case BinaryOperationExpression(operator: .dividedBy) &&
               var expression) {
         if (_visitSlashOperation(expression) && !negated) {
           addPatch(patchDelete(node.span, end: 1));
@@ -269,7 +269,7 @@ class _DivisionMigrationVisitor(
   @override
   void visitUnaryOperationExpression(UnaryOperationExpression node) {
     if (node case UnaryOperationExpression(
-      operator: UnaryOperator.minus,
+      operator: .minus,
       :ParenthesizedExpression operand,
     )) {
       visitParenthesizedExpression(operand, negated: true);
@@ -313,7 +313,7 @@ class _DivisionMigrationVisitor(
 
     if (channels case ListExpression(
       hasBrackets: false,
-      separator: ListSeparator.space,
+      separator: .space,
       contents: [_, _, BinaryOperationExpression last],
     )) {
       // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2`
@@ -352,8 +352,7 @@ class _DivisionMigrationVisitor(
     }
     var status = _NumberStatus.of(node);
 
-    if ((!_isDivisionAllowed && _onlySlash(node)) ||
-        status == _NumberStatus.no) {
+    if ((!_isDivisionAllowed && _onlySlash(node)) || status == .no) {
       // Definitely not division
       if (_isDivisionAllowed || _containsInterpolation(node)) {
         // We only want to convert a non-division slash operation to a
@@ -365,9 +364,7 @@ class _DivisionMigrationVisitor(
       }
       return true;
     }
-    if (_expectsNumericResult ||
-        status == _NumberStatus.yes ||
-        !isPessimistic) {
+    if (_expectsNumericResult || status == .yes || !isPessimistic) {
       // Definitely division
       _withContext(
         () => super.visitBinaryOperationExpression(node),
@@ -413,7 +410,7 @@ class _DivisionMigrationVisitor(
   /// unnecessary interpolation.
   void _visitSlashListArguments(Expression node) {
     switch (node) {
-      case BinaryOperationExpression(operator: BinaryOperator.dividedBy):
+      case BinaryOperationExpression(operator: .dividedBy):
         _visitSlashListArguments(node.left);
         _patchOperatorToComma(node);
         _visitSlashListArguments(node.right);
@@ -430,24 +427,20 @@ class _DivisionMigrationVisitor(
   /// Returns true if we assume that [operator] always operators on numbers.
   ///
   /// This is true for `*`, `%`, `<`, `<=`, `>`, and `>=`.
-  bool _operatesOnNumbers(BinaryOperator operator) => {
-    BinaryOperator.times,
-    BinaryOperator.modulo,
-    BinaryOperator.lessThan,
-    BinaryOperator.lessThanOrEquals,
-    BinaryOperator.greaterThan,
-    BinaryOperator.greaterThanOrEquals,
+  bool _operatesOnNumbers(BinaryOperator operator) => <BinaryOperator>{
+    .times,
+    .modulo,
+    .lessThan,
+    .lessThanOrEquals,
+    .greaterThan,
+    .greaterThanOrEquals,
   }.contains(operator);
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
   bool _onlySlash(Expression node) => switch (node) {
     NumberExpression() => true,
-    BinaryOperationExpression(
-      operator: BinaryOperator.dividedBy,
-      :var left,
-      :var right,
-    ) =>
+    BinaryOperationExpression(operator: .dividedBy, :var left, :var right) =>
       _onlySlash(left) && _onlySlash(right),
     _ => false,
   };
@@ -485,9 +478,7 @@ class _DivisionMigrationVisitor(
   void _patchParensIfAny(SassNode node) {
     switch (node) {
       case ParenthesizedExpression(
-        expression: BinaryOperationExpression(
-          operator: BinaryOperator.dividedBy,
-        ),
+        expression: BinaryOperationExpression(operator: .dividedBy),
       ):
         return;
       case ParenthesizedExpression():
@@ -527,9 +518,7 @@ enum _NumberStatus {
   /// definitely not a number, and [maybe] otherwise.
   static _NumberStatus of(Expression node) => switch (node) {
     NumberExpression() ||
-    BinaryOperationExpression(
-      operator: BinaryOperator.times || BinaryOperator.modulo,
-    ) => yes,
+    BinaryOperationExpression(operator: .times || .modulo) => yes,
     BooleanExpression() ||
     ColorExpression() ||
     ListExpression() ||

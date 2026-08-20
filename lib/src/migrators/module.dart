@@ -25,7 +25,6 @@ import 'module/forward_type.dart';
 import 'module/reference_source.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
-import 'module/unreferencable_type.dart';
 import 'module/use_allowed.dart';
 
 /// Migrates stylesheets to the new module system.
@@ -540,7 +539,7 @@ class _ModuleMigrationVisitor(
     __additionalRelativeUseRules = {};
     _beforeFirstImport = null;
     _afterLastImport = null;
-    _useAllowed = UseAllowed.allowed;
+    _useAllowed = .allowed;
     super.visitStylesheet(node);
     __namespaces = oldNamespaces;
     __forwardedUrls = oldForwardedUrls;
@@ -909,7 +908,7 @@ class _ModuleMigrationVisitor(
   /// Visits a `@function` rule, renaming if necessary.
   @override
   void visitFunctionRule(FunctionRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitFunctionRule(node);
   }
@@ -1096,7 +1095,7 @@ class _ModuleMigrationVisitor(
     _unreferencable = UnreferencableMembers(_unreferencable);
     for (var declaration in references.allDeclarations) {
       if (declaration.sourceUrl != currentUrl) continue;
-      _unreferencable.add(declaration, UnreferencableType.fromImporter);
+      _unreferencable.add(declaration, .fromImporter);
     }
 
     var (canonicalUrl, config, forwardForConfig) = _migrateImportCommon(
@@ -1118,9 +1117,7 @@ class _ModuleMigrationVisitor(
       if (declaration.sourceUrl != canonicalUrl) continue;
       _unreferencable.add(
         declaration,
-        isNested
-            ? UnreferencableType.fromNestedImport
-            : UnreferencableType.fromLateImport,
+        isNested ? .fromNestedImport : .fromLateImport,
       );
     }
 
@@ -1359,7 +1356,7 @@ class _ModuleMigrationVisitor(
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitIncludeRule(node);
     if (node.namespace != null) return;
     if (builtInOnly && references.sources[node] is! BuiltInSource) return;
@@ -1380,7 +1377,7 @@ class _ModuleMigrationVisitor(
   /// Visits a `@mixin` rule, renaming it if necessary.
   @override
   void visitMixinRule(MixinRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     if (!builtInOnly) _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitMixinRule(node);
   }
@@ -1653,7 +1650,7 @@ class _ModuleMigrationVisitor(
   /// Disallows `@use` after `@at-root` rules.
   @override
   void visitAtRootRule(AtRootRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitAtRootRule(node);
   }
 
@@ -1661,7 +1658,7 @@ class _ModuleMigrationVisitor(
   @override
   void visitAtRule(AtRule node) {
     var oldUseAllowed = _useAllowed;
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitAtRule(node);
     if (safeAtRules.contains(node.name.asPlain)) {
       _useAllowed = oldUseAllowed.lowerToRequiresHoist();
@@ -1678,49 +1675,49 @@ class _ModuleMigrationVisitor(
   /// Disallows `@use` after `@each` rules.
   @override
   void visitEachRule(EachRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitEachRule(node);
   }
 
   /// Disallows `@use` after `@error` rules.
   @override
   void visitErrorRule(ErrorRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitErrorRule(node);
   }
 
   /// Disallows `@use` after `@for` rules.
   @override
   void visitForRule(ForRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitForRule(node);
   }
 
   /// Disallows `@use` after `@if` rules.
   @override
   void visitIfRule(IfRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitIfRule(node);
   }
 
   /// Disallows `@use` after `@media` rules.
   @override
   void visitMediaRule(MediaRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitMediaRule(node);
   }
 
   /// Disallows `@use` after style rules.
   @override
   void visitStyleRule(StyleRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitStyleRule(node);
   }
 
   /// Disallows `@use` after `@supports` rules.
   @override
   void visitSupportsRule(SupportsRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitSupportsRule(node);
   }
 
@@ -1734,7 +1731,7 @@ class _ModuleMigrationVisitor(
   /// Disallows `@use` after `@while` rules.
   @override
   void visitWhileRule(WhileRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitWhileRule(node);
   }
 }

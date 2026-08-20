@@ -30,21 +30,17 @@ GetArgumentsResult getArguments(
     var parameter = parameters.parameters[i];
     if (arguments.positional.length > i) {
       var arg = arguments.positional[i];
-      results.add(
-        GetArgumentArgument._(arg, arg.span, GetArgumentType.positional),
-      );
+      results.add(GetArgumentArgument._(arg, arg.span, .positional));
     } else if (namedArgs.remove(parameter.name) case var arg?) {
       results.add(
         GetArgumentArgument._(
           arg,
           arguments.namedSpans[parameter.name]!,
-          GetArgumentType.named,
+          .named,
         ),
       );
     } else if (parameter.defaultValue case var arg?) {
-      results.add(
-        GetArgumentArgument._(arg, parameter.span, GetArgumentType.defaultArg),
-      );
+      results.add(GetArgumentArgument._(arg, parameter.span, .defaultArg));
     } else {
       return GetArgumentsInvalidCall._(
         arguments.span,
@@ -94,7 +90,7 @@ class GetArgumentsArguments._(
   static bool _isInOrder(List<GetArgumentArgument> arguments) {
     GetArgumentArgument? last;
     for (var argument in arguments) {
-      if (argument.type == GetArgumentType.defaultArg) continue;
+      if (argument.type == .defaultArg) continue;
       if (last != null && last.span.end.offset > argument.span.start.offset) {
         return false;
       }
@@ -129,7 +125,6 @@ class GetArgumentArgument._(
   final GetArgumentType type,
 ) {
   /// If this is a named argument, returns a [Patch] that removes its argument name.
-  Patch? patchOutName() => type == GetArgumentType.named
-      ? Patch(span.before(argument.span), '')
-      : null;
+  Patch? patchOutName() =>
+      type == .named ? Patch(span.before(argument.span), '') : null;
 }

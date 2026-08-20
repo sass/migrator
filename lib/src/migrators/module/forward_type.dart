@@ -21,16 +21,10 @@ class const ForwardType._(
   /// Forward all members through the entrypoint's import-only file.
   static const importOnly = ForwardType._('import-only');
 
-  factory(String option) {
-    switch (option) {
-      case 'all':
-        return ForwardType.all;
-      case 'import-only':
-        return ForwardType.importOnly;
-      case 'prefixed':
-        return ForwardType.prefixed;
-      default:
-        throw StateError('Invalid value "$option" for --forward option.');
-    }
-  }
+  factory(String option) => switch (option) {
+    'all' => .all,
+    'import-only' => .importOnly,
+    'prefixed' => .prefixed,
+    _ => throw StateError('Invalid value "$option" for --forward option.'),
+  };
 }

@@ -344,7 +344,7 @@ class _ReferenceVisitor(
             node.arguments.positional.length + node.arguments.named.length;
         if (totalArgs > 1) return true;
         return argument is BinaryOperationExpression &&
-            argument.operator == BinaryOperator.singleEquals;
+            argument.operator == .singleEquals;
       default:
         return false;
     }

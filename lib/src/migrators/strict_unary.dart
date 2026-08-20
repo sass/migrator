@@ -41,8 +41,7 @@ class _UnaryMigrationVisitor(
 }) extends MigrationVisitor {
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
-    if (node.operator == BinaryOperator.plus ||
-        node.operator == BinaryOperator.minus) {
+    if (node.operator case .plus || .minus) {
       var betweenOperands = node.span.file
           .span(node.left.span.end.offset, node.right.span.start.offset)
           .text;
