@@ -397,10 +397,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if patched and false otherwise.
   bool _tryMultiplication(BinaryOperationExpression node) {
     if (!useMultiplication) return false;
-    if (node.right case NumberExpression(
-      unit: null,
-      value: var divisor,
-    ) when _allowedDivisors.contains(divisor)) {
+    if (node.right case NumberExpression(unit: null, value: var divisor)
+        when _allowedDivisors.contains(divisor)) {
       var operatorSpan = node.left.span
           .extendThroughWhitespace()
           .end

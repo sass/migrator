@@ -146,9 +146,8 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
     var oldNamespace = rule.namespace!;
     _usedNamespaces.add(newNamespace);
     if (rule.namespace == newNamespace) return;
-    var asClause = RegExp(
-      '\\s*as\\s+(${rule.namespace})',
-    ).firstMatch(rule.span.text);
+    var asClause = RegExp('\\s*as\\s+(${rule.namespace})')
+        .firstMatch(rule.span.text);
     if (asClause == null) {
       // Add an `as` clause to a rule that previously lacked one.
       var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text)!.end;
