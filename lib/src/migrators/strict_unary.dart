@@ -35,9 +35,10 @@ class StrictUnaryMigrator extends Migrator {
   }
 }
 
-class _UnaryMigrationVisitor extends MigrationVisitor {
-  new(super.importCache, {required super.migrateDependencies});
-
+class _UnaryMigrationVisitor(
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
     if (node.operator == BinaryOperator.plus ||

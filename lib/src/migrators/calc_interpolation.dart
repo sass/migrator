@@ -35,9 +35,10 @@ class CalculationInterpolationMigrator extends Migrator {
   }
 }
 
-class _CalculationInterpolationVisitor extends MigrationVisitor {
-  new(super.importCache, {required super.migrateDependencies});
-
+class _CalculationInterpolationVisitor(
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];

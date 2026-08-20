@@ -9,15 +9,15 @@ import 'package:source_span/source_span.dart';
 
 import 'utils.dart';
 
-class Patch implements Comparable<Patch> {
+class const Patch(
   /// Selection to be replaced
-  final FileSpan selection;
+  final FileSpan selection,
 
   /// Text to replace the selection with.
-  final String replacement;
-
+  final String replacement,
+) implements Comparable<Patch> {
   /// Constructs a patch that replaces [selection] with [replacement].
-  const new(this.selection, this.replacement);
+  this;
 
   /// Constructs a patch that inserts [replacement] at [location].
   new insert(FileLocation location, String replacement)

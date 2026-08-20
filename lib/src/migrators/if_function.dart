@@ -57,12 +57,13 @@ final _sassPolyfill = r"""
 /// A regular expression matching a sequence characters followed by a semicolon.
 final _semicolonRegExp = RegExp(r".*?;");
 
-class _IfMigrationVisitor extends MigrationVisitor {
+class _IfMigrationVisitor(
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// Whether to add an `@function -if()` definition to the root of the
   /// stylesheet to polyfill rest arguments.
   var _addPolyfill = false;
-
-  new(super.importCache, {required super.migrateDependencies});
 
   @override
   void beforePatch(Stylesheet node) {

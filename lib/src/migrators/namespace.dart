@@ -63,10 +63,12 @@ class NamespaceMigrator extends Migrator {
   }
 }
 
-class _NamespaceMigrationVisitor extends MigrationVisitor {
-  final Renamer<UseRule> renamer;
-  final bool forceRename;
-
+class _NamespaceMigrationVisitor(
+  final Renamer<UseRule> renamer,
+  final bool forceRename,
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// A set of spans for each *original* namespace in the current file.
   ///
   /// Each span covers just the namespace of a member reference.
@@ -78,13 +80,6 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   Set<String> get _usedNamespaces =>
       assertInStylesheet(__usedNamespaces, '_usedNamespaces');
   Set<String>? __usedNamespaces;
-
-  new(
-    this.renamer,
-    this.forceRename,
-    super.importCache, {
-    required super.migrateDependencies,
-  });
 
   @override
   void visitStylesheet(Stylesheet node) {

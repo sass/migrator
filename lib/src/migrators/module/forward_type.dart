@@ -8,7 +8,10 @@ import 'package:meta/meta.dart';
 
 /// An enum of values for the --forward option.
 @sealed
-class ForwardType {
+class const ForwardType._(
+  /// Identifier for this value.
+  final String id,
+) {
   /// Forward all members through the entrypoint
   static const all = ForwardType._('all');
 
@@ -17,11 +20,6 @@ class ForwardType {
 
   /// Forward all members through the entrypoint's import-only file.
   static const importOnly = ForwardType._('import-only');
-
-  /// Identifier for this value.
-  final String id;
-
-  const new _(this.id);
 
   factory(String option) {
     switch (option) {

@@ -100,7 +100,7 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
   ]);
 }
 
-class _HrxTestFiles {
+class _HrxTestFiles(String hrxText) {
   Map<String, String?> input = {};
   Map<String, String?> output = {};
   List<String> arguments = [];
@@ -108,7 +108,7 @@ class _HrxTestFiles {
   String? expectedError;
   String? expectedWarning;
 
-  new(String hrxText) {
+  this {
     // TODO(jathak): Replace this with an actual HRX parser.
     String? filename;
     var contents = "";

@@ -156,7 +156,32 @@ class ModuleMigrator extends Migrator {
   }
 }
 
-class _ModuleMigrationVisitor extends MigrationVisitor {
+class _ModuleMigrationVisitor(
+  super.importCache,
+
+  /// A mapping between member declarations and references.
+  ///
+  /// This performs an initial pass to determine how a declaration seen in the
+  /// main migration pass is used.
+  final References references,
+  List<String> loadPaths, {
+  required super.migrateDependencies,
+
+  /// Whether to migrate only global functions, leaving `@import` rules as-is.
+  required final bool builtInOnly,
+
+  /// Whether to allow hoisting imports to the top of the file even when they
+  /// emit CSS.
+  required final bool unsafeHoist,
+  Iterable<String> prefixesToRemove = const [],
+
+  /// The values of the --forward flag.
+  final Set<ForwardType> forwards = const {},
+
+  /// CSS at rules that should be considered to not emit CSS for the purpose
+  /// of hoisting late `@import` rules.
+  final Set<String> safeAtRules = const {},
+}) extends MigrationVisitor {
   /// Set of stylesheets currently being migrated.
   ///
   /// Used to ensure that a dependency declaring a variable that an upstream
@@ -259,32 +284,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       ));
   Set<MemberDeclaration<VariableDeclaration>>? __configuredVariables;
 
-  /// A mapping between member declarations and references.
-  ///
-  /// This performs an initial pass to determine how a declaration seen in the
-  /// main migration pass is used.
-  final References references;
-
   /// List of paths that stylesheets can be loaded from.
-  final List<String> loadPaths;
+  final List<String> loadPaths = List.unmodifiable(
+    loadPaths.map((path) => p.toUri(p.absolute(path)).path),
+  );
 
   /// Prefixes to be removed from any members with them, or empty if no prefixes
   /// should be removed.
-  final Set<String> prefixesToRemove;
-
-  /// The values of the --forward flag.
-  final Set<ForwardType> forwards;
-
-  /// Whether to migrate only global functions, leaving `@import` rules as-is.
-  final bool builtInOnly;
-
-  /// Whether to allow hoisting imports to the top of the file even when they
-  /// emit CSS.
-  final bool unsafeHoist;
-
-  /// CSS at rules that should be considered to not emit CSS for the purpose
-  /// of hoisting late `@import` rules.
-  final Set<String> safeAtRules;
+  final Set<String> prefixesToRemove = UnmodifiableSetView(
+    prefixesToRemove.toSet(),
+  );
 
   /// Constructs a new module migration visitor.
   ///
@@ -297,20 +306,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   ///
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
-  new(
-    super.importCache,
-    this.references,
-    List<String> loadPaths, {
-    required super.migrateDependencies,
-    required this.builtInOnly,
-    required this.unsafeHoist,
-    Iterable<String> prefixesToRemove = const [],
-    this.forwards = const {},
-    this.safeAtRules = const {},
-  }) : loadPaths = List.unmodifiable(
-         loadPaths.map((path) => p.toUri(p.absolute(path)).path),
-       ),
-       prefixesToRemove = UnmodifiableSetView(prefixesToRemove.toSet());
+  this;
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.

@@ -22,16 +22,13 @@ String copyNamespacedCode(
   return Patch.applyAllToSpan(node.span, patches);
 }
 
-class _NamespacePatchingVisitor
-    with RecursiveStatementVisitor, RecursiveAstVisitor {
+class _NamespacePatchingVisitor(
   /// Called on every [SassReference] encountered, this should return the
   /// namespace that should be used for this reference, or null if the
   /// reference should be unnamespaced.
-  final String? Function(SassReference reference) namespacer;
-
+  final String? Function(SassReference reference) namespacer,
+) with RecursiveStatementVisitor, RecursiveAstVisitor {
   late List<Patch> patches;
-
-  new(this.namespacer);
 
   List<Patch> getPatchesFor(SassNode node) {
     patches = [];

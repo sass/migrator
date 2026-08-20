@@ -67,33 +67,27 @@ GetArgumentsResult getArguments(
 sealed class GetArgumentsResult {}
 
 /// The call doesn't match the given parameters.
-class GetArgumentsInvalidCall extends GetArgumentsResult {
+class GetArgumentsInvalidCall._(
   /// The span of the first invalid argument.
-  final FileSpan span;
+  final FileSpan span,
 
   /// A description of what's invalid.
-  final String description;
-
-  new _(this.span, this.description);
-}
+  final String description,
+) extends GetArgumentsResult {}
 
 /// The call may be valid, but can't be resolved statically (for example because
 /// it involves rest arguments).
-class GetArgumentsNotResolvable extends GetArgumentsResult {
-  new _();
-}
+class GetArgumentsNotResolvable._() extends GetArgumentsResult;
 
 /// The call is valid.
-class GetArgumentsArguments extends GetArgumentsResult {
+class GetArgumentsArguments._(
   /// The list of arguments in positional order.
   ///
   /// This is guaranteed to be the same length as [ParameterList.parameters].
-  final List<GetArgumentArgument> arguments;
-
+  final List<GetArgumentArgument> arguments,
+) extends GetArgumentsResult {
   /// Whether the arguments were passed in the canonical, positional order.
-  final bool inOrder;
-
-  new _(this.arguments) : inOrder = _isInOrder(arguments);
+  final bool inOrder = _isInOrder(arguments);
 
   /// Returns whether each non-default argument in [arguments] appears in the
   /// normal positional order.
@@ -123,19 +117,17 @@ enum GetArgumentType {
 }
 
 /// Metadata about a particular argument returned by [getArgument].
-class GetArgumentArgument {
+class GetArgumentArgument._(
   /// The value of the argument.
-  final Expression argument;
+  final Expression argument,
 
   /// The argument's span, _including_ the name if it was passed by name (or is
   /// a default argument).
-  final FileSpan span;
+  final FileSpan span,
 
   /// The type of argument this represents.
-  final GetArgumentType type;
-
-  new _(this.argument, this.span, this.type);
-
+  final GetArgumentType type,
+) {
   /// If this is a named argument, returns a [Patch] that removes its argument name.
   Patch? patchOutName() => type == GetArgumentType.named
       ? Patch(span.before(argument.span), '')

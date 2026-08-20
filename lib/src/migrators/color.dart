@@ -42,11 +42,11 @@ class ColorMigrator extends Migrator {
 /// URL for the sass:color module.
 final _colorUrl = Uri(scheme: 'sass', path: 'color');
 
-class _ColorMigrationVisitor extends MigrationVisitor {
-  final References references;
-
-  new(this.references, super.importCache, {required super.migrateDependencies});
-
+class _ColorMigrationVisitor(
+  final References references,
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// The namespace of an existing `@use "sass:color"` rule in the current
   /// file, if any.
   String? _colorModuleNamespace;

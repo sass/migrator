@@ -39,16 +39,14 @@ import 'package:string_scanner/string_scanner.dart';
 ///
 /// If you wish to include a semicolon, space, or literal backslash in the
 /// matcher or output clause, you should escape it with `\`.
-class Renamer<T> {
+class Renamer<T>._(
   /// A map from keys to functions that take an input and return the value of
   /// that key for that input.
-  final Map<String, String Function(T input)> keys;
+  final Map<String, String Function(T input)> keys,
 
   /// The list of statements that are evaluated in order by this renamer.
-  final List<_Statement<T>> _statements;
-
-  new _(this.keys, this._statements);
-
+  final List<_Statement<T>> _statements,
+) {
   /// Creates a simple Renamer from [code] that only uses an empty key.
   ///
   /// If provided, [sourceUrl] will appear in parsing errors. It can be
@@ -225,19 +223,17 @@ final _statementDelimiter = RegExp(r' *((\n|;) *)+');
 
 /// A Renamer statement, which defines a single key and regex to match on and
 /// the output to return if an input is successfully matched.
-class _Statement<T> {
+class _Statement<T>(
   /// The key this statement matches on.
-  final String Function(T input) key;
+  final String Function(T input) key,
 
   /// The regular expression that matches on key.
-  final RegExp matcher;
+  final RegExp matcher,
 
   /// The output of this statement is constructed from the concatenation of
   /// these components.
-  final List<_OutputComponent> output;
-
-  new(this.key, this.matcher, this.output);
-
+  final List<_OutputComponent> output,
+) {
   /// Return the output if this statement matches [input] or null otherwise.
   String? rename(T input) {
     var match = matcher.firstMatch(key(input));
@@ -247,27 +243,21 @@ class _Statement<T> {
 }
 
 /// A component of an output clause.
-abstract class _OutputComponent {
+abstract class _OutputComponent() {
   /// When constructing the output, this will be called with the match that
   /// the matcher clause found.
   String? build(RegExpMatch match);
 }
 
 /// Literal text that's part of a statement's output.
-class _Literal extends _OutputComponent {
-  final String text;
-  new(this.text);
-
+class _Literal(final String text) extends _OutputComponent {
   /// This just returns the literal text of this component.
   @override
   String build(RegExpMatch match) => text;
 }
 
 /// A backreference that's part of a statement's output.
-class _Backreference extends _OutputComponent {
-  final int number;
-  new(this.number);
-
+class _Backreference(final int number) extends _OutputComponent {
   /// Returns the captured group numbered [number] in [match].
   @override
   String? build(RegExpMatch match) => match.group(number);

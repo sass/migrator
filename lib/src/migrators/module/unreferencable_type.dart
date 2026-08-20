@@ -12,7 +12,10 @@ import '../../exception.dart';
 
 /// An enum of reasons why a member is unreferencable.
 @sealed
-class UnreferencableType {
+class const UnreferencableType._(
+  /// Identifier for this unreferencable type.
+  final String id,
+) {
   /// For members of the importing stylesheet within a nested import.
   static const fromImporter = UnreferencableType._('fromImporter');
 
@@ -21,11 +24,6 @@ class UnreferencableType {
 
   /// For members from a late import.
   static const fromLateImport = UnreferencableType._('fromLateImport');
-
-  /// Identifier for this unreferencable type.
-  final String id;
-
-  const new _(this.id);
 
   /// Returns a MigrationException for a [reference] to a member defined in
   /// [source] of this type.

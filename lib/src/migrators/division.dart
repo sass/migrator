@@ -90,17 +90,12 @@ More info: https://sass-lang.com/d/slash-div""";
 /// The set of constant divisors that should be migrated to multiplication.
 const _allowedDivisors = {2, 4, 5, 8, 10, 20, 40, 50, 80, 100, 1000};
 
-class _DivisionMigrationVisitor extends MigrationVisitor {
-  final bool isPessimistic;
-  final bool useMultiplication;
-
-  new(
-    super.importCache,
-    this.isPessimistic,
-    this.useMultiplication, {
-    required super.migrateDependencies,
-  });
-
+class _DivisionMigrationVisitor(
+  super.importCache,
+  final bool isPessimistic,
+  final bool useMultiplication, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// True when division is allowed by the context the current node is in.
   var _isDivisionAllowed = false;
 
