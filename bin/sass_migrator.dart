@@ -9,8 +9,6 @@ import 'package:sass_migrator/src/node_interop_stub.dart'
 
 import 'package:sass_migrator/src/runner.dart';
 
-// We can't declare args as a List<String> or Iterable<String> beacause of
-// dart-lang/sdk#36627.
 void main(Iterable<String> args) {
   var argv = process.argv;
   if (argv != null) args = argv.skip(2).cast<String>();

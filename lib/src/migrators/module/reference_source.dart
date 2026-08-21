@@ -95,9 +95,6 @@ final class BuiltInSource(String module) extends ReferenceSource {
   @override
   final Uri url = Uri.parse("sass:$module");
 
-  /// Constructs a [BuiltInSource] for a [module].
-  this;
-
   @override
   String get preferredNamespace => url.path;
 
