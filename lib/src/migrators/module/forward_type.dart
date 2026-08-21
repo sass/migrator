@@ -8,7 +8,10 @@ import 'package:meta/meta.dart';
 
 /// An enum of values for the --forward option.
 @sealed
-class ForwardType {
+class const ForwardType._(
+  /// Identifier for this value.
+  final String id,
+) {
   /// Forward all members through the entrypoint
   static const all = ForwardType._('all');
 
@@ -18,21 +21,10 @@ class ForwardType {
   /// Forward all members through the entrypoint's import-only file.
   static const importOnly = ForwardType._('import-only');
 
-  /// Identifier for this value.
-  final String id;
-
-  const ForwardType._(this.id);
-
-  factory ForwardType(String option) {
-    switch (option) {
-      case 'all':
-        return ForwardType.all;
-      case 'import-only':
-        return ForwardType.importOnly;
-      case 'prefixed':
-        return ForwardType.prefixed;
-      default:
-        throw StateError('Invalid value "${option}" for --forward option.');
-    }
-  }
+  factory(String option) => switch (option) {
+    'all' => .all,
+    'import-only' => .importOnly,
+    'prefixed' => .prefixed,
+    _ => throw StateError('Invalid value "$option" for --forward option.'),
+  };
 }

@@ -12,7 +12,9 @@ import '../patch.dart';
 
 /// Removes interpolation in calculation functions.
 class CalculationInterpolationMigrator extends Migrator {
+  @override
   final name = "calc-interpolation";
+  @override
   final description =
       r"Removes interpolation in calculation functions"
       r"`calc()`, `clamp()`, `min()`, and `max()`";
@@ -33,12 +35,10 @@ class CalculationInterpolationMigrator extends Migrator {
   }
 }
 
-class _CalculationInterpolationVisitor extends MigrationVisitor {
-  _CalculationInterpolationVisitor(
-    super.importCache, {
-    required super.migrateDependencies,
-  });
-
+class _CalculationInterpolationVisitor(
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     const calcFunctions = ['calc', 'clamp', 'min', 'max'];
@@ -58,7 +58,7 @@ class _CalculationInterpolationVisitor extends MigrationVisitor {
         for (var match in interpolation.allMatches(newArg)) {
           var noInterpolation = match[0]!.substring(2, match[0]!.length - 1);
           if (hasOperation.hasMatch(noInterpolation)) {
-            noInterpolation = '(' + noInterpolation + ')';
+            noInterpolation = '($noInterpolation)';
           }
           newArg = newArg.toString().replaceAll(match[0]!, noInterpolation);
         }

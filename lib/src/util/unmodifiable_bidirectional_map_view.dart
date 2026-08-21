@@ -9,13 +9,10 @@ import 'dart:collection';
 import 'bidirectional_map.dart';
 
 /// A unmodifiable view of [BidirectionalMap].
-class UnmodifiableBidirectionalMapView<K, V> extends UnmodifiableMapView<K, V>
+class UnmodifiableBidirectionalMapView<K, V>(BidirectionalMap<K, V> super.map)
+    extends UnmodifiableMapView<K, V>
     implements BidirectionalMap<K, V> {
-  final BidirectionalMap<K, V> _map;
-
-  UnmodifiableBidirectionalMapView(BidirectionalMap<K, V> map)
-    : _map = map,
-      super(map);
+  final BidirectionalMap<K, V> _map = map;
 
   @override
   Iterable<K> keysForValue(V value) => _map.keysForValue(value);

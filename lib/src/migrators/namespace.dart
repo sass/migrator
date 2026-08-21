@@ -16,7 +16,9 @@ import '../renamer.dart';
 
 /// Changes namespaces for `@use` rules within the file(s) being migrated.
 class NamespaceMigrator extends Migrator {
+  @override
   final name = "namespace";
+  @override
   final description = "Change namespaces for `@use` rules.";
 
   @override
@@ -44,10 +46,11 @@ class NamespaceMigrator extends Migrator {
     Stylesheet stylesheet,
     Importer importer,
   ) {
-    var renamer = Renamer<UseRule>(argResults!['rename'].join('\n'), {
-      '': ((rule) => rule.namespace!),
-      'url': (rule) => rule.url.toString(),
-    }, sourceUrl: '--rename');
+    var renamer = Renamer<UseRule>(
+      (argResults!['rename'] as List<String>).join('\n'),
+      {'': ((rule) => rule.namespace!), 'url': (rule) => rule.url.toString()},
+      sourceUrl: '--rename',
+    );
     var visitor = _NamespaceMigrationVisitor(
       renamer,
       argResults!['force'] as bool,
@@ -60,10 +63,12 @@ class NamespaceMigrator extends Migrator {
   }
 }
 
-class _NamespaceMigrationVisitor extends MigrationVisitor {
-  final Renamer<UseRule> renamer;
-  final bool forceRename;
-
+class _NamespaceMigrationVisitor(
+  final Renamer<UseRule> renamer,
+  final bool forceRename,
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// A set of spans for each *original* namespace in the current file.
   ///
   /// Each span covers just the namespace of a member reference.
@@ -75,13 +80,6 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
   Set<String> get _usedNamespaces =>
       assertInStylesheet(__usedNamespaces, '_usedNamespaces');
   Set<String>? __usedNamespaces;
-
-  _NamespaceMigrationVisitor(
-    this.renamer,
-    this.forceRename,
-    super.importCache, {
-    required super.migrateDependencies,
-  });
 
   @override
   void visitStylesheet(Stylesheet node) {
@@ -146,9 +144,8 @@ class _NamespaceMigrationVisitor extends MigrationVisitor {
     var oldNamespace = rule.namespace!;
     _usedNamespaces.add(newNamespace);
     if (rule.namespace == newNamespace) return;
-    var asClause = RegExp(
-      '\\s*as\\s+(${rule.namespace})',
-    ).firstMatch(rule.span.text);
+    var asClause = RegExp('\\s*as\\s+(${rule.namespace})')
+        .firstMatch(rule.span.text);
     if (asClause == null) {
       // Add an `as` clause to a rule that previously lacked one.
       var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text)!.end;

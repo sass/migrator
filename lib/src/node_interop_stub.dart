@@ -8,9 +8,10 @@
 /// use, so that it can be imported on the Dart VM.
 ///
 /// [`node_interop/node`]: https://pub.dartlang.org/documentation/node_interop/latest/node_interop.node/node_interop.node-library.html
+library;
 
 class Process {
-  List? get argv => null;
+  List<Object?>? get argv => null;
 }
 
 final process = Process();

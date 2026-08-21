@@ -9,7 +9,10 @@ import 'package:meta/meta.dart';
 /// An enum of potential states for whether unnested `@import`s at the current
 /// point in the file can be migrated.
 @sealed
-class UseAllowed {
+class const UseAllowed._(
+  /// Identifier for this status
+  final String id,
+) {
   /// Status when `@use` and `@forward` are allowed at this point in the file.
   static const allowed = UseAllowed._('allowed');
 
@@ -25,11 +28,6 @@ class UseAllowed {
   /// Migrated `@import`s may still be hoisted at this point if they do not
   /// emit any CSS themselves or if `--unsafe-hoist` is passed.
   static const notAllowed = UseAllowed._('notAllowed');
-
-  /// Identifier for this status
-  final String id;
-
-  const UseAllowed._(this.id);
 
   /// Returns [requiresHoist] unless [this] is already [notAllowed], in which
   /// case it should remain [notAllowed].

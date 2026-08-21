@@ -10,10 +10,10 @@ import 'member_declaration.dart';
 
 /// Keeps track of the scope of any members declared at the current level of
 /// the stylesheet.
-class Scope {
+class Scope([
   /// The parent of this scope, or null if this scope is global.
-  final Scope? parent;
-
+  final Scope? parent,
+]) {
   /// Variables defined in this scope.
   ///
   /// These are usually VariableDeclarations, but can also be Arguments from
@@ -25,8 +25,6 @@ class Scope {
 
   /// Functions defined in this scope.
   final functions = <String, MemberDeclaration<FunctionRule>>{};
-
-  Scope([this.parent]);
 
   /// The global scope this scope descends from.
   Scope get global => parent?.global ?? this;
@@ -68,5 +66,6 @@ class Scope {
   MemberDeclaration<FunctionRule>? findFunction(String name) =>
       functions[name] ?? parent?.findFunction(name);
 
+  @override
   String toString() => '${functions.keys}->$parent';
 }

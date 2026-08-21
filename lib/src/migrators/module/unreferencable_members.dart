@@ -10,14 +10,12 @@ import '../../util/member_declaration.dart';
 import 'unreferencable_type.dart';
 
 /// Tracks members that are unreferencable in the current scope.
-class UnreferencableMembers {
+class UnreferencableMembers([
   /// The parent scope of this instance.
-  final UnreferencableMembers? parent;
-
+  final UnreferencableMembers? parent,
+]) {
   /// The members marked as unreferencable in this scope directly.
   final _unreferencable = <MemberDeclaration, UnreferencableType>{};
-
-  UnreferencableMembers([this.parent]);
 
   /// Marks [declaration] as unreferencable with the given [type].
   void add(MemberDeclaration declaration, UnreferencableType type) {

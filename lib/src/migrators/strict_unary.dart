@@ -12,7 +12,9 @@ import '../patch.dart';
 
 /// Migrates deprecated `$a -$b` construct to unambiguous `$a - $b`.
 class StrictUnaryMigrator extends Migrator {
+  @override
   final name = "strict-unary";
+  @override
   final description =
       r"Migrates deprecated `$a -$b` syntax (and similar) to "
       r"unambiguous `$a - $b`";
@@ -33,16 +35,13 @@ class StrictUnaryMigrator extends Migrator {
   }
 }
 
-class _UnaryMigrationVisitor extends MigrationVisitor {
-  _UnaryMigrationVisitor(
-    super.importCache, {
-    required super.migrateDependencies,
-  });
-
+class _UnaryMigrationVisitor(
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
-    if (node.operator == BinaryOperator.plus ||
-        node.operator == BinaryOperator.minus) {
+    if (node.operator case .plus || .minus) {
       var betweenOperands = node.span.file
           .span(node.left.span.end.offset, node.right.span.start.offset)
           .text;

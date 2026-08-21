@@ -42,7 +42,9 @@ const _calcFunctions = {
 /// Migrates stylesheets that use the `/` operator for division to use the
 /// `divide` function instead.
 class DivisionMigrator extends Migrator {
+  @override
   final name = "division";
+  @override
   final description = """
 Use the math.div() function instead of the / division operator
 
@@ -88,17 +90,12 @@ More info: https://sass-lang.com/d/slash-div""";
 /// The set of constant divisors that should be migrated to multiplication.
 const _allowedDivisors = {2, 4, 5, 8, 10, 20, 40, 50, 80, 100, 1000};
 
-class _DivisionMigrationVisitor extends MigrationVisitor {
-  final bool isPessimistic;
-  final bool useMultiplication;
-
-  _DivisionMigrationVisitor(
-    super.importCache,
-    this.isPessimistic,
-    this.useMultiplication, {
-    required super.migrateDependencies,
-  });
-
+class _DivisionMigrationVisitor(
+  super.importCache,
+  final bool isPessimistic,
+  final bool useMultiplication, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// True when division is allowed by the context the current node is in.
   var _isDivisionAllowed = false;
 
@@ -196,7 +193,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// operands.
   @override
   void visitBinaryOperationExpression(BinaryOperationExpression node) {
-    if (node.operator == BinaryOperator.dividedBy) {
+    if (node.operator == .dividedBy) {
       _visitSlashOperation(node);
     } else {
       _withContext(
@@ -255,7 +252,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   }) {
     _withContext(() {
       if (node.expression
-          case BinaryOperationExpression(operator: BinaryOperator.dividedBy) &&
+          case BinaryOperationExpression(operator: .dividedBy) &&
               var expression) {
         if (_visitSlashOperation(expression) && !negated) {
           addPatch(patchDelete(node.span, end: 1));
@@ -272,7 +269,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   @override
   void visitUnaryOperationExpression(UnaryOperationExpression node) {
     if (node case UnaryOperationExpression(
-      operator: UnaryOperator.minus,
+      operator: .minus,
       :ParenthesizedExpression operand,
     )) {
       visitParenthesizedExpression(operand, negated: true);
@@ -316,7 +313,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
     if (channels case ListExpression(
       hasBrackets: false,
-      separator: ListSeparator.space,
+      separator: .space,
       contents: [_, _, BinaryOperationExpression last],
     )) {
       // Handles cases like `rgb(10 20 30/2 / 0.5)`, since converting `30/2`
@@ -355,8 +352,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
     }
     var status = _NumberStatus.of(node);
 
-    if ((!_isDivisionAllowed && _onlySlash(node)) ||
-        status == _NumberStatus.no) {
+    if ((!_isDivisionAllowed && _onlySlash(node)) || status == .no) {
       // Definitely not division
       if (_isDivisionAllowed || _containsInterpolation(node)) {
         // We only want to convert a non-division slash operation to a
@@ -368,9 +364,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
       }
       return true;
     }
-    if (_expectsNumericResult ||
-        status == _NumberStatus.yes ||
-        !isPessimistic) {
+    if (_expectsNumericResult || status == .yes || !isPessimistic) {
       // Definitely division
       _withContext(
         () => super.visitBinaryOperationExpression(node),
@@ -397,10 +391,8 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if patched and false otherwise.
   bool _tryMultiplication(BinaryOperationExpression node) {
     if (!useMultiplication) return false;
-    if (node.right case NumberExpression(
-      unit: null,
-      value: var divisor,
-    ) when _allowedDivisors.contains(divisor)) {
+    if (node.right case NumberExpression(unit: null, value: var divisor)
+        when _allowedDivisors.contains(divisor)) {
       var operatorSpan = node.left.span
           .extendThroughWhitespace()
           .end
@@ -418,7 +410,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// unnecessary interpolation.
   void _visitSlashListArguments(Expression node) {
     switch (node) {
-      case BinaryOperationExpression(operator: BinaryOperator.dividedBy):
+      case BinaryOperationExpression(operator: .dividedBy):
         _visitSlashListArguments(node.left);
         _patchOperatorToComma(node);
         _visitSlashListArguments(node.right);
@@ -435,24 +427,20 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   /// Returns true if we assume that [operator] always operators on numbers.
   ///
   /// This is true for `*`, `%`, `<`, `<=`, `>`, and `>=`.
-  bool _operatesOnNumbers(BinaryOperator operator) => {
-    BinaryOperator.times,
-    BinaryOperator.modulo,
-    BinaryOperator.lessThan,
-    BinaryOperator.lessThanOrEquals,
-    BinaryOperator.greaterThan,
-    BinaryOperator.greaterThanOrEquals,
+  bool _operatesOnNumbers(BinaryOperator operator) => <BinaryOperator>{
+    .times,
+    .modulo,
+    .lessThan,
+    .lessThanOrEquals,
+    .greaterThan,
+    .greaterThanOrEquals,
   }.contains(operator);
 
   /// Returns true if [node] is entirely composed of number literals and slash
   /// operations.
   bool _onlySlash(Expression node) => switch (node) {
     NumberExpression() => true,
-    BinaryOperationExpression(
-      operator: BinaryOperator.dividedBy,
-      :var left,
-      :var right,
-    ) =>
+    BinaryOperationExpression(operator: .dividedBy, :var left, :var right) =>
       _onlySlash(left) && _onlySlash(right),
     _ => false,
   };
@@ -490,9 +478,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
   void _patchParensIfAny(SassNode node) {
     switch (node) {
       case ParenthesizedExpression(
-        expression: BinaryOperationExpression(
-          operator: BinaryOperator.dividedBy,
-        ),
+        expression: BinaryOperationExpression(operator: .dividedBy),
       ):
         return;
       case ParenthesizedExpression():
@@ -503,7 +489,7 @@ class _DivisionMigrationVisitor extends MigrationVisitor {
 
   /// Runs [operation] with the given context.
   void _withContext(
-    void operation(), {
+    void Function() operation, {
     bool? isDivisionAllowed,
     bool? expectsNumericResult,
     bool? inCalcContext,
@@ -532,9 +518,7 @@ enum _NumberStatus {
   /// definitely not a number, and [maybe] otherwise.
   static _NumberStatus of(Expression node) => switch (node) {
     NumberExpression() ||
-    BinaryOperationExpression(
-      operator: BinaryOperator.times || BinaryOperator.modulo,
-    ) => yes,
+    BinaryOperationExpression(operator: .times || .modulo) => yes,
     BooleanExpression() ||
     ColorExpression() ||
     ListExpression() ||

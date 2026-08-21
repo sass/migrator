@@ -24,11 +24,29 @@ import 'reference_source.dart';
 /// This object is generated during an initial pass. The module migrator then
 /// uses the information here during the main migration pass to determine how
 /// members are referenced.
-class References {
+class References._(
+  BidirectionalMap<VariableExpression, MemberDeclaration> variables,
+  BidirectionalMap<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
+  variableReassignments,
+  Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
+  defaultVariableDeclarations,
+  BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins,
+  BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+  functions,
+  BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
+  getFunctionReferences,
+  Set<MemberDeclaration> globalDeclarations,
+  Map<MemberDeclaration, Set<Uri>> libraries,
+  Map<SassReference, ReferenceSource> sources,
+  Map<Uri, ForwardRule?> orphanImportOnlyFiles,
+  Map<Uri, bool> fileEmitsCss,
+  Map<Uri, List<IncludeRule>> importOnlyIncludes,
+) {
   /// An unmodifiable map between variable references and their declarations.
   ///
   /// Each value in this map must be a [VariableDeclaration] or an [Argument].
-  final BidirectionalMap<VariableExpression, MemberDeclaration> variables;
+  final BidirectionalMap<VariableExpression, MemberDeclaration> variables =
+      UnmodifiableBidirectionalMapView(variables);
 
   /// An unmodifiable map between variable reassignments and the original
   /// declaration they override.
@@ -41,7 +59,9 @@ class References {
     MemberDeclaration<VariableDeclaration>,
     MemberDeclaration
   >
-  variableReassignments;
+  variableReassignments = UnmodifiableBidirectionalMapView(
+    variableReassignments,
+  );
 
   /// An unmodifiable map from variable declarations with the `!default` flag to
   /// the declaration they would override were it not for that flag.
@@ -49,55 +69,71 @@ class References {
   /// This only includes `!default` declarations for variables that already
   /// exist.
   final Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
-  defaultVariableDeclarations;
+  defaultVariableDeclarations = UnmodifiableMapView(
+    defaultVariableDeclarations,
+  );
 
   /// An unmodifiable map between mixin references and their declarations.
-  final BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins;
+  final BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins =
+      UnmodifiableBidirectionalMapView(mixins);
 
   /// An unmodifiable map between normal function references and their
   /// declarations.
   ///
   /// This only includes references to user-defined functions.
   final BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-  functions;
+  functions = UnmodifiableBidirectionalMapView(functions);
 
   /// An unmodifiable map between statically-known function references within
   /// a `get-function` call and their declarations.
   ///
   /// This only includes references to user-defined functions.
   final BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-  getFunctionReferences;
+  getFunctionReferences = UnmodifiableBidirectionalMapView(
+    getFunctionReferences,
+  );
 
   /// An unmodifiable set of all member declarations declared in the global
   /// scope of a stylesheet.
-  final Set<MemberDeclaration> globalDeclarations;
+  final Set<MemberDeclaration> globalDeclarations = UnmodifiableSetView(
+    globalDeclarations,
+  );
 
   /// An unmodifiable map from member declarations to the library URLs those
   /// members can be loaded from.
-  final Map<MemberDeclaration, Set<Uri>> libraries;
+  final Map<MemberDeclaration, Set<Uri>> libraries = UnmodifiableMapView({
+    for (var entry in libraries.entries)
+      entry.key: UnmodifiableSetView(entry.value),
+  });
 
   /// A mapping from member references to their source.
   ///
   /// This includes references to built-in functions, but it does not include
   /// functions referenced within `get-function` calls (those nodes instead
   /// map to the [ReferenceSource] for the `sass:meta` module).
-  final Map<SassReference, ReferenceSource> sources;
+  final Map<SassReference, ReferenceSource> sources = UnmodifiableMapView(
+    sources,
+  );
 
   /// Map of import-only files that do not directly depend on their regular
   /// counterparts to the last forward appearing within it (or null, if no
   /// regular file is forwarded by the import-only file).
-  final Map<Uri, ForwardRule?> orphanImportOnlyFiles;
+  final Map<Uri, ForwardRule?> orphanImportOnlyFiles = UnmodifiableMapView(
+    orphanImportOnlyFiles,
+  );
 
   /// A map from stylesheet URLs to whether or not they possibly emit CSS,
   ///
   /// A file is considered to emit CSS if it contains style rules, contains
   /// any top-level `@include` rules or plain CSS at-rules, or depends on any
   /// file that itself emits CSS.
-  final Map<Uri, bool> fileEmitsCss;
+  final Map<Uri, bool> fileEmitsCss = UnmodifiableMapView(fileEmitsCss);
 
   /// A map from import-only files to top-level `@include` rules that should be
   /// used when migrating that import.
-  final Map<Uri, List<IncludeRule>> importOnlyIncludes;
+  final Map<Uri, List<IncludeRule>> importOnlyIncludes = UnmodifiableMapView(
+    importOnlyIncludes,
+  );
 
   /// An iterable of all member declarations.
   Iterable<MemberDeclaration> get allDeclarations =>
@@ -142,48 +178,9 @@ class References {
     return variableReassignments[declaration] ?? declaration;
   }
 
-  References._(
-    BidirectionalMap<VariableExpression, MemberDeclaration> variables,
-    BidirectionalMap<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
-    variableReassignments,
-    Map<MemberDeclaration<VariableDeclaration>, MemberDeclaration>
-    defaultVariableDeclarations,
-    BidirectionalMap<IncludeRule, MemberDeclaration<MixinRule>> mixins,
-    BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-    functions,
-    BidirectionalMap<FunctionExpression, MemberDeclaration<FunctionRule>>
-    getFunctionReferences,
-    Set<MemberDeclaration> globalDeclarations,
-    Map<MemberDeclaration, Set<Uri>> libraries,
-    Map<SassReference, ReferenceSource> sources,
-    Map<Uri, ForwardRule?> orphanImportOnlyFiles,
-    Map<Uri, bool> fileEmitsCss,
-    Map<Uri, List<IncludeRule>> importOnlyIncludes,
-  ) : variables = UnmodifiableBidirectionalMapView(variables),
-      variableReassignments = UnmodifiableBidirectionalMapView(
-        variableReassignments,
-      ),
-      defaultVariableDeclarations = UnmodifiableMapView(
-        defaultVariableDeclarations,
-      ),
-      mixins = UnmodifiableBidirectionalMapView(mixins),
-      functions = UnmodifiableBidirectionalMapView(functions),
-      getFunctionReferences = UnmodifiableBidirectionalMapView(
-        getFunctionReferences,
-      ),
-      globalDeclarations = UnmodifiableSetView(globalDeclarations),
-      libraries = UnmodifiableMapView({
-        for (var entry in libraries.entries)
-          entry.key: UnmodifiableSetView(entry.value),
-      }),
-      sources = UnmodifiableMapView(sources),
-      orphanImportOnlyFiles = UnmodifiableMapView(orphanImportOnlyFiles),
-      fileEmitsCss = UnmodifiableMapView(fileEmitsCss),
-      importOnlyIncludes = UnmodifiableMapView(importOnlyIncludes);
-
   /// Constructs a new [References] object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
-  factory References(
+  factory(
     ImportCache importCache,
     Stylesheet stylesheet,
     Importer importer, {
@@ -195,7 +192,14 @@ class References {
 }
 
 /// A visitor that builds a References object.
-class _ReferenceVisitor extends ScopedAstVisitor {
+class _ReferenceVisitor(
+  /// Cache used to load stylesheets.
+  final ImportCache importCache,
+
+  /// CSS at rules that should be considered to not emit CSS for the purpose
+  /// of hoisting late `@import` rules.
+  final Set<String> safeAtRules,
+) extends ScopedAstVisitor {
   final _variables = BidirectionalMap<VariableExpression, MemberDeclaration>();
   final _variableReassignments =
       BidirectionalMap<
@@ -271,17 +275,8 @@ class _ReferenceVisitor extends ScopedAstVisitor {
   /// This is always false for regular files.
   late bool _isOrphanImportOnly;
 
-  /// Cache used to load stylesheets.
-  final ImportCache importCache;
-
   /// The last `@forward` rule to be visited that was not an import-only file.
   ForwardRule? _lastRegularForward;
-
-  /// CSS at rules that should be considered to not emit CSS for the purpose
-  /// of hoisting late `@import` rules.
-  final Set<String> safeAtRules;
-
-  _ReferenceVisitor(this.importCache, this.safeAtRules);
 
   /// Constructs a new References object based on a [stylesheet] (imported by
   /// [importer]) and its dependencies.
@@ -349,7 +344,7 @@ class _ReferenceVisitor extends ScopedAstVisitor {
             node.arguments.positional.length + node.arguments.named.length;
         if (totalArgs > 1) return true;
         return argument is BinaryOperationExpression &&
-            argument.operator == BinaryOperator.singleEquals;
+            argument.operator == .singleEquals;
       default:
         return false;
     }

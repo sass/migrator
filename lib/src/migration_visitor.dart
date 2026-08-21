@@ -26,17 +26,15 @@ import 'util/scoped_ast_visitor.dart';
 /// If [migrateDependencies] is enabled, this visitor will construct and run a
 /// new instance of itself (using [newInstance]) each time it encounters an
 /// `@import` or `@use` rule.
-abstract class MigrationVisitor extends ScopedAstVisitor {
-  /// A mapping from URLs to migrated contents for stylesheets already migrated.
-  final _migrated = <Uri, String>{};
+abstract class MigrationVisitor(
+  /// Cache used to load stylesheets.
+  @protected final ImportCache importCache, {
 
   /// True if dependencies should be migrated as well.
-  @protected
-  final bool migrateDependencies;
-
-  /// Cache used to load stylesheets.
-  @protected
-  final ImportCache importCache;
+  @protected required final bool migrateDependencies,
+}) extends ScopedAstVisitor {
+  /// A mapping from URLs to migrated contents for stylesheets already migrated.
+  final _migrated = <Uri, String>{};
 
   /// Map of missing dependency URLs to the spans that import/use them.
   Map<Uri, FileSpan> get missingDependencies =>
@@ -68,8 +66,6 @@ abstract class MigrationVisitor extends ScopedAstVisitor {
   /// Returns a semicolon unless the current stylesheet uses the indented
   /// syntax, in which case this returns an empty string.
   String get semicolon => isIndented ? "" : ";";
-
-  MigrationVisitor(this.importCache, {required this.migrateDependencies});
 
   /// Runs a new migration on [stylesheet] (and its dependencies, if
   /// [migrateDependencies] is true) and returns a map of migrated contents.

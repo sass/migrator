@@ -7,6 +7,7 @@
 import 'package:file/file.dart';
 import 'package:js/js.dart';
 import 'package:node_interop/node.dart';
+// ignore: implementation_imports
 import 'package:node_io/src/file_system.dart';
 
 export 'package:node_io/src/directory.dart';
@@ -22,7 +23,7 @@ external bool get supportsAnsiEscapes;
 void printStderr(Object message) => process.stderr.write("$message\n");
 
 int get exitCode => process.exitCode;
-void set exitCode(int code) {
+set exitCode(int code) {
   process.exitCode = code;
 }
 

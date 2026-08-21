@@ -13,7 +13,9 @@ import '../utils.dart';
 
 /// Migrates the legacy `if()` function to the CSS syntax.
 class IfMigrator extends Migrator {
+  @override
   final name = "if-function";
+  @override
   final description = "Migrates the legacy if() to CSS syntax.";
 
   @override
@@ -55,12 +57,13 @@ final _sassPolyfill = r"""
 /// A regular expression matching a sequence characters followed by a semicolon.
 final _semicolonRegExp = RegExp(r".*?;");
 
-class _IfMigrationVisitor extends MigrationVisitor {
+class _IfMigrationVisitor(
+  super.importCache, {
+  required super.migrateDependencies,
+}) extends MigrationVisitor {
   /// Whether to add an `@function -if()` definition to the root of the
   /// stylesheet to polyfill rest arguments.
   var _addPolyfill = false;
-
-  _IfMigrationVisitor(super.importCache, {required super.migrateDependencies});
 
   @override
   void beforePatch(Stylesheet node) {
@@ -82,7 +85,7 @@ class _IfMigrationVisitor extends MigrationVisitor {
         addPatch(
           Patch.insert(
             span.end,
-            '\n' + (isIndented ? _sassPolyfill : _scssPolyfill) + '\n',
+            '\n${isIndented ? _sassPolyfill : _scssPolyfill}\n',
           ),
         );
 
@@ -90,7 +93,7 @@ class _IfMigrationVisitor extends MigrationVisitor {
         addPatch(
           Patch.insert(
             span.extendIfMatches(_semicolonRegExp).end,
-            '\n\n' + (isIndented ? _sassPolyfill : _scssPolyfill),
+            '\n\n${isIndented ? _sassPolyfill : _scssPolyfill}',
           ),
         );
 
@@ -98,7 +101,7 @@ class _IfMigrationVisitor extends MigrationVisitor {
         addPatch(
           Patch.insert(
             node.span.start,
-            (isIndented ? _sassPolyfill : _scssPolyfill) + '\n\n',
+            '${isIndented ? _sassPolyfill : _scssPolyfill}\n\n',
           ),
         );
     }

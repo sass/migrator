@@ -24,6 +24,7 @@ sealed class ReferenceSource {
 /// This includes both sources that directly come from an `@import` rule and
 /// those from a `@forward` rule within an import-only file.
 final class ImportSource extends ReferenceSource {
+  @override
   final Uri url;
 
   /// The URL of the `@import` rule that loaded this member, or null if this
@@ -39,15 +40,16 @@ final class ImportSource extends ReferenceSource {
   /// For example, if A imports B and B imports C, and a member of C is
   /// referenced in A, than that reference's source should be the import in B
   /// that imports C, not the import in A that imports B.
-  ImportSource(this.url, DynamicImport import) : originalRuleUrl = import.url;
+  new(this.url, DynamicImport import) : originalRuleUrl = import.url;
 
   /// Creates an [ImportSource] from an [ImportOnlySource].
-  ImportSource.fromImportOnlyForward(ImportOnlySource source)
+  new fromImportOnlyForward(ImportOnlySource source)
     : url = source.realSourceUrl,
       originalRuleUrl = source.originalRuleUrl;
 
   /// Returns the preferred namespace to use for this module, based on
   /// [originalRuleUrl].
+  @override
   String get preferredNamespace {
     var path = (originalRuleUrl ?? url).path;
     var basename = p.url.basenameWithoutExtension(path);
@@ -55,16 +57,18 @@ final class ImportSource extends ReferenceSource {
     return namespaceForPath(path);
   }
 
+  @override
   operator ==(other) =>
       other is ImportSource &&
       url == other.url &&
       originalRuleUrl == other.originalRuleUrl;
+  @override
   int get hashCode => url.hashCode;
 }
 
 /// A source for references to members loaded by a `@use` rule.
-final class UseSource extends ReferenceSource {
-  final Uri url;
+final class UseSource(
+  @override final Uri url,
 
   /// The `@use` rule that made the referenced member available in the
   /// referencing stylesheet.
@@ -73,39 +77,41 @@ final class UseSource extends ReferenceSource {
   /// imports or forwards C, and a member originally defined in C is referenced
   /// in A, than that reference's source should be the `@use` rule in A that
   /// loads B, not the import or `@forward` rule in B that loads C.
-  final UseRule use;
-
-  UseSource(this.url, this.use);
-
+  final UseRule use,
+) extends ReferenceSource {
+  @override
   String? get preferredNamespace => use.namespace;
 
+  @override
   operator ==(other) =>
       other is UseSource && url == other.url && use == other.use;
+  @override
   int get hashCode => use.hashCode;
 }
 
 /// A source for references to built-in functions that are now part of a
 /// built-in module.
-final class BuiltInSource extends ReferenceSource {
-  final Uri url;
+final class BuiltInSource(String module) extends ReferenceSource {
+  @override
+  final Uri url = Uri.parse("sass:$module");
 
-  /// Constructs a [BuiltInSource] for a [module].
-  BuiltInSource(String module) : url = Uri.parse("sass:$module");
-
+  @override
   String get preferredNamespace => url.path;
 
+  @override
   operator ==(other) => other is BuiltInSource && url == other.url;
+  @override
   int get hashCode => url.hashCode;
 }
 
 /// A source for references to members declared in the same stylesheet.
-final class CurrentSource extends ReferenceSource {
-  final Uri url;
-  CurrentSource(this.url);
-
+final class CurrentSource(@override final Uri url) extends ReferenceSource {
+  @override
   String? get preferredNamespace => null;
 
+  @override
   operator ==(other) => other is CurrentSource && url == other.url;
+  @override
   int get hashCode => url.hashCode;
 }
 
@@ -122,18 +128,19 @@ final class CurrentSource extends ReferenceSource {
 ///
 /// Members forwarded from an import-only file should use [ImportOnlySource]
 /// instead of this.
-final class ForwardSource extends ReferenceSource {
-  final Uri url;
+final class ForwardSource(
+  @override final Uri url,
 
   /// The `@forward` rule the forwarded a member through the current stylesheet.
-  final ForwardRule forward;
-
-  ForwardSource(this.url, this.forward);
-
+  final ForwardRule forward,
+) extends ReferenceSource {
+  @override
   String? get preferredNamespace => null;
 
+  @override
   operator ==(other) =>
       other is ForwardSource && url == other.url && forward == other.forward;
+  @override
   int get hashCode => forward.hashCode;
 }
 
@@ -142,29 +149,30 @@ final class ForwardSource extends ReferenceSource {
 /// This source is similar to [ForwardSource] in that it is only used by
 /// [_ReferenceVisitor] to track sources internally, and should not be present
 /// in the final [sources] property of [References].
-final class ImportOnlySource extends ReferenceSource {
+final class ImportOnlySource(
   /// The canonical URL of the outermost import-only file in the member's
   /// forward chain.
-  final Uri url;
+  @override final Uri url,
 
   /// The canonical URL of the outermost non-import-only file in the member's
   /// forward chain.
-  final Uri realSourceUrl;
+  final Uri realSourceUrl,
 
   /// If [url] is the import-only file for [realSourceUrl], this is the text of
   /// the URL of the `@import` rule that loaded that import-only file.
   ///
   /// Otherwise, this will be null.
-  final Uri? originalRuleUrl;
-
-  ImportOnlySource(this.url, this.realSourceUrl, this.originalRuleUrl);
-
+  final Uri? originalRuleUrl,
+) extends ReferenceSource {
+  @override
   String? get preferredNamespace => null;
 
+  @override
   operator ==(other) =>
       other is ImportOnlySource &&
       url == other.url &&
       realSourceUrl == other.realSourceUrl &&
       originalRuleUrl == other.originalRuleUrl;
+  @override
   int get hashCode => realSourceUrl.hashCode;
 }

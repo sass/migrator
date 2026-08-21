@@ -25,12 +25,13 @@ import 'module/forward_type.dart';
 import 'module/reference_source.dart';
 import 'module/references.dart';
 import 'module/unreferencable_members.dart';
-import 'module/unreferencable_type.dart';
 import 'module/use_allowed.dart';
 
 /// Migrates stylesheets to the new module system.
 class ModuleMigrator extends Migrator {
+  @override
   final name = "module";
+  @override
   final description = "Use the new module system.";
 
   @override
@@ -100,12 +101,15 @@ class ModuleMigrator extends Migrator {
 
   /// Runs the module migrator on [stylesheet] and its dependencies and returns
   /// a map of migrated contents.
+  @override
   Map<Uri, String> migrateFile(
     ImportCache importCache,
     Stylesheet stylesheet,
     Importer importer,
   ) {
-    var forwards = {for (var arg in argResults!['forward']) ForwardType(arg)};
+    var forwards = {
+      for (var arg in argResults!['forward'] as List<String>) ForwardType(arg),
+    };
     var builtInOnly = argResults!['built-in-only'] as bool;
     if (builtInOnly &&
         (argResults!.wasParsed('forward') ||
@@ -151,7 +155,32 @@ class ModuleMigrator extends Migrator {
   }
 }
 
-class _ModuleMigrationVisitor extends MigrationVisitor {
+class _ModuleMigrationVisitor(
+  super.importCache,
+
+  /// A mapping between member declarations and references.
+  ///
+  /// This performs an initial pass to determine how a declaration seen in the
+  /// main migration pass is used.
+  final References references,
+  List<String> loadPaths, {
+  required super.migrateDependencies,
+
+  /// Whether to migrate only global functions, leaving `@import` rules as-is.
+  required final bool builtInOnly,
+
+  /// Whether to allow hoisting imports to the top of the file even when they
+  /// emit CSS.
+  required final bool unsafeHoist,
+  Iterable<String> prefixesToRemove = const [],
+
+  /// The values of the --forward flag.
+  final Set<ForwardType> forwards = const {},
+
+  /// CSS at rules that should be considered to not emit CSS for the purpose
+  /// of hoisting late `@import` rules.
+  final Set<String> safeAtRules = const {},
+}) extends MigrationVisitor {
   /// Set of stylesheets currently being migrated.
   ///
   /// Used to ensure that a dependency declaring a variable that an upstream
@@ -254,32 +283,16 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       ));
   Set<MemberDeclaration<VariableDeclaration>>? __configuredVariables;
 
-  /// A mapping between member declarations and references.
-  ///
-  /// This performs an initial pass to determine how a declaration seen in the
-  /// main migration pass is used.
-  final References references;
-
   /// List of paths that stylesheets can be loaded from.
-  final List<String> loadPaths;
+  final List<String> loadPaths = List.unmodifiable(
+    loadPaths.map((path) => p.toUri(p.absolute(path)).path),
+  );
 
   /// Prefixes to be removed from any members with them, or empty if no prefixes
   /// should be removed.
-  final Set<String> prefixesToRemove;
-
-  /// The values of the --forward flag.
-  final Set<ForwardType> forwards;
-
-  /// Whether to migrate only global functions, leaving `@import` rules as-is.
-  final bool builtInOnly;
-
-  /// Whether to allow hoisting imports to the top of the file even when they
-  /// emit CSS.
-  final bool unsafeHoist;
-
-  /// CSS at rules that should be considered to not emit CSS for the purpose
-  /// of hoisting late `@import` rules.
-  final Set<String> safeAtRules;
+  final Set<String> prefixesToRemove = UnmodifiableSetView(
+    prefixesToRemove.toSet(),
+  );
 
   /// Constructs a new module migration visitor.
   ///
@@ -292,20 +305,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// the module migrator will filter out the dependencies' migration results.
   ///
   /// This converts the OS-specific relative [loadPaths] to absolute URL paths.
-  _ModuleMigrationVisitor(
-    super.importCache,
-    this.references,
-    List<String> loadPaths, {
-    required super.migrateDependencies,
-    required this.builtInOnly,
-    required this.unsafeHoist,
-    Iterable<String> prefixesToRemove = const [],
-    this.forwards = const {},
-    this.safeAtRules = const {},
-  }) : loadPaths = List.unmodifiable(
-         loadPaths.map((path) => p.toUri(p.absolute(path)).path),
-       ),
-       prefixesToRemove = UnmodifiableSetView(prefixesToRemove.toSet());
+  this;
 
   /// Checks which global declarations need to be renamed, then runs the
   /// migrator.
@@ -422,7 +422,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       ...entrypointForwards,
     ];
     var semicolon = entrypoint.path.endsWith('.sass') ? '' : ';';
-    return forwardLines.join('$semicolon\n') + '$semicolon\n';
+    return '${forwardLines.join('$semicolon\n')}$semicolon\n';
   }
 
   /// If [declaration] should be renamed, adds it to [renamedMembers].
@@ -498,7 +498,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       ]);
     }
     var forwards = [...loadPathForwards..sort(), ...relativeForwards..sort()];
-    return forwards.isEmpty ? '' : '\n' + forwards.join('');
+    return forwards.isEmpty ? '' : '\n${forwards.join('')}';
   }
 
   /// Stores per-file state and determines namespaces for this stylesheet before
@@ -539,7 +539,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     __additionalRelativeUseRules = {};
     _beforeFirstImport = null;
     _afterLastImport = null;
-    _useAllowed = UseAllowed.allowed;
+    _useAllowed = .allowed;
     super.visitStylesheet(node);
     __namespaces = oldNamespaces;
     __forwardedUrls = oldForwardedUrls;
@@ -820,7 +820,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   void _patchNamespaceForFunction(
     FunctionExpression node,
     MemberDeclaration<FunctionRule>? declaration,
-    void patchNamespace(String namespace), {
+    void Function(String namespace) patchNamespace, {
     bool getFunctionCall = false,
   }) {
     var span = getFunctionCall
@@ -908,7 +908,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Visits a `@function` rule, renaming if necessary.
   @override
   void visitFunctionRule(FunctionRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitFunctionRule(node);
   }
@@ -1027,9 +1027,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       addPatch(
         Patch.insert(
           _afterLastImport ?? node.span.file.location(0),
-          '$indent@import ' +
-              staticImports.map((import) => import.span.text).join(', ') +
-              '$semicolon\n',
+          '$indent@import ${staticImports.map((import) => import.span.text).join(', ')}$semicolon\n',
         ),
       );
     }
@@ -1097,7 +1095,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
     _unreferencable = UnreferencableMembers(_unreferencable);
     for (var declaration in references.allDeclarations) {
       if (declaration.sourceUrl != currentUrl) continue;
-      _unreferencable.add(declaration, UnreferencableType.fromImporter);
+      _unreferencable.add(declaration, .fromImporter);
     }
 
     var (canonicalUrl, config, forwardForConfig) = _migrateImportCommon(
@@ -1119,9 +1117,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       if (declaration.sourceUrl != canonicalUrl) continue;
       _unreferencable.add(
         declaration,
-        isNested
-            ? UnreferencableType.fromNestedImport
-            : UnreferencableType.fromLateImport,
+        isNested ? .fromNestedImport : .fromLateImport,
       );
     }
 
@@ -1264,9 +1260,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       }
     });
     if (configured.length == 1) {
-      normalConfig = "(" + configured.first + ")";
+      normalConfig = "(${configured.first})";
     } else if (configured.isNotEmpty) {
-      normalConfig = "(\n  " + configured.join(',\n  ') + "\n)";
+      normalConfig = "(\n  ${configured.join(',\n  ')}\n)";
     }
     return (canonicalUrl, normalConfig, extraForward);
   }
@@ -1360,7 +1356,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Adds a namespace to any mixin include that requires it.
   @override
   void visitIncludeRule(IncludeRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitIncludeRule(node);
     if (node.namespace != null) return;
     if (builtInOnly && references.sources[node] is! BuiltInSource) return;
@@ -1381,7 +1377,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Visits a `@mixin` rule, renaming it if necessary.
   @override
   void visitMixinRule(MixinRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     if (!builtInOnly) _renameReference(nameSpan(node), MemberDeclaration(node));
     super.visitMixinRule(node);
   }
@@ -1390,6 +1386,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
+  @override
   void visitUseRule(UseRule node) {
     _usedUrls.add(
       importCache
@@ -1407,6 +1404,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   ///
   /// The migrator will use the information from [references] to migrate
   /// references to members of these dependencies.
+  @override
   void visitForwardRule(ForwardRule node) {
     _forwardedUrls.add(
       importCache
@@ -1529,8 +1527,9 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
       isPrivate = _isPrivate(name);
       var unprivateName = isPrivate ? _privateToPublic(name) : name;
       prefix = _prefixFor(unprivateName);
-      if (prefix == null)
+      if (prefix == null) {
         return isPrivate && forcePublic ? unprivateName : name;
+      }
       withoutPrefix = unprivateName.substring(prefix.length);
     }
 
@@ -1651,7 +1650,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Disallows `@use` after `@at-root` rules.
   @override
   void visitAtRootRule(AtRootRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitAtRootRule(node);
   }
 
@@ -1659,7 +1658,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   @override
   void visitAtRule(AtRule node) {
     var oldUseAllowed = _useAllowed;
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitAtRule(node);
     if (safeAtRules.contains(node.name.asPlain)) {
       _useAllowed = oldUseAllowed.lowerToRequiresHoist();
@@ -1676,49 +1675,49 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Disallows `@use` after `@each` rules.
   @override
   void visitEachRule(EachRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitEachRule(node);
   }
 
   /// Disallows `@use` after `@error` rules.
   @override
   void visitErrorRule(ErrorRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitErrorRule(node);
   }
 
   /// Disallows `@use` after `@for` rules.
   @override
   void visitForRule(ForRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitForRule(node);
   }
 
   /// Disallows `@use` after `@if` rules.
   @override
   void visitIfRule(IfRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitIfRule(node);
   }
 
   /// Disallows `@use` after `@media` rules.
   @override
   void visitMediaRule(MediaRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitMediaRule(node);
   }
 
   /// Disallows `@use` after style rules.
   @override
   void visitStyleRule(StyleRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitStyleRule(node);
   }
 
   /// Disallows `@use` after `@supports` rules.
   @override
   void visitSupportsRule(SupportsRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitSupportsRule(node);
   }
 
@@ -1732,7 +1731,7 @@ class _ModuleMigrationVisitor extends MigrationVisitor {
   /// Disallows `@use` after `@while` rules.
   @override
   void visitWhileRule(WhileRule node) {
-    _useAllowed = UseAllowed.notAllowed;
+    _useAllowed = .notAllowed;
     super.visitWhileRule(node);
   }
 }

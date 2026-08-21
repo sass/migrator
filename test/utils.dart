@@ -100,7 +100,7 @@ Future<void> _testHrx(File hrxFile, String migrator) async {
   ]);
 }
 
-class _HrxTestFiles {
+class _HrxTestFiles(String hrxText) {
   Map<String, String?> input = {};
   Map<String, String?> output = {};
   List<String> arguments = [];
@@ -108,7 +108,7 @@ class _HrxTestFiles {
   String? expectedError;
   String? expectedWarning;
 
-  _HrxTestFiles(String hrxText) {
+  this {
     // TODO(jathak): Replace this with an actual HRX parser.
     String? filename;
     var contents = "";
@@ -120,7 +120,7 @@ class _HrxTestFiles {
         filename = line.substring(5).trim();
         contents = "";
       } else {
-        contents += line + "\n";
+        contents += "$line\n";
       }
     }
     if (filename != null) _load(filename, contents);
@@ -163,7 +163,7 @@ class _HrxTestFiles {
   final _argParseRegex = RegExp(r'''"([^"]+)"|'([^']+)'|([^'"\s][^\s]*)''');
 
   /// Unpacks this test's input files into a temporary directory.
-  Future unpack() async {
+  Future<void> unpack() async {
     for (var file in input.keys) {
       var parts = p.split(file);
       d.Descriptor descriptor = d.file(parts.removeLast(), input[file]);

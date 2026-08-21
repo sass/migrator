@@ -5,15 +5,13 @@
 // https://opensource.org/licenses/MIT.
 
 import 'package:sass_api/sass_api.dart';
-import 'package:source_span/source_span.dart';
 
 /// An exception thrown by a migrator.
-class MigrationException implements Exception {
+class MigrationException(
   /// An explanation of why migration failed.
-  final String message;
-
-  MigrationException(this.message);
-
+  final String message,
+) implements Exception {
+  @override
   String toString() => "Error: $message";
 }
 
@@ -24,8 +22,6 @@ class MigrationException implements Exception {
 ///
 /// This extends [SassException] to ensure that migrator exceptions are
 /// formatted the same way as the syntax errors Sass throws.
-class MigrationSourceSpanException extends SassException
-    implements MigrationException {
-  MigrationSourceSpanException(String message, FileSpan span)
-    : super(message, span);
-}
+class MigrationSourceSpanException(super.message, super.span)
+    extends SassException
+    implements MigrationException;

@@ -141,7 +141,7 @@ void emitWarning(String message, [FileSpan? context]) {
 /// Returns the only argument in [arguments], or null if [arguments] does not
 /// contain exactly one argument.
 Expression? getOnlyArgument(ArgumentList arguments) {
-  if (arguments.positional.length == 0 && arguments.named.length == 1) {
+  if (arguments.positional.isEmpty && arguments.named.length == 1) {
     return arguments.named.values.first;
   } else if (arguments.positional.length == 1 && arguments.named.isEmpty) {
     return arguments.positional.first;

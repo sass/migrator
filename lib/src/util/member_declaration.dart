@@ -10,15 +10,15 @@ import 'package:sass_api/sass_api.dart';
 import '../utils.dart';
 
 /// A wrapper class for nodes that declare a variable, function, or mixin.
-class MemberDeclaration<T extends SassDeclaration> {
+class MemberDeclaration<T extends SassDeclaration>._(
   /// The original definition of the member, after all `@forward` rules have
   /// been resolved.
-  final T member;
+  final T member,
 
   /// The name of this member, including all prefixes from `@forward` rules.
   ///
   /// For variables, this does not include the `$`.
-  final String name;
+  final String name,
 
   /// The canonical URL of the nearest non-import-only module from which this
   /// member was loaded.
@@ -31,16 +31,15 @@ class MemberDeclaration<T extends SassDeclaration> {
   ///
   /// * For a member loaded from an import-only module, this is the URL of the
   ///   first non-import-only module in its chain of forwards.
-  final Uri sourceUrl;
-
+  final Uri sourceUrl,
+) {
   /// Whether this member declaration was loaded through a `@forward` rule,
   /// including via an import-only file.
   bool get isForwarded => sourceUrl != member.span.sourceUrl;
 
   /// Creates a MemberDefinition for a [member] that was loaded from the same
   /// module it was defined.
-  MemberDeclaration(T member)
-    : this._(member, member.name, member.span.sourceUrl!);
+  new(T member) : this._(member, member.name, member.span.sourceUrl!);
 
   /// Creates a MemberDefinition for a member that was forwarded through at
   /// least one non-import-only module.
@@ -49,10 +48,8 @@ class MemberDeclaration<T extends SassDeclaration> {
   ///
   /// If [forward] comes from an import-only file, this returns an
   /// [ImportOnlyMemberDeclaration].
-  factory MemberDeclaration.forward(
-    MemberDeclaration<T> forwarded,
-    ForwardRule forward,
-  ) => isImportOnlyFile(forward.span.sourceUrl!)
+  factory forward(MemberDeclaration<T> forwarded, ForwardRule forward) =>
+      isImportOnlyFile(forward.span.sourceUrl!)
       ? ImportOnlyMemberDeclaration._(forwarded, forward)
       : MemberDeclaration._(
           forwarded.member,
@@ -60,16 +57,17 @@ class MemberDeclaration<T extends SassDeclaration> {
           forward.span.sourceUrl!,
         );
 
-  MemberDeclaration._(this.member, this.name, this.sourceUrl);
-
+  @override
   operator ==(other) =>
       other is MemberDeclaration &&
       member == other.member &&
       name == other.name &&
       sourceUrl == other.sourceUrl;
 
+  @override
   int get hashCode => member.hashCode ^ name.hashCode ^ sourceUrl.hashCode;
 
+  @override
   String toString() {
     var buffer = StringBuffer();
     if (member is MixinRule) {
@@ -85,29 +83,28 @@ class MemberDeclaration<T extends SassDeclaration> {
 }
 
 /// A declaration for a member forwarded through an import-only file.
-class ImportOnlyMemberDeclaration<T extends SassDeclaration>
-    extends MemberDeclaration<T> {
+class ImportOnlyMemberDeclaration<T extends SassDeclaration>._(
+  MemberDeclaration<T> forwarded,
+  ForwardRule forward,
+) extends MemberDeclaration<T> {
   /// The prefix added to [name] by forwards through import-only files.
-  final String importOnlyPrefix;
+  final String importOnlyPrefix =
+      (forward.prefix ?? "") +
+      (forwarded is ImportOnlyMemberDeclaration<T>
+          ? forwarded.importOnlyPrefix
+          : "");
 
   /// The canonical URL of the outermost import-only module that forwarded this
   /// member.
-  final Uri importOnlyUrl;
+  final Uri importOnlyUrl = forward.span.sourceUrl!;
 
+  @override
   bool get isForwarded => true;
 
   /// Constructs a forwarded MemberDefinition of [forwarding] based on
   /// [forward].
-  ImportOnlyMemberDeclaration._(
-    MemberDeclaration<T> forwarded,
-    ForwardRule forward,
-  ) : importOnlyPrefix =
-          (forward.prefix ?? "") +
-          (forwarded is ImportOnlyMemberDeclaration<T>
-              ? forwarded.importOnlyPrefix
-              : ""),
-      importOnlyUrl = forward.span.sourceUrl!,
-      super._(
+  this
+    : super._(
         forwarded.member,
         '${forward.prefix ?? ""}${forwarded.name}',
         forwarded.sourceUrl,
@@ -115,6 +112,7 @@ class ImportOnlyMemberDeclaration<T extends SassDeclaration>
     assert(isImportOnlyFile(forward.span.sourceUrl!));
   }
 
+  @override
   String toString() =>
       "${super.toString()} through ${p.prettyUri(importOnlyUrl)}";
 }

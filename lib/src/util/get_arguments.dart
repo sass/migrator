@@ -19,7 +19,7 @@ GetArgumentsResult getArguments(
   ArgumentList arguments,
 ) {
   if (parameters.restParameter != null) {
-    throw new ArgumentError("parameters.restParameter is not supported");
+    throw ArgumentError("parameters.restParameter is not supported");
   } else if (arguments.rest != null) {
     return GetArgumentsNotResolvable._();
   }
@@ -30,21 +30,17 @@ GetArgumentsResult getArguments(
     var parameter = parameters.parameters[i];
     if (arguments.positional.length > i) {
       var arg = arguments.positional[i];
-      results.add(
-        GetArgumentArgument._(arg, arg.span, GetArgumentType.positional),
-      );
+      results.add(GetArgumentArgument._(arg, arg.span, .positional));
     } else if (namedArgs.remove(parameter.name) case var arg?) {
       results.add(
         GetArgumentArgument._(
           arg,
           arguments.namedSpans[parameter.name]!,
-          GetArgumentType.named,
+          .named,
         ),
       );
     } else if (parameter.defaultValue case var arg?) {
-      results.add(
-        GetArgumentArgument._(arg, parameter.span, GetArgumentType.defaultArg),
-      );
+      results.add(GetArgumentArgument._(arg, parameter.span, .defaultArg));
     } else {
       return GetArgumentsInvalidCall._(
         arguments.span,
@@ -67,40 +63,34 @@ GetArgumentsResult getArguments(
 sealed class GetArgumentsResult {}
 
 /// The call doesn't match the given parameters.
-class GetArgumentsInvalidCall extends GetArgumentsResult {
+class GetArgumentsInvalidCall._(
   /// The span of the first invalid argument.
-  final FileSpan span;
+  final FileSpan span,
 
   /// A description of what's invalid.
-  final String description;
-
-  GetArgumentsInvalidCall._(this.span, this.description);
-}
+  final String description,
+) extends GetArgumentsResult {}
 
 /// The call may be valid, but can't be resolved statically (for example because
 /// it involves rest arguments).
-class GetArgumentsNotResolvable extends GetArgumentsResult {
-  GetArgumentsNotResolvable._();
-}
+class GetArgumentsNotResolvable._() extends GetArgumentsResult;
 
 /// The call is valid.
-class GetArgumentsArguments extends GetArgumentsResult {
+class GetArgumentsArguments._(
   /// The list of arguments in positional order.
   ///
   /// This is guaranteed to be the same length as [ParameterList.parameters].
-  final List<GetArgumentArgument> arguments;
-
+  final List<GetArgumentArgument> arguments,
+) extends GetArgumentsResult {
   /// Whether the arguments were passed in the canonical, positional order.
-  final bool inOrder;
-
-  GetArgumentsArguments._(this.arguments) : inOrder = _isInOrder(arguments);
+  final bool inOrder = _isInOrder(arguments);
 
   /// Returns whether each non-default argument in [arguments] appears in the
   /// normal positional order.
   static bool _isInOrder(List<GetArgumentArgument> arguments) {
     GetArgumentArgument? last;
     for (var argument in arguments) {
-      if (argument.type == GetArgumentType.defaultArg) continue;
+      if (argument.type == .defaultArg) continue;
       if (last != null && last.span.end.offset > argument.span.start.offset) {
         return false;
       }
@@ -123,21 +113,18 @@ enum GetArgumentType {
 }
 
 /// Metadata about a particular argument returned by [getArgument].
-class GetArgumentArgument {
+class GetArgumentArgument._(
   /// The value of the argument.
-  final Expression argument;
+  final Expression argument,
 
   /// The argument's span, _including_ the name if it was passed by name (or is
   /// a default argument).
-  final FileSpan span;
+  final FileSpan span,
 
   /// The type of argument this represents.
-  final GetArgumentType type;
-
-  GetArgumentArgument._(this.argument, this.span, this.type);
-
+  final GetArgumentType type,
+) {
   /// If this is a named argument, returns a [Patch] that removes its argument name.
-  Patch? patchOutName() => type == GetArgumentType.named
-      ? Patch(span.before(argument.span), '')
-      : null;
+  Patch? patchOutName() =>
+      type == .named ? Patch(span.before(argument.span), '') : null;
 }
