@@ -10,6 +10,12 @@ on:
     tags: ['**']
   pull_request:
 
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dart_tests:
     name: "Dart tests | Dart ${{ matrix.dart_channel }} | ${{ matrix.os }}"
@@ -28,10 +34,11 @@ jobs:
     steps:
       - if: ${{ matrix.os == 'windows-latest' }}
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
         with: {sdk: "${{ matrix.dart_channel }}"}
-      - uses: sass/clone-linked-repo@v1
+      - uses: sass/clone-linked-repo@ec2dcd11c5eaec56b64855712372056a14e9614d # v1.1.0
         with: {repo: sass/dart-sass, path: dart-sass}
       - run: "dart pub add \"override:sass:{path: dart-sass}\" \"override:sass_api:{path: dart-sass/pkg/sass_api}\""
       - run: dart pub get
@@ -69,15 +76,18 @@ jobs:
     steps:
       - if: ${{ matrix.os == 'windows-latest' }}
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
         with: {sdk: "${{ matrix.dart_channel }}"}
-      - uses: sass/clone-linked-repo@v1
+      - uses: sass/clone-linked-repo@ec2dcd11c5eaec56b64855712372056a14e9614d # v1.1.0
         with: {repo: sass/dart-sass, path: dart-sass}
       - run: "dart pub add \"override:sass:{path: dart-sass}\" \"override:sass_api:{path: dart-sass/pkg/sass_api}\""
       - run: dart pub get
-      - uses: actions/setup-node@v2
-        with: {node-version: "${{ matrix.node_version }}"}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          package-manager-cache: ${{ !startsWith(github.ref, 'refs/tags/') }} # zizmor: ignore[cache-poisoning] (zizmorcore/zizmor#2496)
+          node-version: "${{ matrix.node_version }}"
       - run: npm install
       - run: dart pub run grinder pkg-npm-dev
       - name: Run tests
@@ -88,9 +98,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
-      - uses: sass/clone-linked-repo@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - uses: sass/clone-linked-repo@ec2dcd11c5eaec56b64855712372056a14e9614d # v1.1.0
         with: {repo: sass/dart-sass, path: dart-sass}
       - run: "dart pub add \"override:sass:{path: dart-sass}\" \"override:sass_api:{path: dart-sass/pkg/sass_api}\""
       - run: dart pub get
@@ -99,6 +110,17 @@ jobs:
       - name: Check formatting
         run: dart format -o none --set-exit-if-changed .
 
+  static_analysis_ci:
+    name: Static analysis (GitHub Actions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          persona: pedantic
+          advanced-security: false # Fail the GitHub action if Zizmor has findings
+
   sanity_checks:
     name: Sanity checks
     runs-on: ubuntu-latest
@@ -106,8 +128,9 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
       - name: Run checks
         run: dart pub run grinder sanity-check-before-release
@@ -119,8 +142,9 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
       - name: Deploy
         run: dart pub run grinder pkg-github-release pkg-github-linux
@@ -135,8 +159,9 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
       - name: Deploy
         run: dart pub run grinder pkg-github-macos
@@ -151,8 +176,9 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
       - name: Deploy
         run: dart pub run grinder pkg-github-windows
@@ -166,21 +192,21 @@ jobs:
     needs: [sanity_checks]
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
     permissions:
-      attestations: write
-      contents: write
-      id-token: write
+      id-token: write # Authenticating npm trusted publishing
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
+          package-manager-cache: false # Avoid cache poisioning risk
           node-version: "${{ env.DEFAULT_NODE_VERSION }}"
           check-latest: true
           registry-url: 'https://registry.npmjs.org'
       # npm trusted publisher infrastructure requires npm >=11.5.1
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@latest # zizmor: ignore[adhoc-packages]
       - name: Deploy
         run: dart pub run grinder pkg-npm-deploy
 
@@ -191,8 +217,9 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
       - name: Deploy
         run: dart pub run grinder pkg-pub-deploy
@@ -205,8 +232,9 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/') && github.repository == 'sass/migrator'"
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       - run: dart pub get
       - name: Deploy
         run: dart pub run grinder pkg-homebrew-update
