@@ -29,7 +29,7 @@ $a: blue;
 @use "a/variables";
 @use "b/variables" as variables2;
 
-$fn: meta.get-function(fn, $module: "variables2");
+$fn: meta.get-function(fn, $module: variables2);
 
 a {
   color: variables.$a;

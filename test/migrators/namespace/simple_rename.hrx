@@ -10,6 +10,24 @@ a {
   c: a.function();
   d: meta.get-function('function', $module: 'a');
   e: meta.get-function(function, false, a);
+  f: meta.get-mixin('mixin', $module: 'a');
+  g: meta.get-mixin('mixin', a);
+  h: meta.get-module($module: 'a');
+  i: meta.get-module(a);
+  j: meta.function-exists('function', $module: 'a');
+  k: meta.function-exists('function', a);
+  l: meta.mixin-exists('mixin', $module: 'a');
+  m: meta.mixin-exists('mixin', a);
+  n: meta.global-variable-exists('variable', $module: 'a');
+  o: meta.global-variable-exists('variable', a);
+  p: meta.module-functions($module: 'a');
+  q: meta.module-functions(a);
+  r: meta.module-mixins($module: 'a');
+  s: meta.module-mixins(a);
+  t: meta.module-variables($module: 'a');
+  u: meta.module-variables(a);
+  @include meta.css($module: 'a');
+  @include meta.css(a);
   @include a.mixin;
 }
 
@@ -20,7 +38,25 @@ a {
 a {
   b: b.$variable;
   c: b.function();
-  d: meta.get-function('function', $module: 'b');
+  d: meta.get-function('function', $module: b);
   e: meta.get-function(function, false, b);
+  f: meta.get-mixin('mixin', $module: b);
+  g: meta.get-mixin('mixin', b);
+  h: meta.get-module($module: b);
+  i: meta.get-module(b);
+  j: meta.function-exists('function', $module: b);
+  k: meta.function-exists('function', b);
+  l: meta.mixin-exists('mixin', $module: b);
+  m: meta.mixin-exists('mixin', b);
+  n: meta.global-variable-exists('variable', $module: b);
+  o: meta.global-variable-exists('variable', b);
+  p: meta.module-functions($module: b);
+  q: meta.module-functions(b);
+  r: meta.module-mixins($module: b);
+  s: meta.module-mixins(b);
+  t: meta.module-variables($module: b);
+  u: meta.module-variables(b);
+  @include meta.css($module: b);
+  @include meta.css(b);
   @include b.mixin;
 }

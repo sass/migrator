@@ -1,0 +1,31 @@
+<==> input/entrypoint.scss
+@use 'sass:color' as \$;
+@use 'sass:math' as \~;
+@use 'sass:meta' as \&;
+@use 'sass:string' as \%;
+
+$a: mix(red, blue);
+$b: str-length("hello");
+$c: scale-color(blue, $lightness: -10%);
+$d: call(get-function(mix), red, blue);
+$e: min(10 % 2, 4 + 3);
+
+@function fn($args...) {
+  @return keywords($args);
+}
+
+<==> output/entrypoint.scss
+@use 'sass:color' as \$;
+@use 'sass:math' as \~;
+@use 'sass:meta' as \&;
+@use 'sass:string' as \%;
+
+$a: \$.mix(red, blue);
+$b: \%.length("hello");
+$c: \$.scale(blue, $lightness: -10%);
+$d: \&.call(\&.get-function(mix, $module: \$), red, blue);
+$e: \~.min(10 % 2, 4 + 3);
+
+@function fn($args...) {
+  @return \&.keywords($args);
+}

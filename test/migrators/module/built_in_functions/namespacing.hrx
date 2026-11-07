@@ -17,7 +17,7 @@ $e: min(10 % 2, 4 + 3);
 $a: color.mix(red, blue);
 $b: string.length("hello");
 $c: color.scale(blue, $lightness: -10%);
-$d: meta.call(meta.get-function(mix, $module: "color"), red, blue);
+$d: meta.call(meta.get-function(mix, $module: color), red, blue);
 $e: math.min(10 % 2, 4 + 3);
 
 @function fn($args...) {

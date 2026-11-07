@@ -157,7 +157,10 @@ class _DivisionMigrationVisitor(
   String _builtInPrefix(String module) {
     var url = Uri.parse('sass:$module');
     if (_existingNamespaces.containsKey(url)) {
-      return _existingNamespaces[url].andThen((ns) => '$ns.') ?? '';
+      return _existingNamespaces[url].andThen(
+            (ns) => '${toCssIdentifier(ns)}.',
+          ) ??
+          '';
     }
     Iterable<String> options() sync* {
       yield module;
@@ -172,9 +175,11 @@ class _DivisionMigrationVisitor(
       (option) => !_existingNamespaces.containsValue(option),
     );
     _existingNamespaces[url] = namespace;
-    var asClause = module == namespace ? '' : ' as $namespace';
+    var asClause = module == namespace
+        ? ''
+        : ' as ${toCssIdentifier(namespace)}';
     _useRulesToInsert.add('@use "sass:$module"$asClause$semicolon');
-    return '$namespace.';
+    return '${toCssIdentifier(namespace)}.';
   }
 
   /// Allows division within this argument list.

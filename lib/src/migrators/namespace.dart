@@ -69,47 +69,40 @@ class _NamespaceMigrationVisitor(
   super.importCache, {
   required super.migrateDependencies,
 }) extends MigrationVisitor {
-  /// A set of spans for each *original* namespace in the current file.
-  ///
-  /// Each span covers just the namespace of a member reference.
-  Map<String, Set<FileSpan>> get _spansByNamespace =>
-      assertInStylesheet(__spansByNamespace, '_spansByNamespace');
-  Map<String, Set<FileSpan>>? __spansByNamespace;
-
-  /// The set of namespaces used in the current file *after* renaming.
-  Set<String> get _usedNamespaces =>
-      assertInStylesheet(__usedNamespaces, '_usedNamespaces');
-  Set<String>? __usedNamespaces;
+  /// A map from the semantic values of namespaces before renaming to those
+  /// after renaming.
+  Map<String, String> get _renamedNamespaces =>
+      assertInStylesheet(__renamedNamespaces, '_renamedNamespaces');
+  Map<String, String>? __renamedNamespaces;
 
   @override
   void visitStylesheet(Stylesheet node) {
-    var oldSpansByNamespace = __spansByNamespace;
-    var oldUsedNamespaces = __usedNamespaces;
-    __spansByNamespace = {};
-    __usedNamespaces = {};
+    assert(__renamedNamespaces == null);
+    __renamedNamespaces = _chooseNamespaces(node);
     super.visitStylesheet(node);
-    __spansByNamespace = oldSpansByNamespace;
-    __usedNamespaces = oldUsedNamespaces;
+    __renamedNamespaces = null;
   }
 
-  @override
-  void beforePatch(Stylesheet node) {
-    // Pass each `@use` rule through the renamer.
-    var newNamespaces = <String, Set<UseRule>>{};
-    for (var rule in node.children.whereType<UseRule>()) {
+  /// Computes [_renamedNamespaces] for a given stylesheet based on [renamer].
+  Map<String, String> _chooseNamespaces(Stylesheet node) {
+    // A map from the semantic values of namespaces *after* renaming to all use
+    // rules that were renamed to that value.
+    var newNamespaces = <String, List<UseRule>>{};
+    for (var rule in node.uses) {
       var namespace = rule.namespace;
       if (namespace == null) continue;
       newNamespaces
-          .putIfAbsent(renamer.rename(rule) ?? namespace, () => {})
+          .putIfAbsent(renamer.rename(rule) ?? namespace, () => [])
           .add(rule);
     }
 
+    var renamedNamespaces = <String, String>{};
     // Goes through each new namespace, resolving conflicts if necessary.
     for (var entry in newNamespaces.entries) {
       var newNamespace = entry.key;
       var rules = entry.value;
-      if (rules.length == 1) {
-        _patchNamespace(rules.first, newNamespace);
+      if (rules case [var rule]) {
+        renamedNamespaces[rule.namespace!] = newNamespace;
         continue;
       }
 
@@ -127,104 +120,145 @@ class _NamespaceMigrationVisitor(
 
       // With --force, give the first rule its preferred namespace and then
       // add numerical suffixes to the rest.
+      renamedNamespaces[rules.first.namespace!] = newNamespace;
       var suffix = 2;
-      for (var rule in rules) {
-        var forcedNamespace = newNamespace;
-        while (_usedNamespaces.contains(forcedNamespace)) {
-          forcedNamespace = '$newNamespace$suffix';
-          suffix++;
-        }
-        _patchNamespace(rule, forcedNamespace);
+      for (var rule in rules.skip(1)) {
+        renamedNamespaces[rule.namespace!] = '$newNamespace$suffix';
+        suffix++;
       }
     }
+    return renamedNamespaces;
   }
 
-  /// Patch [rule] and all references to it with [newNamespace].
-  void _patchNamespace(UseRule rule, String newNamespace) {
-    var oldNamespace = rule.namespace!;
-    _usedNamespaces.add(newNamespace);
+  @override
+  void visitUseRule(UseRule rule) {
+    var newNamespace = _renamedNamespaces[rule.namespace];
+    if (newNamespace == null) return;
     if (rule.namespace == newNamespace) return;
-    var asClause = RegExp('\\s*as\\s+(${rule.namespace})')
-        .firstMatch(rule.span.text);
-    if (asClause == null) {
-      // Add an `as` clause to a rule that previously lacked one.
-      var end = RegExp(r"""@use\s("|').*?\1""").firstMatch(rule.span.text)!.end;
-      addPatch(
-        Patch.insert(rule.span.subspan(0, end).end, ' as $newNamespace'),
-      );
-    } else if (namespaceForPath(rule.url.toString()) == newNamespace) {
-      // Remove an `as` clause that is no longer necessary.
-      addPatch(
-        patchDelete(rule.span, start: asClause.start, end: asClause.end),
-      );
+
+    // TODO: Use `UseRule.namespaceSpan` once such a thing is added to support
+    // sass-parser. This RegExp approach fails if there are extra comments or if
+    // the namespace isn't in normalized form in the document.
+    var spanAfterUrl = rule.span.after(rule.urlSpan);
+    if (rule.namespace.andThen(
+          (namespace) => RegExp(
+            '^(\\s*as\\s+)${RegExp.escape(toCssIdentifier(namespace))}',
+          ).firstMatch(spanAfterUrl.text),
+        )
+        case var asClause?) {
+      if (namespaceForPath(rule.url.toString()) == newNamespace) {
+        // Remove an `as` clause that is no longer necessary.
+        addPatch(patchDelete(spanAfterUrl, end: asClause.end));
+      } else {
+        // Change the namespace of an existing `as` clause.
+        addPatch(
+          Patch(
+            spanAfterUrl.subspan(
+              asClause.start + asClause[1]!.length,
+              asClause.end,
+            ),
+            toCssIdentifier(newNamespace),
+          ),
+        );
+      }
     } else {
-      // Change the namespace of an existing `as` clause.
       addPatch(
-        Patch(
-          rule.span.subspan(asClause.end - oldNamespace.length, asClause.end),
-          newNamespace,
+        Patch.insert(
+          spanAfterUrl.start,
+          ' as ${toCssIdentifier(newNamespace)}',
         ),
       );
-    }
-    for (FileSpan span in _spansByNamespace[oldNamespace] ?? {}) {
-      addPatch(Patch(span, newNamespace));
-    }
-  }
-
-  /// If [namespace] is not null, add its span to [_spansByNamespace].
-  void _addNamespaceSpan(String? namespace, FileSpan span) {
-    if (namespace != null) {
-      assert(span.text.startsWith(namespace));
-      _spansByNamespace
-          .putIfAbsent(namespace, () => {})
-          .add(span.subspan(0, namespace.length));
     }
   }
 
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    _addNamespaceSpan(node.namespace, node.span);
-    var name = node.name;
-    if (name == 'get-function') {
-      var moduleArg = node.arguments.named['module'];
-      if (node.arguments.positional.length == 3) {
-        moduleArg ??= node.arguments.positional[2];
-      }
-      if (moduleArg is StringExpression) {
-        var namespace = moduleArg.text.asPlain;
-        if (namespace != null) {
-          var span = moduleArg.hasQuotes
-              ? moduleArg.span.subspan(1, moduleArg.span.length - 1)
-              : moduleArg.span;
-          _addNamespaceSpan(namespace, span);
-        }
-      }
+    if (_renamedNamespaces[node.namespace] case var newNamespace?) {
+      addPatches(patchNamespace(node, newNamespace));
     }
+
+    _visitModuleArg(switch (node) {
+      FunctionExpression(
+        name: 'get-function' ||
+            'function-exists' ||
+            'get-mixin' ||
+            'global-variable-exists' ||
+            'mixin-exists' ||
+            'get-module' ||
+            'module-functions' ||
+            'module-mixins' ||
+            'module-variables',
+        arguments: ArgumentList(named: {'module': var arg}),
+      ) ||
+      FunctionExpression(
+        name: 'get-function',
+        arguments: ArgumentList(positional: [_, _, var arg]),
+      ) ||
+      FunctionExpression(
+        name: 'function-exists' ||
+            'get-mixin' ||
+            'global-variable-exists' ||
+            'mixin-exists',
+        arguments: ArgumentList(positional: [_, var arg]),
+      ) ||
+      FunctionExpression(
+        name: 'get-module' ||
+            'module-functions' ||
+            'module-mixins' ||
+            'module-variables',
+        arguments: ArgumentList(positional: [var arg]),
+      ) => arg,
+
+      _ => null,
+    });
     super.visitFunctionExpression(node);
   }
 
   @override
   void visitIncludeRule(IncludeRule node) {
-    var namespace = node.namespace;
-    if (namespace != null) {
-      var startNamespace = node.span.text.indexOf(
-        namespace,
-        node.span.text[0] == '+' ? 1 : '@include'.length,
-      );
-      _addNamespaceSpan(namespace, node.span.subspan(startNamespace));
+    if (_renamedNamespaces[node.namespace] case var newNamespace?) {
+      addPatches(patchNamespace(node, newNamespace));
     }
+
+    if (node case IncludeRule(
+      name: 'css',
+      arguments: ArgumentList(named: {'module': var arg}) ||
+          ArgumentList(positional: [var arg]),
+    )) {
+      _visitModuleArg(arg);
+    }
+
     super.visitIncludeRule(node);
+  }
+
+  /// Patches the value of the `$module` argument for a module reference
+  /// `sass:meta` function.
+  void _visitModuleArg(Expression? moduleArg) {
+    // TODO sass/sass#4268 - Use the semantic value of quoted strings once
+    // Sass supports those semantics.
+    if (moduleArg
+        case StringExpression(text: Interpolation(asPlain: var oldNamespace?))
+        when isIdentifier(oldNamespace)) {
+      if (_renamedNamespaces[parseIdentifier(oldNamespace)]
+          case var newNamespace?) {
+        addPatch(Patch(moduleArg.span, toSassIdentString(newNamespace)));
+      }
+    }
   }
 
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    _addNamespaceSpan(node.namespace, node.span);
+    if (_renamedNamespaces[node.namespace] case var newNamespace?) {
+      addPatches(patchNamespace(node, newNamespace));
+    }
     super.visitVariableDeclaration(node);
   }
 
   @override
   void visitVariableExpression(VariableExpression node) {
-    _addNamespaceSpan(node.namespace, node.span);
+    if (_renamedNamespaces[node.namespace] case var newNamespace?) {
+      addPatches(patchNamespace(node, newNamespace));
+    }
     super.visitVariableExpression(node);
   }
 }

@@ -65,6 +65,57 @@ Patch? patchReplaceFirst(FileSpan span, Pattern from, String to) => from
     .firstOrNull
     ?.andThen((match) => Patch(span.subspan(match.start, match.end), to));
 
+/// Patches [node] (a [SassReference] or a [VariableDeclaration]) so that it's
+/// referred to using [namespace] instead of whatever namespace it's currently
+/// using.
+///
+/// If [namespace] is null, patches [node] to use the global namespace instead.
+List<Patch> patchNamespace(SassReference node, String? namespace) {
+  switch ((node, namespace)) {
+    case (SassReference(:var namespaceSpan?), null):
+      return [patchDelete(namespaceSpan.extendIfMatches('.'))];
+
+    case (
+      SassReference(namespace: var oldNamespace?, :var namespaceSpan!),
+      var namespace?,
+    ):
+      if (oldNamespace == namespace) return [];
+      return [Patch(namespaceSpan, toCssIdentifier(namespace))];
+
+    case (VariableExpression(:var span, namespace: null), var namespace?)
+        when span.matchesBefore('-'):
+      // Surround the variable in parens if negated to avoid `-` being parsed
+      // as part of the namespace.
+      return [
+        patchBefore(node, '(${toCssIdentifier(namespace)}.'),
+        patchAfter(node, ')'),
+      ];
+
+    case (_, var namespace?):
+      return [
+        Patch(
+          node.nameSpan.start.pointSpan(),
+          '${toCssIdentifier(namespace)}.',
+        ),
+      ];
+
+    case _:
+      return [];
+  }
+}
+
+/// Returns a Sass string whose value is [text].
+///
+/// This should only be used in places that can accept both unquoted and quoted
+/// strings. It prefers returning unquoted strings, but will return quoted
+/// strings for the special case where an unquoted identifier could be
+/// interpreted as a non-string value by Sass (such as `true`, `and`, or `red`).
+String toSassIdentString(String text) => switch (text) {
+  'true' || 'false' || 'null' || 'and' || 'or' || 'not' => toCssString(text),
+  _ when colorsByName.containsKey(text) => toCssString(text),
+  _ => toCssIdentifier(text),
+};
+
 /// Returns the next location after [import] that it would be safe to insert
 /// a `@use` or `@forward` rule.
 ///
@@ -216,3 +267,28 @@ bool isImportOnlyFile(Uri url) =>
 
   return (fs, gs);
 }
+
+/// Returns the Sass source code for a quoted CSS string that evaluates to
+/// [text].
+///
+/// If [quote] is passed, this string is forced to have that quote style, even
+/// if it means adding extra escapes to its contents.
+String toCssString(String text, {StringQuote? quote}) {
+  var result = SassString(text).toCssString();
+  return switch (quote) {
+    null => result,
+    .single when result.startsWith("'") => result,
+    .single =>
+      "'"
+          "${result.substring(1, result.length - 1).replaceAll("'", "\\'")}"
+          "'",
+    .double when result.startsWith('"') => result,
+    .double =>
+      '"'
+          '${result.substring(1, result.length - 1).replaceAll('"', '\\"')}'
+          '"',
+  };
+}
+
+/// Types of quotation marks to force for [toCssString].
+enum StringQuote { single, double }

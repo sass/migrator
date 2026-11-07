@@ -1,0 +1,62 @@
+<==> arguments
+--rename '\$ to \~'
+
+<==> input/entrypoint.scss
+@use "meta";
+@use "library" as \$;
+
+a {
+  b: \$.$variable;
+  c: \$.function();
+  d: meta.get-function('function', $module: \$);
+  e: meta.get-function(function, false, \24);
+  f: meta.get-mixin('mixin', $module: \$);
+  g: meta.get-mixin('mixin', \24);
+  h: meta.get-module($module: \$);
+  i: meta.get-module(\24);
+  j: meta.function-exists('function', $module: \$);
+  k: meta.function-exists('function', \24);
+  l: meta.mixin-exists('mixin', $module: \$);
+  m: meta.mixin-exists('mixin', \24);
+  n: meta.global-variable-exists('variable', $module: \$);
+  o: meta.global-variable-exists('variable', \24);
+  p: meta.module-functions($module: \$);
+  q: meta.module-functions(\24);
+  r: meta.module-mixins($module: \$);
+  s: meta.module-mixins(\24);
+  t: meta.module-variables($module: \$);
+  u: meta.module-variables(\24);
+  @include meta.css($module: \$);
+  @include meta.css(\24);
+  @include \24.mixin;
+}
+
+<==> output/entrypoint.scss
+@use "meta";
+@use "library" as \~;
+
+a {
+  b: \~.$variable;
+  c: \~.function();
+  d: meta.get-function('function', $module: \~);
+  e: meta.get-function(function, false, \~);
+  f: meta.get-mixin('mixin', $module: \~);
+  g: meta.get-mixin('mixin', \~);
+  h: meta.get-module($module: \~);
+  i: meta.get-module(\~);
+  j: meta.function-exists('function', $module: \~);
+  k: meta.function-exists('function', \~);
+  l: meta.mixin-exists('mixin', $module: \~);
+  m: meta.mixin-exists('mixin', \~);
+  n: meta.global-variable-exists('variable', $module: \~);
+  o: meta.global-variable-exists('variable', \~);
+  p: meta.module-functions($module: \~);
+  q: meta.module-functions(\~);
+  r: meta.module-mixins($module: \~);
+  s: meta.module-mixins(\~);
+  t: meta.module-variables($module: \~);
+  u: meta.module-variables(\~);
+  @include meta.css($module: \~);
+  @include meta.css(\~);
+  @include \~.mixin;
+}
