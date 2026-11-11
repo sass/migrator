@@ -38,7 +38,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
         with: {sdk: "${{ matrix.dart_channel }}"}
-      - uses: sass/clone-linked-repo@ec2dcd11c5eaec56b64855712372056a14e9614d # v1.1.0
+      - uses: sass/clone-linked-repo@5c6b8c79dc302d9104921eb4fee1942b15031e36 # v1.2.0
         with: {repo: sass/dart-sass, path: dart-sass}
       - run: "dart pub add \"override:sass:{path: dart-sass}\" \"override:sass_api:{path: dart-sass/pkg/sass_api}\""
       - run: dart pub get
@@ -80,7 +80,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
         with: {sdk: "${{ matrix.dart_channel }}"}
-      - uses: sass/clone-linked-repo@ec2dcd11c5eaec56b64855712372056a14e9614d # v1.1.0
+      - uses: sass/clone-linked-repo@5c6b8c79dc302d9104921eb4fee1942b15031e36 # v1.2.0
         with: {repo: sass/dart-sass, path: dart-sass}
       - run: "dart pub add \"override:sass:{path: dart-sass}\" \"override:sass_api:{path: dart-sass/pkg/sass_api}\""
       - run: dart pub get
@@ -101,7 +101,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
-      - uses: sass/clone-linked-repo@ec2dcd11c5eaec56b64855712372056a14e9614d # v1.1.0
+      - uses: sass/clone-linked-repo@5c6b8c79dc302d9104921eb4fee1942b15031e36 # v1.2.0
         with: {repo: sass/dart-sass, path: dart-sass}
       - run: "dart pub add \"override:sass:{path: dart-sass}\" \"override:sass_api:{path: dart-sass/pkg/sass_api}\""
       - run: dart pub get
