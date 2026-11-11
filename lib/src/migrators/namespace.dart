@@ -234,7 +234,7 @@ class _NamespaceMigrationVisitor(
   /// Patches the value of the `$module` argument for a module reference
   /// `sass:meta` function.
   void _visitModuleArg(Expression? moduleArg) {
-    // TODO sass/sass#4268 - Use the semantic value of quoted strings once
+    // TODO(sass/sass#4268): Use the semantic value of quoted strings once
     // Sass supports those semantics.
     if (moduleArg
         case StringExpression(text: Interpolation(asPlain: var oldNamespace?))
