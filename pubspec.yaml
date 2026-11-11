@@ -42,7 +42,3 @@ dev_dependencies:
 
 executables:
   sass-migrator: sass_migrator
-
-dependency_overrides:
-  sass: {path: ../dart}
-  sass_api: {path: ../dart/pkg/sass_api}
