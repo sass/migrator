@@ -81,15 +81,12 @@ class _ColorMigrationVisitor(
     var source = references.sources[node];
     if (source is BuiltInSource && source.url == _colorUrl) {
       var colorPatches = _makeColorPatches(node);
-      if (colorPatches.isNotEmpty && node.namespace == null) {
-        addPatch(
-          patchBefore(
-            node,
-            '${_getOrAddColorModuleNamespace(node.span.file)}.',
-          ),
+      if (colorPatches.isNotEmpty) {
+        addPatches(
+          patchNamespace(node, _getOrAddColorModuleNamespace(node.span.file)),
         );
+        colorPatches.forEach(addPatch);
       }
-      colorPatches.forEach(addPatch);
     }
     super.visitFunctionExpression(node);
   }
@@ -141,10 +138,11 @@ class _ColorMigrationVisitor(
   /// if necessary.
   String _getOrAddColorModuleNamespace(SourceFile file) {
     if (_colorModuleNamespace == null) {
-      _colorModuleNamespace = _chooseColorModuleNamespace();
-      var asClause = _colorModuleNamespace == 'color'
+      var namespace = _chooseColorModuleNamespace();
+      _colorModuleNamespace = namespace;
+      var asClause = namespace == 'color'
           ? ''
-          : ' as $_colorModuleNamespace';
+          : ' as ${toCssIdentifier(namespace)}';
       addPatch(
         Patch.insert(file.location(0), '@use "sass:color"$asClause;\n\n'),
       );

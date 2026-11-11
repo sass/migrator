@@ -1,3 +1,18 @@
+## 2.7.0
+
+* Fix a number of edge cases involving escape codes in identifiers, particularly
+  module namespaces.
+
+* Prefer using unquoted strings when passing module namespaces to `sass:meta`
+  functions.
+
+### Namespace Migrator
+
+* Migrate namespace references in `meta.get-mixin()`, `meta.get-module()`,
+  `meta.function-exists()`, `meta.mixin-exists()`,
+  `meta.global-variable-exists()`, `meta.module-functions()`,
+  `meta.module-mixins()`, `meta.module-variables()`, and `meta.css()`.
+
 ## 2.6.1
 
 ### `if()` Function Migrator

@@ -761,7 +761,7 @@ class _ModuleMigrationVisitor(
         _renameReference(fnNameSpan, declaration);
       }
       _patchNamespaceForFunction(node, declaration, (namespace) {
-        addPatch(Patch.insert(fnNameSpan.start, '$namespace.'));
+        addPatches(patchNamespace(node, namespace));
       });
     }
 
@@ -799,7 +799,7 @@ class _ModuleMigrationVisitor(
         addPatch(
           Patch(
             node.span.file.span(beforeParen, beforeParen),
-            ', \$module: "$namespace"',
+            ', \$module: ${toSassIdentString(namespace)}',
           ),
         );
       }, getFunctionCall: true);
@@ -1055,14 +1055,18 @@ class _ModuleMigrationVisitor(
     // If a member from this dependency is actually referenced, it should
     // already have a namespace from [_determineNamespaces], so we just use
     // a simple number suffix to resolve conflicts at this point.
-    var namespace = _namespaces.putIfAbsent(
-      canonicalUrl,
-      () => _incrementUntilAvailable(defaultNamespace, _namespaces),
-    );
-    if (namespace != defaultNamespace) asClause = ' as $namespace';
+    if (_namespaces.putIfAbsent(
+          canonicalUrl,
+          () => _incrementUntilAvailable(defaultNamespace, _namespaces),
+        )
+        case var namespace? when namespace != defaultNamespace) {
+      asClause = ' as ${toCssIdentifier(namespace)}';
+    }
 
-    var quote = context.text.startsWith("'") ? "'" : '"';
-    var quotedUrl = '$quote$ruleUrl$quote';
+    var quotedUrl = toCssString(
+      ruleUrl.toString(),
+      quote: context.text.startsWith("'") ? .single : .double,
+    );
     var withClause = config == null ? '' : ' with $config';
     var rules = <String>[];
     if (forwardForConfig != null) {
@@ -1121,11 +1125,16 @@ class _ModuleMigrationVisitor(
       );
     }
 
-    var meta = _findOrAddBuiltInNamespace('meta');
+    var namespace = switch (_findOrAddBuiltInNamespace('meta')) {
+      var meta? => '${toSassIdentString(meta)}.',
+      _ => '',
+    };
     var configuration = config == null ? '' : ', \$with: $config';
-    var quote = context.text.startsWith("'") ? "'" : '"';
-    var quotedUrl = '$quote$ruleUrl$quote';
-    return '@include $meta.load-css($quotedUrl$configuration)';
+    var quotedUrl = toCssString(
+      ruleUrl.toString(),
+      quote: context.text.startsWith("'") ? .single : .double,
+    );
+    return '@include ${namespace}load-css($quotedUrl$configuration)';
   }
 
   /// Creates an `@include` rule for the current file based on the `@include`
@@ -1228,7 +1237,7 @@ class _ModuleMigrationVisitor(
     String? extraForward;
     if (externallyConfiguredVariables.isNotEmpty) {
       extraForward = externallyConfiguredVariables.keys
-          .map((variable) => "\$$variable")
+          .map((variable) => "\$${toCssIdentifier(variable)}")
           .join(", ");
     }
 
@@ -1237,7 +1246,9 @@ class _ModuleMigrationVisitor(
     locallyConfiguredVariables.forEach((name, variable) {
       if (variable.member.isGuarded ||
           references.variables.containsValue(variable)) {
-        configured.add("\$$name: \$$name");
+        configured.add(
+          "\$${toCssIdentifier(name)}: \$${toCssIdentifier(name)}",
+        );
       } else {
         // TODO(jathak): Handle the case where the expression of this
         // declaration has already been patched.
@@ -1255,7 +1266,9 @@ class _ModuleMigrationVisitor(
         var end = start + semicolon.length;
         if (span.file.span(end, end + 1).text == '\n') end++;
         addPatch(patchDelete(span.file.span(start, end)));
-        var nameFormat = toLoadCss ? '"$name"' : '\$$name';
+        var nameFormat = toLoadCss
+            ? toCssString(name)
+            : '\$${toCssIdentifier(name)}';
         configured.add("$nameFormat: ${variable.member.expression}");
       }
     });
@@ -1340,12 +1353,17 @@ class _ModuleMigrationVisitor(
         }
         name = _unprefix(name, forcePublic: true);
         if (subprefix.isNotEmpty) name = '$subprefix$name';
-        if (declaration.member is VariableDeclaration) name = '\$$name';
+        name = toCssIdentifier(name);
+        if (declaration.member is VariableDeclaration) {
+          name = '\$$name';
+        }
         allHidden.add(name);
       }
-      var forward = forwardBase + (subprefix.isEmpty ? '' : ' as $subprefix*');
+      var forward =
+          forwardBase +
+          (subprefix.isEmpty ? '' : ' as ${toCssIdentifier(subprefix)}*');
       if (allHidden.isNotEmpty) {
-        var sorted = allHidden.toList()..sort();
+        var sorted = [for (var hidden in allHidden) hidden]..sort();
         forward += ' hide ${sorted.join(", ")}';
       }
       forwards.add(forward);
@@ -1368,10 +1386,7 @@ class _ModuleMigrationVisitor(
     }
     _unreferencable.check(declaration, node);
     _renameReference(nameSpan(node), declaration);
-    var namespace = _namespaceForDeclaration(declaration);
-    if (namespace != null) {
-      addPatch(Patch.insert(nameSpan(node).start, '$namespace.'));
-    }
+    addPatches(patchNamespace(node, _namespaceForDeclaration(declaration)));
   }
 
   /// Visits a `@mixin` rule, renaming it if necessary.
@@ -1434,15 +1449,7 @@ class _ModuleMigrationVisitor(
           references.variableReassignments[declaration] ?? declaration;
     }
     _renameReference(nameSpan(node), declaration);
-    var namespace = _namespaceForDeclaration(declaration);
-    if (namespace != null) {
-      // Surround the variable in parens if negated to avoid `-` being parsed
-      // as part of the namespace.
-      var negated = node.span.matchesBefore('-');
-      if (negated) addPatch(patchBefore(node, '('));
-      addPatch(patchBefore(node, '$namespace.'));
-      if (negated) addPatch(patchAfter(node, ')'));
-    }
+    addPatches(patchNamespace(node, _namespaceForDeclaration(declaration)));
   }
 
   /// Visits the variable declaration, tracking configured variables and
@@ -1468,8 +1475,7 @@ class _ModuleMigrationVisitor(
         originalUrl != currentUrl &&
         !node.isGuarded &&
         !_upstreamStylesheets.contains(originalUrl)) {
-      var namespace = _namespaceForDeclaration(existingNode);
-      addPatch(patchBefore(node, '$namespace.'));
+      addPatches(patchNamespace(node, _namespaceForDeclaration(existingNode)));
       _reassignedVariables.add(declaration);
     }
 
@@ -1551,7 +1557,11 @@ class _ModuleMigrationVisitor(
     var namespace = _namespaces[url];
     if (!_usedUrls.contains(url)) {
       _usedUrls.add(url);
-      var asClause = namespace == module ? '' : ' as $namespace';
+      var asClause = switch (namespace) {
+        null => 'as *',
+        _ when namespace == module => '',
+        _ => ' as ${toCssIdentifier(namespace)}',
+      };
       _builtInUseRules.add('@use "sass:$module"$asClause');
     }
     return namespace;
@@ -1585,7 +1595,11 @@ class _ModuleMigrationVisitor(
         () => _incrementUntilAvailable(defaultNamespace, _namespaces),
       );
       var namespace = _namespaces[url];
-      var asClause = defaultNamespace == namespace ? '' : ' as $namespace';
+      var asClause = switch (namespace) {
+        null => 'as *',
+        _ when namespace == defaultNamespace => '',
+        _ => ' as ${toCssIdentifier(namespace)}',
+      };
       _usedUrls.add(url);
       (isRelative ? _additionalRelativeUseRules : _additionalLoadPathUseRules)
           .add('@use "$dependency"$asClause');

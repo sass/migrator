@@ -1,0 +1,17 @@
+<==> input/entrypoint.scss
+@use "sass:color" as \~;
+
+a {
+  b: red(gold);
+  c: green(gold);
+  d: blue(gold);
+}
+
+<==> output/entrypoint.scss
+@use "sass:color" as \~;
+
+a {
+  b: \~.channel(gold, 'red', $space: rgb);
+  c: \~.channel(gold, 'green', $space: rgb);
+  d: \~.channel(gold, 'blue', $space: rgb);
+}

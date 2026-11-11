@@ -172,6 +172,20 @@ abstract class MigrationVisitor(
     }
   }
 
+  /// Adds multiple new patches that should be applied to the current stylesheet.
+  ///
+  /// If [beforeExisting] is true, these patches will be added to the beginning
+  /// of the patch list. This should be used for insertion patches that should
+  /// be inserted before any existing insertion patches at the same location.
+  @protected
+  void addPatches(List<Patch> patches, {bool beforeExisting = false}) {
+    if (beforeExisting) {
+      _patches.insertAll(0, patches);
+    } else {
+      _patches.addAll(patches);
+    }
+  }
+
   /// If [migrateDependencies] is enabled, any dynamic imports within
   /// this [node] will be migrated before continuing.
   @override

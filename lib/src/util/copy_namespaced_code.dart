@@ -62,21 +62,6 @@ class _NamespacePatchingVisitor(
   }
 
   void _patchNamespace(SassReference reference) {
-    var namespace = namespacer(reference);
-    if (namespace == reference.namespace) return;
-    // Add new namespace
-    if (namespace != null && reference.namespace == null) {
-      patches.add(Patch.insert(reference.nameSpan.start, '$namespace.'));
-      return;
-    }
-    // Remove existing namespace
-    if (namespace == null && reference.namespace != null) {
-      patches.add(
-        Patch(reference.namespaceSpan!.extendIfMatches(RegExp(r'\s*\.')), ''),
-      );
-      return;
-    }
-    // Change existing namespace
-    patches.add(Patch(reference.namespaceSpan!, namespace!));
+    patchNamespace(reference, namespacer(reference));
   }
 }

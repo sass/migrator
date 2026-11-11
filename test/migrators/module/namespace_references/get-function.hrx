@@ -33,11 +33,11 @@ $fn6: get-function(lighten);
 @use "library";
 @use "true";
 
-$fn1: meta.get-function(increment, $module: "library");
+$fn1: meta.get-function(increment, $module: library);
 // This function's namespace is `true`, which is a boolean when unquoted.
 // This tests that the $module parameter is a quoted string.
 $fn2: meta.get-function($name: "false", $module: "true");
-$fn3: meta.get-function("length", $module: "string");
+$fn3: meta.get-function("length", $module: string);
 $fn4: meta.get-function("incre" + "ment");
 
 $x: "increment";

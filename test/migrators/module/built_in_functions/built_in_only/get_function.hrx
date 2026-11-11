@@ -20,6 +20,6 @@ a {
 @import "library";
 
 a {
-  b: meta.call(meta.get-function(mix, $module: "color"), red, blue);
+  b: meta.call(meta.get-function(mix, $module: color), red, blue);
   c: meta.call(meta.get-function(fn), green);
 }
